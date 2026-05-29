@@ -18,6 +18,8 @@
 
 	let operator = $state<Operator>('inconnu');
 	let consent = $state(false);
+	let showArcep = $state(true);
+	let showCommunity = $state(true);
 	let live = $state<LiveState | null>(null);
 	// État local initialisé une fois avec la couverture SSR, puis rafraîchi
 	// localement après chaque mesure (refreshCoverage) — lecture initiale voulue.
@@ -103,7 +105,7 @@
 
 <section class="layout">
 	<div class="map-wrap">
-		<Map {coverage} />
+		<Map {coverage} {operator} {showArcep} {showCommunity} />
 	</div>
 
 	<aside class="panel">
@@ -121,6 +123,18 @@
 			<span><i style="background:#22c55e"></i> Ça capte</span>
 			<span><i style="background:#f59e0b"></i> Dégradé</span>
 			<span><i style="background:#ef4444"></i> Ça coupe</span>
+			<span><i style="background:#3b82f6"></i> ARCEP (théorique)</span>
+		</div>
+
+		<div class="layers">
+			<label>
+				<input type="checkbox" name="show-community" bind:checked={showCommunity} />
+				Mesures communautaires
+			</label>
+			<label>
+				<input type="checkbox" name="show-arcep" bind:checked={showArcep} />
+				Couverture officielle ARCEP
+			</label>
 		</div>
 
 		<div class="measure">
@@ -223,7 +237,21 @@
 		flex-wrap: wrap;
 		font-size: 0.8rem;
 		color: var(--muted);
+		margin-bottom: 0.75rem;
+	}
+	.layers {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+		font-size: 0.82rem;
+		color: var(--muted);
 		margin-bottom: 1rem;
+	}
+	.layers label {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		cursor: pointer;
 	}
 	.legend i {
 		display: inline-block;

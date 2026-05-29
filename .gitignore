@@ -16,9 +16,15 @@ vite.config.ts.timestamp-*
 # Certificats locaux (mkcert)
 /certs/*.pem
 
-# Données importées volumineuses (régénérables via les scripts data:*)
-/static/data/*.geojson
-/static/data/*.json
+# Données importées (régénérables via les scripts data:*).
+# On versionne les sorties finales légères pour un déploiement clé en main :
+# - rail-lines.geojson (~1,7 Mo) : tracés SNCF simplifiés
+# - arcep-coverage.geojson (~3,2 Mo) : couverture ARCEP échantillonnée le long des voies
+# Les fichiers temporaires lourds (.gpkg, .7z) restent hors du dépôt.
+/static/data/*.gpkg
+/static/data/*.7z
 !/static/data/.gitkeep
+!/static/data/rail-lines.geojson
+!/static/data/arcep-coverage.geojson
 
 .DS_Store

@@ -16,30 +16,37 @@ SEO `/ligne/[slug]`.
 
 ## 2. Couverture officielle — ARCEP « Mon Réseau Mobile »
 
-- **Portail** : https://data.arcep.fr/ et https://www.data.gouv.fr/datasets/mon-reseau-mobile
-- **Contenu** : couverture _théorique_ 2G/3G/4G/5G par opérateur (Orange, SFR, Free, Bouygues)
-- **Import** : `ARCEP_GEOJSON_URL="<url>" bun run data:arcep`
+- **Portail** : https://data.arcep.fr/mobile/couvertures_theoriques/ et https://www.data.gouv.fr/datasets/mon-reseau-mobile
+- **Contenu** : couverture _théorique_ 2G/3G/4G/5G par opérateur (Orange, SFR, Free, Bouygues),
+  publiée en GeoPackage compressé 7z, projection Lambert-93 (RGF93 / EPSG:2154).
+- **Import** : `bun run data:arcep` (4G par défaut) ou `ARCEP_TECHNO=5G bun run data:arcep`
 - **Sortie** : `static/data/arcep-coverage.geojson`
 
-### Obtenir un GeoJSON exploitable
+### Pipeline d'import (100 % JS/Bun, sans GDAL ni 7z système)
 
-Les fichiers ARCEP sont publiés par opérateur et par technologie, souvent en
-Shapefile/MapInfo et volumineux. Procédure recommandée :
+`scripts/import-arcep.ts` fait tout, sans dépendance système :
 
-1. Télécharger les couches voulues depuis data.arcep.fr (ex. 4G par opérateur).
-2. Convertir/filtrer en GeoJSON avec [`ogr2ogr`](https://gdal.org/) (GDAL) :
-   ```bash
-   ogr2ogr -f GeoJSON -t_srs EPSG:4326 -simplify 0.0005 \
-     arcep-4g-orange.geojson source_arcep.shp
-   ```
-3. (Optionnel) Fusionner les opérateurs et tagger chaque feature avec
-   `operator` + `techno`.
-4. Héberger le GeoJSON résultant et passer son URL via `ARCEP_GEOJSON_URL`,
-   ou le déposer directement dans `static/data/arcep-coverage.geojson`.
+1. **Télécharge** les fichiers `.gpkg.7z` (un par opérateur × techno) depuis
+   `data.arcep.fr`.
+2. **Décompresse** avec `7zip-min` (binaire embarqué).
+3. **Lit** le GeoPackage (= base SQLite) via `bun:sqlite`.
+4. **Décode** les géométries WKB (header GeoPackage + `wkx`) et **reprojette**
+   Lambert-93 → WGS84 avec `proj4`.
+5. **Échantillonne** la couverture sur des cellules H3 (résolution 7, ≈ 1,4 km)
+   **le long du corridor ferroviaire** (`rail-lines.geojson`) : pour chaque
+   cellule traversée par une voie, on retient le meilleur niveau par opérateur
+   (`TBC` > `BC` > `CL`).
 
-> Sans `ARCEP_GEOJSON_URL`, le script écrit un placeholder vide pour ne pas
-> bloquer le build ; la carte fonctionne alors uniquement avec les mesures
-> communautaires.
+La sortie est une FeatureCollection de points H3 (même format que les mesures
+communautaires), donc légère (~3 Mo) et directement affichable par MapLibre —
+les polygones France entière (≈ 900 Mo décompressés/opérateur) ne sont jamais
+servis au navigateur.
+
+**Réglages** (variables d'env) : `ARCEP_TECHNO` (2G/3G/4G/5G), `ARCEP_QUARTER`
+(ex. `2025_T4`), `ARCEP_H3_RES` (résolution H3, défaut 7).
+
+> Si le fichier de sortie est absent, la carte fonctionne sans la couche ARCEP
+> (mesures communautaires uniquement).
 
 ## Licences
 
