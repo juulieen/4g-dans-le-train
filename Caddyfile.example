@@ -1,0 +1,6 @@
+# À ajouter au Caddyfile existant du serveur.
+# Caddy provisionne le HTTPS automatiquement via Let's Encrypt.
+
+4g-dans-le-train.juulieen.fr {
+    reverse_proxy localhost:3101
+}

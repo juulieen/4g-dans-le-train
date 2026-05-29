@@ -1,0 +1,20 @@
+name: Deploy
+
+# Déploiement sur le serveur perso via un runner self-hosted (modèle ttt-chrono).
+# `clean: false` est CRITIQUE : évite que git clean -ffdx n'efface ./data
+# (le fichier libSQL gitignoré monté dans le conteneur).
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+      - name: Build & up
+        run: docker compose up -d --build
+      - name: Migrate
+        run: docker compose exec -T 4g-dans-le-train bun run scripts/migrate.ts

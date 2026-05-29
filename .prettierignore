@@ -1,0 +1,7 @@
+.svelte-kit
+build
+node_modules
+static/data
+data
+bun.lock
+drizzle/meta

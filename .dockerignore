@@ -1,0 +1,10 @@
+node_modules
+.svelte-kit
+build
+.git
+data
+*.local
+.env
+.env.*
+!.env.example
+certs

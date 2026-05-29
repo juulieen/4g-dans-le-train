@@ -1,0 +1,18 @@
+services:
+  4g-dans-le-train:
+    build: .
+    container_name: 4g-dans-le-train
+    restart: unless-stopped
+    ports:
+      # Exposé uniquement en local ; Caddy (hôte) fait le reverse proxy + HTTPS.
+      - '127.0.0.1:3101:3000'
+    # Bind-mount du fichier libSQL pour qu'il survive aux redéploiements
+    # (même logique que ttt-chrono : ne JAMAIS perdre la base sur un rebuild).
+    volumes:
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+      # libSQL local dans le bind-mount. Pour Turso cloud : libsql://… + token.
+      - DATABASE_URL=file:/app/data/local.db
+      # URL publique, utilisée pour les balises SEO / sitemap.
+      - PUBLIC_SITE_URL=https://4g-dans-le-train.juulieen.fr

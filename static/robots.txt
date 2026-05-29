@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://4g-dans-le-train.juulieen.fr/sitemap.xml
