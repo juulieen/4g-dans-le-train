@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onDestroy, getContext } from 'svelte';
 	import Map from '$components/Map.svelte';
+	import Icon from '$components/Icon.svelte';
 	import HintChip from '$components/Onboarding/HintChip.svelte';
 	import { MeasurementController, type LiveState, type Operator } from '$measure/controller';
 	import {
@@ -200,7 +201,7 @@
 	<div class="map-wrap" onpointerdown={onMapInteract}>
 		<Map coverage={filteredCoverage} operator={viewOperator} {showArcep} {showCommunity} />
 		<button class="info-fab glass" onclick={openOnboarding} aria-label="Comment ça marche">
-			<span aria-hidden="true">ℹ️</span>
+			<Icon name="info" size={20} />
 		</button>
 	</div>
 
@@ -268,7 +269,7 @@
 			</div>
 
 			<div class="measure">
-				<h2>Mode mesure 📍</h2>
+				<h2 class="measure-title">Mode mesure <Icon name="map" size={18} /></h2>
 				<p class="hint">
 					Sur mobile, dans le train&nbsp;: gardez cette page ouverte (l'écran reste allumé) et on
 					mesure votre connexion en continu, de façon <strong>anonyme</strong>.
@@ -418,6 +419,14 @@
 	h2 {
 		font-size: var(--fs-lg);
 		margin: 0 0 0.5rem;
+	}
+	.measure-title {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+	.measure-title :global(svg) {
+		color: var(--accent);
 	}
 	.lede {
 		color: var(--muted);

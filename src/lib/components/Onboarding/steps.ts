@@ -3,6 +3,7 @@
  * Chaque étape explique une facette du projet ; le markup est dans Onboarding.svelte.
  */
 export type OnboardingStep = {
+	/** Nom d'icône (voir Icon.svelte). */
 	icon: string;
 	title: string;
 	/** Paragraphes de corps (HTML léger autorisé : <strong>, <a>). */
@@ -13,7 +14,7 @@ export type OnboardingStep = {
 
 export const STEPS: OnboardingStep[] = [
 	{
-		icon: '🚆',
+		icon: 'train',
 		title: 'Dans le train, anticipez votre réseau',
 		body: [
 			'Sachez <strong>à l’avance</strong> où vous pourrez regarder une vidéo, faire une recherche… ou rien du tout.',
@@ -22,7 +23,7 @@ export const STEPS: OnboardingStep[] = [
 		visual: 'route'
 	},
 	{
-		icon: '🗺️',
+		icon: 'map',
 		title: 'Comment lire la carte',
 		body: [
 			'La <strong>voie est colorée</strong> selon ce que vous pourrez y faire : c’est la couverture <em>théorique</em>.',
@@ -31,7 +32,7 @@ export const STEPS: OnboardingStep[] = [
 		visual: 'legend'
 	},
 	{
-		icon: '📡',
+		icon: 'signal',
 		title: 'D’où viennent les données « théoriques »',
 		body: [
 			'Ce sont les couvertures <strong>officielles publiées par l’ARCEP</strong> (le régulateur télécom), opérateur par opérateur.',
@@ -40,7 +41,7 @@ export const STEPS: OnboardingStep[] = [
 		]
 	},
 	{
-		icon: '🔒',
+		icon: 'lock',
 		title: 'Nos mesures, et votre vie privée',
 		body: [
 			'En « mode mesure », l’app teste votre connexion en continu (un petit <strong>ping</strong> : ça passe / c’est lent / ça coupe) avec votre position.',
@@ -50,7 +51,7 @@ export const STEPS: OnboardingStep[] = [
 		visual: 'privacy'
 	},
 	{
-		icon: '✨',
+		icon: 'sparkle',
 		title: 'Enrichissez la carte pour tout le monde',
 		body: [
 			'Prenez le train, activez le <strong>mode mesure</strong>, et la carte s’améliore pour tous les voyageurs.',

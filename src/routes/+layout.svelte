@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import { onMount, setContext } from 'svelte';
 	import Onboarding from '$components/Onboarding/Onboarding.svelte';
-	import NavIcon from '$components/NavIcon.svelte';
+	import Icon from '$components/Icon.svelte';
 
 	let { children } = $props();
 
@@ -45,7 +45,7 @@
 <div class="app" class:map-route={isMapRoute}>
 	<header class="glass">
 		<a class="brand" href="/">
-			<span class="logo">🚆📶</span>
+			<span class="logo"><Icon name="logo" size={26} /></span>
 			<span class="title">4G dans le train</span>
 		</a>
 
@@ -61,11 +61,11 @@
 				onclick={() => (onboardingOpen = true)}
 				aria-label="Comment ça marche"
 			>
-				<span aria-hidden="true">ℹ️</span>
+				<Icon name="info" size={19} />
 				<span class="tools-label">Comment ça marche</span>
 			</button>
 			<button class="icon-btn" onclick={toggleTheme} aria-label="Basculer le thème clair/sombre">
-				<span aria-hidden="true">{theme === 'dark' ? '☀️' : '🌙'}</span>
+				<Icon name={theme === 'dark' ? 'sun' : 'moon'} size={19} />
 			</button>
 			<a
 				class="icon-btn gh"
@@ -106,7 +106,7 @@
 	<nav class="bottom-nav glass" aria-label="Navigation principale">
 		{#each nav as item (item.href)}
 			<a href={item.href} class:active={page.url.pathname === item.href}>
-				<span class="bn-icon"><NavIcon name={item.icon} /></span>
+				<span class="bn-icon"><Icon name={item.icon} /></span>
 				<span class="bn-label">{item.label}</span>
 			</a>
 		{/each}
@@ -270,7 +270,9 @@
 		white-space: nowrap;
 	}
 	.logo {
-		font-size: 1.3rem;
+		display: flex;
+		align-items: center;
+		color: var(--accent);
 	}
 	.desktop-nav {
 		display: flex;

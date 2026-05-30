@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { fade, scale } from 'svelte/transition';
+	import Icon from '$components/Icon.svelte';
 	import { STEPS } from './steps';
 
 	let { open = false, onclose }: { open?: boolean; onclose?: () => void } = $props();
@@ -49,7 +50,7 @@
 				<div class="track" style="transform: translateX(-{index * 100}%)">
 					{#each STEPS as step (step.title)}
 						<section class="slide" aria-hidden={STEPS[index] !== step}>
-							<div class="icon" aria-hidden="true">{step.icon}</div>
+							<div class="icon" aria-hidden="true"><Icon name={step.icon} size={44} /></div>
 							<h2>{step.title}</h2>
 
 							{#if step.visual === 'route'}
@@ -83,9 +84,12 @@
 								</div>
 							{:else if step.visual === 'privacy'}
 								<div class="viz privacy" aria-hidden="true">
-									<span>📍➡️▦ <small>arrondi ~150&nbsp;m</small></span>
-									<span>🙈 <small>aucune donnée perso</small></span>
-									<span>🧮 <small>agrégé par zone</small></span>
+									<span
+										><Icon name="map" size={18} />
+										<small>position arrondie ~150&nbsp;m</small></span
+									>
+									<span><Icon name="eye-off" size={18} /> <small>aucune donnée perso</small></span>
+									<span><Icon name="layers" size={18} /> <small>agrégé par zone</small></span>
 								</div>
 							{/if}
 
@@ -189,9 +193,10 @@
 		padding: 0.4rem 0.2rem 0;
 	}
 	.icon {
-		font-size: 2.6rem;
-		line-height: 1;
+		display: flex;
+		justify-content: center;
 		margin-top: 0.4rem;
+		color: var(--accent);
 	}
 	h2 {
 		font-size: var(--fs-lg);
@@ -274,12 +279,21 @@
 	.privacy {
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: 8px;
 		font-size: var(--fs-sm);
 		color: var(--text);
 		width: fit-content;
 		margin-inline: auto;
 		text-align: left;
+	}
+	.privacy span {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+	.privacy :global(svg) {
+		color: var(--accent);
+		flex: none;
 	}
 	.privacy small {
 		color: var(--muted);
