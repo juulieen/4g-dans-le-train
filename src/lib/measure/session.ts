@@ -9,6 +9,7 @@
 
 const SESSION_KEY = '4gdt.session';
 const CONSENT_KEY = '4gdt.consent';
+const ONBOARDED_KEY = '4gdt.onboarded';
 
 export function getSessionId(): string {
 	if (typeof localStorage === 'undefined') return 'ssr';
@@ -31,4 +32,20 @@ export function grantConsent(): void {
 
 export function revokeConsent(): void {
 	localStorage.removeItem(CONSENT_KEY);
+}
+
+/**
+ * Onboarding pédagogique : on retient que l'utilisateur a déjà vu (ou ignoré)
+ * l'invite de première visite, pour ne plus l'afficher automatiquement. Aucune
+ * donnée personnelle ; simple drapeau local. La réouverture manuelle via le
+ * bouton « ℹ️ Comment ça marche » ne touche jamais à cette clé.
+ */
+export function hasOnboarded(): boolean {
+	if (typeof localStorage === 'undefined') return true;
+	return localStorage.getItem(ONBOARDED_KEY) === 'done';
+}
+
+export function markOnboarded(): void {
+	if (typeof localStorage === 'undefined') return;
+	localStorage.setItem(ONBOARDED_KEY, 'done');
 }

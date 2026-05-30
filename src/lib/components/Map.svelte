@@ -166,7 +166,7 @@
 					.setHTML(
 						`<strong>Couverture théorique (ARCEP)</strong>` +
 							`<div style="margin:.35em 0">${usageLabel(lvl)}</div>` +
-							`<div style="font-size:.82em;color:#94a3b8">${opLine}</div>`
+							`<div style="font-size:.82em;color:var(--muted)">${opLine}</div>`
 					)
 					.addTo(map);
 			});
@@ -183,7 +183,7 @@
 					.setHTML(
 						`<strong>Mesuré par la communauté</strong>` +
 							`<div style="margin:.35em 0">${usageFromRate(rate)} — ${rate}% de réussite</div>` +
-							`<div style="font-size:.82em;color:#94a3b8">Opérateur ${p.operator ?? 'inconnu'} · ${p.samples ?? 0} mesures · latence ${rtt}</div>`
+							`<div style="font-size:.82em;color:var(--muted)">Opérateur ${p.operator ?? 'inconnu'} · ${p.samples ?? 0} mesures · latence ${rtt}</div>`
 					)
 					.addTo(map);
 			});
@@ -256,14 +256,14 @@
 
 <div class="map" bind:this={mapContainer}></div>
 {#if hasArcep}
-	<div class="legend-overlay">
+	<div class="legend-overlay glass">
 		<strong>Sur la voie, vous pourrez :</strong>
-		<span><i style="background:#22c55e"></i> Streaming vidéo</span>
-		<span><i style="background:#84cc16"></i> Web & réseaux sociaux</span>
-		<span><i style="background:#f59e0b"></i> Messages seulement</span>
-		<span><i style="background:#ef4444"></i> Rien (zone blanche)</span>
+		<span><i style="background:var(--usage-tbc)"></i> Streaming vidéo</span>
+		<span><i style="background:var(--usage-bc)"></i> Web & réseaux sociaux</span>
+		<span><i style="background:var(--usage-cl)"></i> Messages seulement</span>
+		<span><i style="background:var(--usage-none)"></i> Rien (zone blanche)</span>
 		<span class="real"
-			><i style="background:#22c55e; border:2px solid #fff"></i> Mesuré en vrai</span
+			><i style="background:var(--usage-tbc); border:2px solid #fff"></i> Mesuré en vrai</span
 		>
 	</div>
 {/if}
@@ -281,13 +281,19 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
-		background: rgba(11, 18, 32, 0.85);
-		color: #e2e8f0;
+		color: var(--text);
 		font-size: 0.72rem;
 		padding: 0.5rem 0.7rem;
-		border-radius: 8px;
+		border-radius: var(--r-md);
 		pointer-events: none;
 		max-width: 220px;
+	}
+	/* Sur mobile, la légende remonte en haut-gauche (sinon cachée par le bottom-sheet). */
+	@media (max-width: 760px) {
+		.legend-overlay {
+			top: 56px;
+			bottom: auto;
+		}
 	}
 	.legend-overlay strong {
 		font-size: 0.75rem;
@@ -316,42 +322,45 @@
 		padding-top: 3px;
 	}
 
-	/* Popups MapLibre (injectées hors du composant → :global) : thème sombre lisible. */
+	/* Popups MapLibre (injectées hors du composant → :global) : look glass lisible.
+	   Contenu quasi-opaque (lisibilité du texte sur la carte) + pointe opaque. */
 	:global(.maplibregl-popup-content) {
-		background: #131c2e;
-		color: #e2e8f0;
-		border: 1px solid #1e293b;
-		border-radius: 10px;
+		background: var(--glass-bg-strong);
+		-webkit-backdrop-filter: blur(var(--glass-blur));
+		backdrop-filter: blur(var(--glass-blur));
+		color: var(--text);
+		border: 1px solid var(--glass-border);
+		border-radius: var(--r-md);
 		padding: 0.7rem 0.9rem;
 		font-size: 0.9rem;
 		line-height: 1.45;
-		box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+		box-shadow: var(--shadow-2);
 		max-width: 240px;
 	}
 	:global(.maplibregl-popup-content strong) {
-		color: #fff;
+		color: var(--text);
 		font-size: 0.95rem;
 	}
-	/* La pointe du bulle prend la couleur du fond sombre. */
+	/* La pointe de la bulle prend la couleur (opaque) du panneau. */
 	:global(.maplibregl-popup-anchor-top .maplibregl-popup-tip) {
-		border-bottom-color: #131c2e;
+		border-bottom-color: var(--panel);
 	}
 	:global(.maplibregl-popup-anchor-bottom .maplibregl-popup-tip) {
-		border-top-color: #131c2e;
+		border-top-color: var(--panel);
 	}
 	:global(.maplibregl-popup-anchor-left .maplibregl-popup-tip) {
-		border-right-color: #131c2e;
+		border-right-color: var(--panel);
 	}
 	:global(.maplibregl-popup-anchor-right .maplibregl-popup-tip) {
-		border-left-color: #131c2e;
+		border-left-color: var(--panel);
 	}
 	:global(.maplibregl-popup-close-button) {
-		color: #94a3b8;
+		color: var(--muted);
 		font-size: 1.1rem;
 		padding: 0 0.3rem;
 	}
 	:global(.maplibregl-popup-close-button:hover) {
 		background: transparent;
-		color: #fff;
+		color: var(--text);
 	}
 </style>
