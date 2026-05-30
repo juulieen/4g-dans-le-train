@@ -12,7 +12,7 @@ export default defineConfig({
 				short_name: '4G dans le train',
 				description:
 					'Carte communautaire de la couverture mobile (4G/5G) le long des lignes de train en France.',
-				theme_color: '#0b3d2e',
+				theme_color: '#0b1220',
 				background_color: '#0b1220',
 				display: 'standalone',
 				lang: 'fr',

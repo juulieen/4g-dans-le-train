@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageWrap from '$components/PageWrap.svelte';
 </script>
 
 <svelte:head>
@@ -10,7 +11,7 @@
 	<link rel="canonical" href="https://4g-dans-le-train.juulieen.fr/confidentialite" />
 </svelte:head>
 
-<div class="wrap">
+<PageWrap>
 	<h1>Confidentialité &amp; données</h1>
 
 	<p>
@@ -50,21 +51,4 @@
 	<p class="muted">
 		Le code étant open source, vous pouvez vérifier ces affirmations dans le dépôt GitHub.
 	</p>
-</div>
-
-<style>
-	.wrap {
-		max-width: 720px;
-		margin: 0 auto;
-		padding: 2rem 1rem;
-		line-height: 1.6;
-	}
-	h2 {
-		font-size: 1.15rem;
-		margin-top: 1.5rem;
-	}
-	.muted {
-		color: var(--muted);
-		font-size: 0.9rem;
-	}
-</style>
+</PageWrap>

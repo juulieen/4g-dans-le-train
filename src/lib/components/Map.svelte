@@ -27,6 +27,15 @@
 
 	const EMPTY: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
+	// Données géo mises en cache (fetch une seule fois ; ré-utilisées après un
+	// changement de fond de carte qui réinitialise les couches).
+	let railData: GeoJSON.FeatureCollection | null = null;
+	let arcepData: GeoJSON.FeatureCollection | null = null;
+	// On ne retente pas un fetch déjà tenté (évite de marteler l'endpoint à
+	// chaque bascule de thème si la 1re requête a échoué).
+	let railTried = false;
+	let arcepTried = false;
+
 	// Couleurs par usage (niveau ARCEP → ce qu'on peut faire).
 	const USAGE_COLORS = {
 		TBC: '#22c55e', // vert — streaming vidéo / visio
@@ -34,6 +43,32 @@
 		CL: '#f59e0b', // orange — messages, navigation lente
 		none: '#ef4444' // rouge — zone blanche
 	};
+
+	/**
+	 * Fond de carte sobre, gratuit et sans clé API (raster CARTO), accordé au thème :
+	 * dark-matter en sombre, positron en clair. Attribution OSM + CARTO incluse.
+	 */
+	function basemapStyle(theme: 'light' | 'dark'): maplibregl.StyleSpecification {
+		const base = theme === 'light' ? 'light_all' : 'dark_all';
+		return {
+			version: 8,
+			sources: {
+				carto: {
+					type: 'raster',
+					tiles: ['a', 'b', 'c', 'd'].map(
+						(s) => `https://${s}.basemaps.cartocdn.com/${base}/{z}/{x}/{y}.png`
+					),
+					tileSize: 256,
+					attribution: '© OpenStreetMap, © CARTO'
+				}
+			},
+			layers: [{ id: 'carto', type: 'raster', source: 'carto' }]
+		} satisfies maplibregl.StyleSpecification;
+	}
+
+	function currentTheme(): 'light' | 'dark' {
+		return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+	}
 
 	/**
 	 * Expression MapLibre : couleur d'un segment de voie selon le niveau ARCEP de
@@ -55,72 +90,77 @@
 		] as unknown as maplibregl.ExpressionSpecification;
 	}
 
-	onMount(() => {
-		map = new maplibregl.Map({
-			container: mapContainer,
-			style: 'https://demotiles.maplibre.org/style.json',
-			center: [2.6, 46.6],
-			zoom: 5.2,
-			attributionControl: { compact: true }
-		});
-
-		map.addControl(new maplibregl.NavigationControl());
-		map.addControl(new maplibregl.GeolocateControl({ trackUserLocation: true }), 'top-right');
-
-		map.on('load', async () => {
-			if (!map) return;
-
-			// --- Tracés ferroviaires (gris neutre, contexte) ---
+	async function ensureData() {
+		if (!railData && !railTried) {
+			railTried = true;
 			try {
 				const res = await fetch(railLinesUrl);
-				if (res.ok) {
-					map.addSource('rail-lines', { type: 'geojson', data: await res.json() });
-					map.addLayer({
-						id: 'rail-lines',
-						type: 'line',
-						source: 'rail-lines',
-						paint: {
-							'line-color': '#475569',
-							'line-width': ['interpolate', ['linear'], ['zoom'], 5, 0.5, 12, 1.5],
-							'line-opacity': 0.5
-						}
-					});
-				}
+				if (res.ok) railData = (await res.json()) as GeoJSON.FeatureCollection;
 			} catch {
 				/* pas de tracés : on ignore */
 			}
-
-			// --- Couverture ARCEP : la VOIE colorée selon l'usage possible (théorique) ---
+		}
+		if (!arcepData && !arcepTried) {
+			arcepTried = true;
 			try {
 				const res = await fetch(arcepLinesUrl);
-				if (res.ok) {
-					const lines = (await res.json()) as GeoJSON.FeatureCollection;
-					if (lines.features.length) {
-						hasArcep = true;
-						map.addSource('arcep-lines', { type: 'geojson', data: lines });
-						map.addLayer({
-							id: 'arcep-lines',
-							type: 'line',
-							source: 'arcep-lines',
-							layout: {
-								visibility: showArcep ? 'visible' : 'none',
-								'line-cap': 'round',
-								'line-join': 'round'
-							},
-							paint: {
-								'line-color': arcepColor(operator),
-								// Trait large et un peu pâle : c'est le fond « théorique ».
-								'line-width': ['interpolate', ['linear'], ['zoom'], 5, 2.5, 12, 7],
-								'line-opacity': 0.55
-							}
-						});
-					}
-				}
+				if (res.ok) arcepData = (await res.json()) as GeoJSON.FeatureCollection;
 			} catch {
 				/* couche ARCEP absente : la carte fonctionne sans */
 			}
+		}
+	}
 
-			// --- Mesures communautaires (le RÉEL, vif, par-dessus) ---
+	/**
+	 * (Ré)ajoute les couches métier par-dessus le fond. Idempotent : on saute ce
+	 * qui existe déjà. Appelé au premier chargement et après chaque setStyle.
+	 */
+	async function addOverlays() {
+		if (!map) return;
+		await ensureData();
+		if (!map) return;
+
+		// Tracés ferroviaires (contexte discret).
+		if (railData && !map.getSource('rail-lines')) {
+			map.addSource('rail-lines', { type: 'geojson', data: railData });
+			map.addLayer({
+				id: 'rail-lines',
+				type: 'line',
+				source: 'rail-lines',
+				paint: {
+					'line-color': '#64748b',
+					'line-width': ['interpolate', ['linear'], ['zoom'], 5, 0.5, 12, 1.5],
+					'line-opacity': 0.35
+				}
+			});
+		}
+
+		// Couverture ARCEP : la VOIE colorée selon l'usage possible (théorique).
+		if (arcepData?.features.length) {
+			hasArcep = true;
+			if (!map.getSource('arcep-lines')) {
+				map.addSource('arcep-lines', { type: 'geojson', data: arcepData });
+				map.addLayer({
+					id: 'arcep-lines',
+					type: 'line',
+					source: 'arcep-lines',
+					layout: {
+						visibility: showArcep ? 'visible' : 'none',
+						'line-cap': 'round',
+						'line-join': 'round'
+					},
+					paint: {
+						'line-color': arcepColor(operator),
+						'line-width': ['interpolate', ['linear'], ['zoom'], 5, 3, 12, 8],
+						'line-opacity': 0.9,
+						'line-blur': 0.4
+					}
+				});
+			}
+		}
+
+		// Mesures communautaires (le RÉEL, vif, par-dessus).
+		if (!map.getSource('coverage')) {
 			map.addSource('coverage', { type: 'geojson', data: coverage ?? EMPTY });
 			map.addLayer({
 				id: 'coverage-fill',
@@ -145,63 +185,105 @@
 					'circle-opacity': 0.95
 				}
 			});
+		}
+	}
 
-			// Popup ARCEP : ce qu'on peut faire ici (théorique).
-			map.on('click', 'arcep-lines', (e) => {
-				const f = e.features?.[0];
-				if (!f || !map) return;
-				const p = f.properties as Record<string, string>;
-				const field = operator === 'inconnu' || operator === 'autre' ? 'best' : operator;
-				const lvl = p[field] ?? null;
-				const opLine = [
-					['Orange', p.orange],
-					['SFR', p.sfr],
-					['Free', p.free],
-					['Bouygues', p.bouygues]
-				]
-					.map(([name, l]) => `${name} ${dot(l)}`)
-					.join(' · ');
-				new maplibregl.Popup()
-					.setLngLat(e.lngLat)
-					.setHTML(
-						`<strong>Couverture théorique (ARCEP)</strong>` +
-							`<div style="margin:.35em 0">${usageLabel(lvl)}</div>` +
-							`<div style="font-size:.82em;color:#94a3b8">${opLine}</div>`
-					)
-					.addTo(map);
-			});
+	onMount(() => {
+		map = new maplibregl.Map({
+			container: mapContainer,
+			style: basemapStyle(currentTheme()),
+			center: [2.6, 46.6],
+			zoom: 5.2,
+			attributionControl: { compact: true }
+		});
 
-			// Popup mesure communautaire : la réalité mesurée.
-			map.on('click', 'coverage-fill', (e) => {
-				const f = e.features?.[0];
-				if (!f || !map) return;
-				const p = f.properties as Record<string, unknown>;
-				const rate = Math.round(Number(p.successRate) * 100);
-				const rtt = p.medianRtt ? `${p.medianRtt} ms` : 'n/a';
-				new maplibregl.Popup()
-					.setLngLat(e.lngLat)
-					.setHTML(
-						`<strong>Mesuré par la communauté</strong>` +
-							`<div style="margin:.35em 0">${usageFromRate(rate)} — ${rate}% de réussite</div>` +
-							`<div style="font-size:.82em;color:#94a3b8">Opérateur ${p.operator ?? 'inconnu'} · ${p.samples ?? 0} mesures · latence ${rtt}</div>`
-					)
-					.addTo(map);
-			});
+		map.addControl(new maplibregl.NavigationControl());
+		map.addControl(new maplibregl.GeolocateControl({ trackUserLocation: true }), 'top-right');
 
-			for (const layer of ['arcep-lines', 'coverage-fill']) {
-				map.on('mouseenter', layer, () => {
-					if (map) map.getCanvas().style.cursor = 'pointer';
-				});
-				map.on('mouseleave', layer, () => {
-					if (map) map.getCanvas().style.cursor = '';
-				});
-			}
-
+		map.on('load', async () => {
+			if (!map) return;
+			await addOverlays();
+			bindInteractions();
 			loaded = true;
 		});
 
-		return () => map?.remove();
+		// Bascule de thème : on échange le fond et on ré-ajoute les couches.
+		// `setStyle` repart d'un style vierge ; `styledata` (après parsing du
+		// nouveau style) est le moment fiable pour ré-ajouter nos sources/couches.
+		// addOverlays est idempotent (gardes getSource) → pas de doublon.
+		const observer = new MutationObserver(() => {
+			if (!map) return;
+			map.setStyle(basemapStyle(currentTheme()));
+			map.once('styledata', () => {
+				void addOverlays();
+			});
+		});
+		observer.observe(document.documentElement, {
+			attributes: true,
+			attributeFilter: ['data-theme']
+		});
+
+		return () => {
+			observer.disconnect();
+			map?.remove();
+		};
 	});
+
+	/** Handlers de clic/curseur (liés une fois ; persistent à travers setStyle). */
+	function bindInteractions() {
+		if (!map) return;
+
+		// Popup ARCEP : ce qu'on peut faire ici (théorique).
+		map.on('click', 'arcep-lines', (e) => {
+			const f = e.features?.[0];
+			if (!f || !map) return;
+			const p = f.properties as Record<string, string>;
+			const field = operator === 'inconnu' || operator === 'autre' ? 'best' : operator;
+			const lvl = p[field] ?? null;
+			const opLine = [
+				['Orange', p.orange],
+				['SFR', p.sfr],
+				['Free', p.free],
+				['Bouygues', p.bouygues]
+			]
+				.map(([name, l]) => `${name} ${dot(l)}`)
+				.join(' · ');
+			new maplibregl.Popup()
+				.setLngLat(e.lngLat)
+				.setHTML(
+					`<strong>Couverture théorique (ARCEP)</strong>` +
+						`<div style="margin:.35em 0">${usageLabel(lvl)}</div>` +
+						`<div style="font-size:.82em;color:var(--muted)">${opLine}</div>`
+				)
+				.addTo(map);
+		});
+
+		// Popup mesure communautaire : la réalité mesurée.
+		map.on('click', 'coverage-fill', (e) => {
+			const f = e.features?.[0];
+			if (!f || !map) return;
+			const p = f.properties as Record<string, unknown>;
+			const rate = Math.round(Number(p.successRate) * 100);
+			const rtt = p.medianRtt ? `${p.medianRtt} ms` : 'n/a';
+			new maplibregl.Popup()
+				.setLngLat(e.lngLat)
+				.setHTML(
+					`<strong>Mesuré par la communauté</strong>` +
+						`<div style="margin:.35em 0">${usageFromRate(rate)} — ${rate}% de réussite</div>` +
+						`<div style="font-size:.82em;color:var(--muted)">Opérateur ${p.operator ?? 'inconnu'} · ${p.samples ?? 0} mesures · latence ${rtt}</div>`
+				)
+				.addTo(map);
+		});
+
+		for (const layer of ['arcep-lines', 'coverage-fill']) {
+			map.on('mouseenter', layer, () => {
+				if (map) map.getCanvas().style.cursor = 'pointer';
+			});
+			map.on('mouseleave', layer, () => {
+				if (map) map.getCanvas().style.cursor = '';
+			});
+		}
+	}
 
 	function usageLabel(lvl: string | null): string {
 		switch (lvl) {
@@ -256,14 +338,14 @@
 
 <div class="map" bind:this={mapContainer}></div>
 {#if hasArcep}
-	<div class="legend-overlay">
+	<div class="legend-overlay glass">
 		<strong>Sur la voie, vous pourrez :</strong>
-		<span><i style="background:#22c55e"></i> Streaming vidéo</span>
-		<span><i style="background:#84cc16"></i> Web & réseaux sociaux</span>
-		<span><i style="background:#f59e0b"></i> Messages seulement</span>
-		<span><i style="background:#ef4444"></i> Rien (zone blanche)</span>
+		<span><i style="background:var(--usage-tbc)"></i> Streaming vidéo</span>
+		<span><i style="background:var(--usage-bc)"></i> Web & réseaux sociaux</span>
+		<span><i style="background:var(--usage-cl)"></i> Messages seulement</span>
+		<span><i style="background:var(--usage-none)"></i> Rien (zone blanche)</span>
 		<span class="real"
-			><i style="background:#22c55e; border:2px solid #fff"></i> Mesuré en vrai</span
+			><i style="background:var(--usage-tbc); border:2px solid #fff"></i> Mesuré en vrai</span
 		>
 	</div>
 {/if}
@@ -281,13 +363,19 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
-		background: rgba(11, 18, 32, 0.85);
-		color: #e2e8f0;
+		color: var(--text);
 		font-size: 0.72rem;
 		padding: 0.5rem 0.7rem;
-		border-radius: 8px;
+		border-radius: var(--r-md);
 		pointer-events: none;
 		max-width: 220px;
+	}
+	/* Sur mobile, la légende remonte en haut-gauche (sinon cachée par le bottom-sheet). */
+	@media (max-width: 760px) {
+		.legend-overlay {
+			top: 56px;
+			bottom: auto;
+		}
 	}
 	.legend-overlay strong {
 		font-size: 0.75rem;
@@ -312,46 +400,56 @@
 	}
 	.legend-overlay .real {
 		margin-top: 2px;
-		border-top: 1px solid rgba(255, 255, 255, 0.15);
+		border-top: 1px solid var(--glass-border);
 		padding-top: 3px;
 	}
 
-	/* Popups MapLibre (injectées hors du composant → :global) : thème sombre lisible. */
+	/* Popups MapLibre (injectées hors du composant → :global) : look glass lisible.
+	   Contenu quasi-opaque (lisibilité du texte sur la carte) + pointe opaque. */
 	:global(.maplibregl-popup-content) {
-		background: #131c2e;
-		color: #e2e8f0;
-		border: 1px solid #1e293b;
-		border-radius: 10px;
+		background: var(--glass-bg-strong);
+		-webkit-backdrop-filter: blur(var(--glass-blur));
+		backdrop-filter: blur(var(--glass-blur));
+		color: var(--text);
+		border: 1px solid var(--glass-border);
+		border-radius: var(--r-md);
 		padding: 0.7rem 0.9rem;
 		font-size: 0.9rem;
 		line-height: 1.45;
-		box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+		box-shadow: var(--shadow-2);
 		max-width: 240px;
 	}
 	:global(.maplibregl-popup-content strong) {
-		color: #fff;
+		color: var(--text);
 		font-size: 0.95rem;
 	}
-	/* La pointe du bulle prend la couleur du fond sombre. */
+	/* La pointe de la bulle prend la couleur (opaque) du panneau. */
 	:global(.maplibregl-popup-anchor-top .maplibregl-popup-tip) {
-		border-bottom-color: #131c2e;
+		border-bottom-color: var(--panel);
 	}
 	:global(.maplibregl-popup-anchor-bottom .maplibregl-popup-tip) {
-		border-top-color: #131c2e;
+		border-top-color: var(--panel);
 	}
 	:global(.maplibregl-popup-anchor-left .maplibregl-popup-tip) {
-		border-right-color: #131c2e;
+		border-right-color: var(--panel);
 	}
 	:global(.maplibregl-popup-anchor-right .maplibregl-popup-tip) {
-		border-left-color: #131c2e;
+		border-left-color: var(--panel);
 	}
 	:global(.maplibregl-popup-close-button) {
-		color: #94a3b8;
+		color: var(--muted);
 		font-size: 1.1rem;
 		padding: 0 0.3rem;
 	}
 	:global(.maplibregl-popup-close-button:hover) {
 		background: transparent;
-		color: #fff;
+		color: var(--text);
+	}
+	@media (prefers-reduced-transparency: reduce) {
+		:global(.maplibregl-popup-content) {
+			background: var(--panel);
+			-webkit-backdrop-filter: none;
+			backdrop-filter: none;
+		}
 	}
 </style>
