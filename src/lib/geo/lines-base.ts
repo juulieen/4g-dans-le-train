@@ -12,7 +12,7 @@
 export function slugifyLine(label: string): string {
 	return label
 		.normalize('NFD')
-		.replace(/[̀-ͯ]/g, '') // retire les accents
+		.replace(/\p{Diacritic}/gu, '') // retire les diacritiques (accents)
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, '-')
 		.replace(/^-+|-+$/g, '');

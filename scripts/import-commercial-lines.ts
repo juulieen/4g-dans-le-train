@@ -155,21 +155,24 @@ async function readCsv(path: string): Promise<Record<string, string>[]> {
 
 // --- Normalisation des libellés --------------------------------------------
 
+/** Qualificatif de service/itinéraire en suffixe à retirer (« … TGV », « … Route Nord »). */
+const SUFFIX_RE = /\s+(TGV|SEA|BPL|Route\s+(Nord|Sud))$/i;
+
 /** Nettoie une extrémité : retire suffixes/qualificatifs, normalise les espaces. */
 function cleanEndpoint(raw: string): string {
-	return (
-		raw
-			.replace(/\s+/g, ' ')
-			.trim()
-			// retire un complément de parcours en fin (« Via … », « par … »)
-			.replace(/\s+(via|par)\s+.+$/i, '')
-			// retire des qualificatifs de service/itinéraire en suffixe
-			.replace(/\s+(TGV|SEA|BPL|Route\s+(Nord|Sud))$/i, '')
-			.replace(/\s+(TGV|SEA|BPL)$/i, '')
-			.trim()
-			// « Paris Austerlitz », « Paris Gare de Lyon »… → « Paris » (gares parisiennes)
-			.replace(/^Paris\s+\S.*$/, 'Paris')
-	);
+	let s = raw
+		.replace(/\s+/g, ' ')
+		.trim()
+		// retire un complément de parcours en fin (« Via … », « par … »)
+		.replace(/\s+(via|par)\s+.+$/i, '');
+	// retire les qualificatifs en suffixe, y compris empilés (« … TGV Route Sud »)
+	let prev: string;
+	do {
+		prev = s;
+		s = s.replace(SUFFIX_RE, '').trim();
+	} while (s !== prev);
+	// « Paris Austerlitz », « Paris Gare de Lyon »… → « Paris » (gares parisiennes)
+	return s.replace(/^Paris\s+\S.*$/, 'Paris');
 }
 
 /**
@@ -255,7 +258,9 @@ async function main() {
 		...generated.filter((l) => !curatedSlugs.has(l.slug))
 	];
 
-	await writeFile(OUT_FILE, JSON.stringify(merged, null, 2) + '\n');
+	// Indentation par tabulation pour coller au style Prettier (useTabs) du repo :
+	// évite qu'une régénération casse `bun run lint` ou crée un diff de reformatage.
+	await writeFile(OUT_FILE, JSON.stringify(merged, null, '\t') + '\n');
 
 	console.log(
 		`[lines] écrit ${OUT_FILE} : ${merged.length} lignes ` +

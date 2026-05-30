@@ -21,8 +21,12 @@ export interface RailLine {
 /**
  * Référentiel effectif des lignes commerciales, généré depuis le GTFS SNCF
  * (scripts/import-commercial-lines.ts → commercial-lines.json, committé) et
- * fusionné avec le noyau curaté. On retombe sur CURATED_LINES si le fichier
- * généré est vide (sécurité au cas où la génération n'a jamais tourné).
+ * fusionné avec le noyau curaté.
+ *
+ * `commercial-lines.json` est importé statiquement : il est committé, donc
+ * toujours présent à la compilation (un fichier absent/corrompu ferait échouer
+ * le build, pas un fallback runtime). Le repli sur CURATED_LINES ne couvre donc
+ * que le cas « JSON présent mais tableau vide » (placeholder non régénéré).
  */
 const generated = generatedLines as CommercialLine[];
 export const RAIL_LINES: CommercialLine[] = generated.length > 0 ? generated : CURATED_LINES;
