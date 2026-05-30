@@ -130,8 +130,9 @@
 		position: fixed;
 		inset: 0;
 		z-index: var(--z-onboarding);
-		display: grid;
-		place-items: center;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
 		background: color-mix(in srgb, var(--bg) 55%, transparent);
 		-webkit-backdrop-filter: blur(4px);

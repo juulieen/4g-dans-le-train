@@ -199,6 +199,11 @@
 		src: url('/fonts/inter-variable.woff2') format('woff2');
 	}
 
+	:global(*),
+	:global(*::before),
+	:global(*::after) {
+		box-sizing: border-box;
+	}
 	:global(body) {
 		margin: 0;
 		font-family: var(--font-sans);
