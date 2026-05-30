@@ -270,6 +270,7 @@ async function main() {
 
 	await writeFile(OUT_FILE, JSON.stringify({ type: 'FeatureCollection', features }));
 	console.log(`[arcep] écrit ${OUT_FILE} — ${features.length} cellules ✅`);
+	console.log('[arcep] génération des voies colorées (data:arcep-lines)…');
 }
 
 main().catch((e) => {

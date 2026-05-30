@@ -119,21 +119,20 @@
 			{/if}
 		</p>
 
-		<div class="legend">
-			<span><i style="background:#22c55e"></i> Ça capte</span>
-			<span><i style="background:#f59e0b"></i> Dégradé</span>
-			<span><i style="background:#ef4444"></i> Ça coupe</span>
-			<span><i style="background:#3b82f6"></i> ARCEP (théorique)</span>
-		</div>
+		<p class="explain">
+			La <strong>voie est colorée</strong> selon ce que vous pourrez y faire (couverture théorique
+			des opérateurs). Les <strong>pastilles cerclées de blanc</strong> sont les mesures réelles des voyageurs&nbsp;:
+			là, c'est du vécu, pas de la théorie.
+		</p>
 
 		<div class="layers">
 			<label>
-				<input type="checkbox" name="show-community" bind:checked={showCommunity} />
-				Mesures communautaires
+				<input type="checkbox" name="show-arcep" bind:checked={showArcep} />
+				Couverture théorique (voie colorée)
 			</label>
 			<label>
-				<input type="checkbox" name="show-arcep" bind:checked={showArcep} />
-				Couverture officielle ARCEP
+				<input type="checkbox" name="show-community" bind:checked={showCommunity} />
+				Mesures réelles des voyageurs
 			</label>
 		</div>
 
@@ -231,13 +230,11 @@
 		color: var(--muted);
 		margin-top: 0;
 	}
-	.legend {
-		display: flex;
-		gap: 0.9rem;
-		flex-wrap: wrap;
-		font-size: 0.8rem;
+	.explain {
+		font-size: 0.82rem;
 		color: var(--muted);
-		margin-bottom: 0.75rem;
+		line-height: 1.5;
+		margin: 0 0 0.75rem;
 	}
 	.layers {
 		display: flex;
@@ -252,14 +249,6 @@
 		align-items: center;
 		gap: 0.4rem;
 		cursor: pointer;
-	}
-	.legend i {
-		display: inline-block;
-		width: 12px;
-		height: 12px;
-		border-radius: 3px;
-		margin-right: 4px;
-		vertical-align: middle;
 	}
 	.measure {
 		border-top: 1px solid var(--border);

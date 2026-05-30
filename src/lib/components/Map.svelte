@@ -9,15 +9,15 @@
 		showArcep = true,
 		showCommunity = true,
 		railLinesUrl = '/data/rail-lines.geojson',
-		arcepUrl = '/data/arcep-coverage.geojson'
+		arcepLinesUrl = '/data/arcep-lines.geojson'
 	}: {
 		coverage?: GeoJSON.FeatureCollection | null;
-		/** Opérateur sélectionné : filtre la couche ARCEP. */
+		/** Opérateur sélectionné : recolore les voies ARCEP. */
 		operator?: string;
 		showArcep?: boolean;
 		showCommunity?: boolean;
 		railLinesUrl?: string;
-		arcepUrl?: string;
+		arcepLinesUrl?: string;
 	} = $props();
 
 	let mapContainer: HTMLDivElement;
@@ -27,19 +27,32 @@
 
 	const EMPTY: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
-	/** Filtre MapLibre : ne montrer que les cellules ARCEP couvertes pour l'opérateur. */
-	function arcepFilter(op: string): maplibregl.FilterSpecification {
-		if (op === 'inconnu' || op === 'autre') {
-			// pas d'opérateur précis : on montre les cellules couvertes par au moins un.
-			return [
-				'any',
-				['has', 'orange'],
-				['has', 'sfr'],
-				['has', 'free'],
-				['has', 'bouygues']
-			] as unknown as maplibregl.FilterSpecification;
-		}
-		return ['has', op] as unknown as maplibregl.FilterSpecification;
+	// Couleurs par usage (niveau ARCEP → ce qu'on peut faire).
+	const USAGE_COLORS = {
+		TBC: '#22c55e', // vert — streaming vidéo / visio
+		BC: '#84cc16', // vert-clair — web, réseaux sociaux
+		CL: '#f59e0b', // orange — messages, navigation lente
+		none: '#ef4444' // rouge — zone blanche
+	};
+
+	/**
+	 * Expression MapLibre : couleur d'un segment de voie selon le niveau ARCEP de
+	 * l'opérateur sélectionné (ou du meilleur des 4 si aucun opérateur précis).
+	 * Un segment sans propriété de niveau = zone blanche (rouge).
+	 */
+	function arcepColor(op: string): maplibregl.ExpressionSpecification {
+		const field = op === 'inconnu' || op === 'autre' ? 'best' : op;
+		return [
+			'match',
+			['coalesce', ['get', field], 'none'],
+			'TBC',
+			USAGE_COLORS.TBC,
+			'BC',
+			USAGE_COLORS.BC,
+			'CL',
+			USAGE_COLORS.CL,
+			USAGE_COLORS.none // défaut = zone blanche
+		] as unknown as maplibregl.ExpressionSpecification;
 	}
 
 	onMount(() => {
@@ -57,7 +70,7 @@
 		map.on('load', async () => {
 			if (!map) return;
 
-			// --- Tracés ferroviaires SNCF (couche de fond, si le GeoJSON est présent) ---
+			// --- Tracés ferroviaires (gris neutre, contexte) ---
 			try {
 				const res = await fetch(railLinesUrl);
 				if (res.ok) {
@@ -67,35 +80,38 @@
 						type: 'line',
 						source: 'rail-lines',
 						paint: {
-							'line-color': '#64748b',
-							'line-width': ['interpolate', ['linear'], ['zoom'], 5, 0.6, 12, 2.5],
-							'line-opacity': 0.7
+							'line-color': '#475569',
+							'line-width': ['interpolate', ['linear'], ['zoom'], 5, 0.5, 12, 1.5],
+							'line-opacity': 0.5
 						}
 					});
 				}
 			} catch {
-				/* pas de données de lignes encore importées : on ignore */
+				/* pas de tracés : on ignore */
 			}
 
-			// --- Couverture officielle ARCEP (théorique, par opérateur) ---
+			// --- Couverture ARCEP : la VOIE colorée selon l'usage possible (théorique) ---
 			try {
-				const res = await fetch(arcepUrl);
+				const res = await fetch(arcepLinesUrl);
 				if (res.ok) {
-					const arcep = (await res.json()) as GeoJSON.FeatureCollection;
-					if (arcep.features.length) {
+					const lines = (await res.json()) as GeoJSON.FeatureCollection;
+					if (lines.features.length) {
 						hasArcep = true;
-						map.addSource('arcep', { type: 'geojson', data: arcep });
+						map.addSource('arcep-lines', { type: 'geojson', data: lines });
 						map.addLayer({
-							id: 'arcep-fill',
-							type: 'circle',
-							source: 'arcep',
-							layout: { visibility: showArcep ? 'visible' : 'none' },
-							filter: arcepFilter(operator),
+							id: 'arcep-lines',
+							type: 'line',
+							source: 'arcep-lines',
+							layout: {
+								visibility: showArcep ? 'visible' : 'none',
+								'line-cap': 'round',
+								'line-join': 'round'
+							},
 							paint: {
-								'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 1.5, 12, 5],
-								// Couleur selon le meilleur niveau ARCEP de l'opérateur sélectionné.
-								'circle-color': '#3b82f6',
-								'circle-opacity': 0.35
+								'line-color': arcepColor(operator),
+								// Trait large et un peu pâle : c'est le fond « théorique ».
+								'line-width': ['interpolate', ['linear'], ['zoom'], 5, 2.5, 12, 7],
+								'line-opacity': 0.55
 							}
 						});
 					}
@@ -104,7 +120,7 @@
 				/* couche ARCEP absente : la carte fonctionne sans */
 			}
 
-			// --- Couverture communautaire (cellules H3 colorées par taux de succès) ---
+			// --- Mesures communautaires (le RÉEL, vif, par-dessus) ---
 			map.addSource('coverage', { type: 'geojson', data: coverage ?? EMPTY });
 			map.addLayer({
 				id: 'coverage-fill',
@@ -112,25 +128,41 @@
 				source: 'coverage',
 				layout: { visibility: showCommunity ? 'visible' : 'none' },
 				paint: {
-					'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 3, 12, 8],
+					'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 4, 12, 9],
 					'circle-color': [
 						'interpolate',
 						['linear'],
 						['get', 'successRate'],
 						0,
-						'#ef4444', // rouge : ça ne capte pas
+						'#ef4444',
 						0.5,
-						'#f59e0b', // orange : dégradé
+						'#f59e0b',
 						1,
-						'#22c55e' // vert : ça capte
+						'#22c55e'
 					],
-					'circle-stroke-color': '#0b1220',
-					'circle-stroke-width': 1,
-					'circle-opacity': 0.85
+					'circle-stroke-color': '#ffffff',
+					'circle-stroke-width': 2,
+					'circle-opacity': 0.95
 				}
 			});
 
-			// Popup au clic sur une cellule communautaire
+			// Popup ARCEP : ce qu'on peut faire ici (théorique).
+			map.on('click', 'arcep-lines', (e) => {
+				const f = e.features?.[0];
+				if (!f || !map) return;
+				const p = f.properties as Record<string, string>;
+				const field = operator === 'inconnu' || operator === 'autre' ? 'best' : operator;
+				const lvl = p[field] ?? null;
+				new maplibregl.Popup()
+					.setLngLat(e.lngLat)
+					.setHTML(
+						`<strong>Couverture théorique (ARCEP)</strong><br>${usageLabel(lvl)}` +
+							`<br><span style="opacity:.7;font-size:.85em">Orange ${badge(p.orange)} · SFR ${badge(p.sfr)} · Free ${badge(p.free)} · Bouygues ${badge(p.bouygues)}</span>`
+					)
+					.addTo(map);
+			});
+
+			// Popup mesure communautaire : la réalité mesurée.
 			map.on('click', 'coverage-fill', (e) => {
 				const f = e.features?.[0];
 				if (!f || !map) return;
@@ -140,25 +172,48 @@
 				new maplibregl.Popup()
 					.setLngLat(e.lngLat)
 					.setHTML(
-						`<strong>${rate}% de réussite</strong><br>` +
-							`Opérateur : ${p.operator ?? 'inconnu'}<br>` +
-							`Latence médiane : ${rtt}<br>` +
-							`Mesures : ${p.samples ?? 0}`
+						`<strong>Mesuré par la communauté</strong><br>` +
+							`${rate}% de réussite — ${usageFromRate(rate)}<br>` +
+							`<span style="opacity:.7;font-size:.85em">Opérateur ${p.operator ?? 'inconnu'} · ${p.samples ?? 0} mesures · latence ${rtt}</span>`
 					)
 					.addTo(map);
 			});
-			map.on('mouseenter', 'coverage-fill', () => {
-				if (map) map.getCanvas().style.cursor = 'pointer';
-			});
-			map.on('mouseleave', 'coverage-fill', () => {
-				if (map) map.getCanvas().style.cursor = '';
-			});
+
+			for (const layer of ['arcep-lines', 'coverage-fill']) {
+				map.on('mouseenter', layer, () => {
+					if (map) map.getCanvas().style.cursor = 'pointer';
+				});
+				map.on('mouseleave', layer, () => {
+					if (map) map.getCanvas().style.cursor = '';
+				});
+			}
 
 			loaded = true;
 		});
 
 		return () => map?.remove();
 	});
+
+	function usageLabel(lvl: string | null): string {
+		switch (lvl) {
+			case 'TBC':
+				return '🟢 Streaming vidéo, visio';
+			case 'BC':
+				return '🟡 Web, réseaux sociaux';
+			case 'CL':
+				return '🟠 Messages, navigation lente';
+			default:
+				return '🔴 Zone blanche — pas de réseau';
+		}
+	}
+	function usageFromRate(rate: number): string {
+		if (rate >= 80) return '🟢 ça capte bien';
+		if (rate >= 40) return '🟠 réseau dégradé';
+		return '🔴 ça coupe';
+	}
+	function badge(lvl: string | null | undefined): string {
+		return lvl ?? '—';
+	}
 
 	// Rafraîchit la couverture communautaire quand la prop change.
 	$effect(() => {
@@ -167,22 +222,31 @@
 		src?.setData(coverage ?? EMPTY);
 	});
 
-	// Applique le filtre opérateur + la visibilité des couches.
+	// Visibilité des couches + recoloration ARCEP selon l'opérateur.
 	$effect(() => {
 		if (!loaded || !map) return;
 		if (map.getLayer('coverage-fill')) {
 			map.setLayoutProperty('coverage-fill', 'visibility', showCommunity ? 'visible' : 'none');
 		}
-		if (map.getLayer('arcep-fill')) {
-			map.setLayoutProperty('arcep-fill', 'visibility', showArcep ? 'visible' : 'none');
-			map.setFilter('arcep-fill', arcepFilter(operator));
+		if (map.getLayer('arcep-lines')) {
+			map.setLayoutProperty('arcep-lines', 'visibility', showArcep ? 'visible' : 'none');
+			map.setPaintProperty('arcep-lines', 'line-color', arcepColor(operator));
 		}
 	});
 </script>
 
 <div class="map" bind:this={mapContainer}></div>
 {#if hasArcep}
-	<div class="badge">Fond bleu : couverture théorique ARCEP</div>
+	<div class="legend-overlay">
+		<strong>Sur la voie, vous pourrez :</strong>
+		<span><i style="background:#22c55e"></i> Streaming vidéo</span>
+		<span><i style="background:#84cc16"></i> Web & réseaux sociaux</span>
+		<span><i style="background:#f59e0b"></i> Messages seulement</span>
+		<span><i style="background:#ef4444"></i> Rien (zone blanche)</span>
+		<span class="real"
+			><i style="background:#22c55e; border:2px solid #fff"></i> Mesuré en vrai</span
+		>
+	</div>
 {/if}
 
 <style>
@@ -191,15 +255,45 @@
 		height: 100%;
 		min-height: 60vh;
 	}
-	.badge {
+	.legend-overlay {
 		position: absolute;
 		bottom: 8px;
 		left: 8px;
-		background: rgba(11, 18, 32, 0.8);
-		color: #cbd5e1;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		background: rgba(11, 18, 32, 0.85);
+		color: #e2e8f0;
 		font-size: 0.72rem;
-		padding: 0.25rem 0.5rem;
-		border-radius: 6px;
+		padding: 0.5rem 0.7rem;
+		border-radius: 8px;
 		pointer-events: none;
+		max-width: 220px;
+	}
+	.legend-overlay strong {
+		font-size: 0.75rem;
+		margin-bottom: 2px;
+	}
+	.legend-overlay span {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.legend-overlay i {
+		display: inline-block;
+		width: 16px;
+		height: 5px;
+		border-radius: 3px;
+		flex: none;
+	}
+	.legend-overlay .real i {
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+	}
+	.legend-overlay .real {
+		margin-top: 2px;
+		border-top: 1px solid rgba(255, 255, 255, 0.15);
+		padding-top: 3px;
 	}
 </style>
