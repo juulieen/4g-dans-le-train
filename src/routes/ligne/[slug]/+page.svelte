@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { OPERATORS } from '$geo/lines';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -58,6 +59,14 @@
 			teste la connexion en continu et enregistre, de façon anonyme, où ça capte. Plus il y a de
 			contributeurs sur la ligne {line.name}, plus la carte est précise.
 		</p>
+		<h2>La couverture sur {line.name} par opérateur</h2>
+		<p>La couverture diffère selon votre opérateur. Voyez le détail&nbsp;:</p>
+		<ul class="ops">
+			{#each OPERATORS as o (o.slug)}
+				<li><a href="/ligne/{line.slug}/{o.slug}">{o.name} sur {line.name}</a></li>
+			{/each}
+		</ul>
+
 		<h2>Astuces pour mieux capter entre {line.from} et {line.to}</h2>
 		<ul>
 			<li>Préchargez vos contenus (musique, vidéos, articles) avant les zones blanches connues.</li>
@@ -100,5 +109,25 @@
 	h2 {
 		font-size: 1.15rem;
 		margin-top: 1.5rem;
+	}
+	.ops {
+		list-style: none;
+		padding: 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+	.ops a {
+		display: inline-block;
+		padding: 0.4rem 0.8rem;
+		background: var(--panel);
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		text-decoration: none;
+		color: var(--text);
+		font-size: 0.85rem;
+	}
+	.ops a:hover {
+		border-color: var(--accent);
 	}
 </style>

@@ -6,6 +6,7 @@
 	const nav = [
 		{ href: '/', label: 'Carte' },
 		{ href: '/lignes', label: 'Lignes' },
+		{ href: '/operateurs', label: 'Opérateurs' },
 		{ href: '/faq', label: 'FAQ' }
 	];
 </script>

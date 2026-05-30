@@ -20,11 +20,24 @@
 	let consent = $state(false);
 	let showArcep = $state(true);
 	let showCommunity = $state(true);
+	// Filtre d'AFFICHAGE de la carte (distinct de l'opérateur du mode mesure).
+	let viewOperator = $state<string>('inconnu');
 	let live = $state<LiveState | null>(null);
 	// État local initialisé une fois avec la couverture SSR, puis rafraîchi
 	// localement après chaque mesure (refreshCoverage) — lecture initiale voulue.
 	// svelte-ignore state_referenced_locally
 	let coverage = $state(data.coverage);
+
+	// Couverture communautaire filtrée selon l'opérateur d'affichage choisi.
+	const filteredCoverage = $derived.by(() => {
+		if (viewOperator === 'inconnu') return coverage;
+		return {
+			type: 'FeatureCollection' as const,
+			features: coverage.features.filter(
+				(f) => (f.properties as Record<string, unknown>)?.operator === viewOperator
+			)
+		};
+	});
 
 	let controller: MeasurementController | null = null;
 
@@ -105,7 +118,7 @@
 
 <section class="layout">
 	<div class="map-wrap">
-		<Map {coverage} {operator} {showArcep} {showCommunity} />
+		<Map coverage={filteredCoverage} operator={viewOperator} {showArcep} {showCommunity} />
 	</div>
 
 	<aside class="panel">
@@ -118,6 +131,17 @@
 				Soyez le premier à contribuer&nbsp;!
 			{/if}
 		</p>
+
+		<label class="view-op" for="view-operator">
+			Afficher la couverture de&nbsp;:
+			<select id="view-operator" name="view-operator" bind:value={viewOperator}>
+				<option value="inconnu">Tous les opérateurs</option>
+				<option value="orange">Orange</option>
+				<option value="sfr">SFR</option>
+				<option value="free">Free</option>
+				<option value="bouygues">Bouygues</option>
+			</select>
+		</label>
 
 		<p class="explain">
 			La <strong>voie est colorée</strong> selon ce que vous pourrez y faire (couverture théorique
@@ -229,6 +253,24 @@
 	.lede {
 		color: var(--muted);
 		margin-top: 0;
+	}
+	.view-op {
+		display: block;
+		font-size: 0.85rem;
+		color: var(--text);
+		font-weight: 600;
+		margin-bottom: 0.75rem;
+	}
+	.view-op select {
+		display: block;
+		width: 100%;
+		margin-top: 0.3rem;
+		padding: 0.5rem;
+		background: var(--bg);
+		color: var(--text);
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		font-weight: 400;
 	}
 	.explain {
 		font-size: 0.82rem;

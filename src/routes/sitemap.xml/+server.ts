@@ -1,15 +1,18 @@
-import { RAIL_LINES } from '$geo/lines';
+import { RAIL_LINES, OPERATORS } from '$geo/lines';
 import type { RequestHandler } from './$types';
 
-/** Génère le sitemap.xml à partir des routes statiques + des pages de lignes. */
+/** Génère le sitemap.xml à partir des routes statiques + pages lignes/opérateurs. */
 export const prerender = true;
 
 const BASE = 'https://4g-dans-le-train.juulieen.fr';
 
 export const GET: RequestHandler = () => {
-	const staticPaths = ['', '/lignes', '/faq', '/confidentialite'];
+	const staticPaths = ['', '/lignes', '/operateurs', '/faq', '/confidentialite'];
 	const linePaths = RAIL_LINES.map((l) => `/ligne/${l.slug}`);
-	const urls = [...staticPaths, ...linePaths];
+	const operatorPaths = OPERATORS.map((o) => `/operateur/${o.slug}`);
+	// Pages croisées ligne × opérateur.
+	const crossPaths = RAIL_LINES.flatMap((l) => OPERATORS.map((o) => `/ligne/${l.slug}/${o.slug}`));
+	const urls = [...staticPaths, ...linePaths, ...operatorPaths, ...crossPaths];
 
 	const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

@@ -104,6 +104,25 @@ export const RAIL_LINES: CommercialLine[] = [
 	{ slug: 'paris-nice', name: 'Paris – Nice', service: 'TGV INOUI', from: 'Paris', to: 'Nice' }
 ];
 
+/** Les quatre opérateurs mobiles français, pour les pages SEO /operateur/[slug]. */
+export interface MobileOperator {
+	slug: string;
+	name: string;
+	/** Clé interne utilisée dans les données (mesures + ARCEP). */
+	key: 'orange' | 'sfr' | 'free' | 'bouygues';
+}
+
+export const OPERATORS: MobileOperator[] = [
+	{ slug: 'orange', name: 'Orange', key: 'orange' },
+	{ slug: 'sfr', name: 'SFR', key: 'sfr' },
+	{ slug: 'free', name: 'Free', key: 'free' },
+	{ slug: 'bouygues', name: 'Bouygues Telecom', key: 'bouygues' }
+];
+
+/** Retrouve une ligne / un opérateur par slug (helpers pour les pages SEO). */
+export const findLine = (slug: string) => RAIL_LINES.find((l) => l.slug === slug);
+export const findOperator = (slug: string) => OPERATORS.find((o) => o.slug === slug);
+
 /**
  * Lit static/data/rail-lines.geojson et renvoie la liste dédupliquée des lignes
  * (une entrée par slug). Utilisé pour générer les pages SEO /ligne/[slug] et le sitemap.
