@@ -2,14 +2,15 @@
 	import { page } from '$app/state';
 	import { onMount, setContext } from 'svelte';
 	import Onboarding from '$components/Onboarding/Onboarding.svelte';
+	import NavIcon from '$components/NavIcon.svelte';
 
 	let { children } = $props();
 
 	const nav = [
-		{ href: '/', label: 'Carte', icon: '🗺️' },
-		{ href: '/lignes', label: 'Lignes', icon: '🚆' },
-		{ href: '/operateurs', label: 'Opérateurs', icon: '📡' },
-		{ href: '/faq', label: 'FAQ', icon: '❓' }
+		{ href: '/', label: 'Carte', icon: 'map' },
+		{ href: '/lignes', label: 'Lignes', icon: 'train' },
+		{ href: '/operateurs', label: 'Opérateurs', icon: 'signal' },
+		{ href: '/faq', label: 'FAQ', icon: 'help' }
 	];
 
 	const isMapRoute = $derived(page.url.pathname === '/');
@@ -105,7 +106,7 @@
 	<nav class="bottom-nav glass" aria-label="Navigation principale">
 		{#each nav as item (item.href)}
 			<a href={item.href} class:active={page.url.pathname === item.href}>
-				<span class="bn-icon" aria-hidden="true">{item.icon}</span>
+				<span class="bn-icon"><NavIcon name={item.icon} /></span>
 				<span class="bn-label">{item.label}</span>
 			</a>
 		{/each}
@@ -387,8 +388,9 @@
 			background: color-mix(in srgb, var(--accent) 14%, transparent);
 		}
 		.bn-icon {
-			font-size: 1.25rem;
-			line-height: 1;
+			display: flex;
+			align-items: center;
+			justify-content: center;
 		}
 		/* Le footer des pages SEO ne doit pas passer sous la bottom nav. */
 		.app:not(.map-route) footer {

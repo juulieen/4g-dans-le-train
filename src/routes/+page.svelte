@@ -113,6 +113,53 @@
 	let sheetExpanded = $state(false);
 	let showHint = $state(false);
 
+	// --- Bottom-sheet : glisser pour ouvrir/fermer (mobile) ---
+	const PEEK = 188; // doit correspondre à --peek dans le CSS
+	let sheetEl: HTMLElement | undefined = $state();
+	let dragging = $state(false);
+	let dragTranslate = $state(0);
+	let dragStartY = 0;
+	let dragStartTranslate = 0;
+	let dragMoved = 0;
+	let suppressClick = false;
+
+	function collapsedPx(): number {
+		return sheetEl ? sheetEl.offsetHeight - PEEK : 0;
+	}
+	function onHandleDown(e: PointerEvent) {
+		if (window.innerWidth > 760) return; // drag mobile uniquement
+		dragging = true;
+		dragMoved = 0;
+		dragStartY = e.clientY;
+		dragStartTranslate = sheetExpanded ? 0 : collapsedPx();
+		dragTranslate = dragStartTranslate;
+		try {
+			(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+		} catch {
+			/* capture indisponible : le drag reste fonctionnel sans */
+		}
+	}
+	function onHandleMove(e: PointerEvent) {
+		if (!dragging) return;
+		const dy = e.clientY - dragStartY;
+		dragMoved = Math.max(dragMoved, Math.abs(dy));
+		dragTranslate = Math.min(Math.max(dragStartTranslate + dy, 0), collapsedPx());
+	}
+	function onHandleUp() {
+		if (!dragging) return;
+		dragging = false;
+		if (dragMoved < 6) return; // tap : on laisse le clic basculer
+		suppressClick = true; // c'était un glissement : on neutralise le clic suivant
+		sheetExpanded = dragTranslate < collapsedPx() / 2;
+	}
+	function onHandleClick() {
+		if (suppressClick) {
+			suppressClick = false;
+			return;
+		}
+		sheetExpanded = !sheetExpanded;
+	}
+
 	// Lecture seule : on n'écrit jamais la persistance ici (sinon la 1re visite
 	// serait « consommée » sans avoir rien montré).
 	$effect(() => {
@@ -161,10 +208,20 @@
 		<HintChip onopen={openOnboarding} ondismiss={dismissHint} />
 	{/if}
 
-	<div class="sheet glass" class:expanded={sheetExpanded}>
+	<div
+		class="sheet glass"
+		class:expanded={sheetExpanded}
+		class:dragging
+		bind:this={sheetEl}
+		style={dragging ? `transform: translateY(${dragTranslate}px)` : ''}
+	>
 		<button
 			class="sheet-handle"
-			onclick={() => (sheetExpanded = !sheetExpanded)}
+			onpointerdown={onHandleDown}
+			onpointermove={onHandleMove}
+			onpointerup={onHandleUp}
+			onpointercancel={onHandleUp}
+			onclick={onHandleClick}
 			aria-label={sheetExpanded ? 'Réduire le panneau' : 'Ouvrir le panneau'}
 			aria-expanded={sheetExpanded}
 		>
@@ -324,6 +381,9 @@
 	}
 	.sheet.expanded {
 		transform: translateY(0);
+	}
+	.sheet.dragging {
+		transition: none;
 	}
 	.sheet-handle {
 		flex: none;
