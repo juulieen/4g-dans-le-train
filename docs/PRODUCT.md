@@ -76,6 +76,12 @@ recolore les voies ARCEP **et** filtre les mesures communautaires. Il est
 - **Agrégation** (`src/lib/server/ingest.ts`) : par cellule H3 × opérateur →
   taux de réussite, latence médiane, nombre de mesures. Servi par
   `GET /api/coverage`.
+- **Rattachement à une ligne (snapping)** : à l'ingestion, la cellule H3 de la
+  mesure est rattachée à sa **ligne commerciale** via un index pré-calculé
+  (`src/lib/geo/line-snap.ts` → `line-index.json`, cf. `docs/DATA.md` § 3). Le
+  rattachement se fait **sur la cellule, pas sur la position brute** — cohérent
+  avec l'anonymisation. Cela débloque les pages de couverture par ligne et la
+  future vue « profil de trajet ».
 
 ## Décisions & conventions produit
 
@@ -85,6 +91,13 @@ recolore les voies ARCEP **et** filtre les mesures communautaires. Il est
   `/ligne/[slug]`, `/operateur/[slug]`, croisées `/ligne/[slug]/[operateur]`,
   - FAQ, sitemap, JSON-LD. Référentiel curaté dans `src/lib/geo/lines.ts`.
 - **Périmètre** : France (réseau SNCF) d'abord ; architecture extensible.
+- **Snapping ligne — décisions** : (1) une mesure hors de toute ligne connue est
+  **acceptée sans `lineSlug`**, jamais rejetée (on ne perd aucune donnée ; le filtre
+  anti-aberrant est reporté). (2) Une cellule de **tronc commun** appartient à
+  plusieurs lignes ; `measurements.lineSlug` ne stocke que la **ligne primaire** (la
+  plus locale), la liste complète restant dans l'index pour la couverture par ligne.
+  (3) La géométrie des lignes vient du **GTFS (gares ordonnées) + routage sur le RFN**,
+  pas d'une saisie manuelle ni d'une corde droite (cf. `docs/DATA.md` § 3).
 - **H3 résolutions** : mesures communautaires en **res 9** (~200 m, précis) ;
   couche ARCEP en **res 7** (~1,4 km, suffisant pour un fond théorique et léger).
 - **Données versionnées** : `rail-lines.geojson` et `arcep-lines.geojson` sont

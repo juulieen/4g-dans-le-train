@@ -4,8 +4,9 @@
  * Enchaîne les imports dans l'ordre de leurs dépendances :
  *   1. SNCF  → static/data/rail-lines.geojson      (prérequis du corridor ARCEP)
  *   2. lignes commerciales → src/lib/geo/commercial-lines.json
- *   3. ARCEP → static/data/arcep-coverage.geojson  (dépend de rail-lines)
- *   4. voies colorées → static/data/arcep-lines.geojson (dépend des deux précédents)
+ *   3. index ligne → src/lib/geo/line-index.json   (dépend de rail-lines + commercial-lines)
+ *   4. ARCEP → static/data/arcep-coverage.geojson  (dépend de rail-lines)
+ *   5. voies colorées → static/data/arcep-lines.geojson (dépend des deux précédents)
  *
  * S'arrête au premier échec (code de sortie non nul). Le trimestre ARCEP se règle
  * via la variable d'environnement ARCEP_QUARTER (cf. docs/DATA.md).
@@ -18,6 +19,7 @@ import { spawn } from 'node:child_process';
 const STEPS: { label: string; task: string }[] = [
 	{ label: 'Tracés SNCF (rail-lines.geojson)', task: 'data:sncf' },
 	{ label: 'Lignes commerciales (commercial-lines.json)', task: 'data:lines' },
+	{ label: 'Index ligne (line-index.json)', task: 'data:line-index' },
 	{ label: 'Couverture ARCEP (arcep-coverage.geojson)', task: 'data:arcep' },
 	{ label: 'Voies colorées (arcep-lines.geojson)', task: 'data:arcep-lines' }
 ];
