@@ -16,7 +16,7 @@
  *
  * Licence source : Licence Ouverte / Open Licence (Etalab).
  */
-import { mkdir, readFile, writeFile, rm, readdir } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rm, rename, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -93,6 +93,36 @@ const REGION_TOKENS = new Set(
 	].map((s) => s.toLowerCase())
 );
 
+/**
+ * Destinations hors de France : on recentre le SEO sur « la 4G dans le train en
+ * France ». Une relation dont une extrémité est étrangère est écartée (cela
+ * élimine aussi des libellés bruités comme « Stuttgart Munich »).
+ */
+const FOREIGN_TOKENS = new Set(
+	[
+		'Francfort',
+		'Bruxelles',
+		'Genève',
+		'Lausanne',
+		'Luxembourg',
+		'Zurich',
+		'Milan',
+		'Stuttgart Munich'
+	].map((s) => s.toLowerCase())
+);
+
+/**
+ * Canonicalisation des extrémités : corrige les libellés GTFS (noms de gare,
+ * abréviations, accents manquants, fautes) vers un nom de ville unique. Évite
+ * notamment les pages SEO en double (« Clermont » vs « Clermont-Ferrand »).
+ */
+const CITY_ALIASES: Record<string, string> = {
+	Clermont: 'Clermont-Ferrand',
+	'Besançon Viotte': 'Besançon',
+	'Saint-Etienne': 'Saint-Étienne',
+	"Les Sables d'Olonnes": "Les Sables-d'Olonne"
+};
+
 // --- Téléchargement / décompression ----------------------------------------
 
 async function download(url: string, dest: string): Promise<void> {
@@ -102,7 +132,11 @@ async function download(url: string, dest: string): Promise<void> {
 	}
 	const res = await fetch(url);
 	if (!res.ok) throw new Error(`HTTP ${res.status} sur ${url}`);
-	await writeFile(dest, Buffer.from(await res.arrayBuffer()));
+	// Écriture atomique : on n'expose `dest` (réutilisé tel quel aux runs suivants)
+	// qu'une fois le téléchargement complet, pour ne jamais réutiliser un ZIP tronqué.
+	const part = `${dest}.part`;
+	await writeFile(part, Buffer.from(await res.arrayBuffer()));
+	await rename(part, dest);
 }
 
 /** Décompresse un .zip GTFS dans un dossier et renvoie ce dossier. */
@@ -172,7 +206,9 @@ function cleanEndpoint(raw: string): string {
 		s = s.replace(SUFFIX_RE, '').trim();
 	} while (s !== prev);
 	// « Paris Austerlitz », « Paris Gare de Lyon »… → « Paris » (gares parisiennes)
-	return s.replace(/^Paris\s+\S.*$/, 'Paris');
+	s = s.replace(/^Paris\s+\S.*$/, 'Paris');
+	// canonicalisation finale (gare→ville, accents, fautes, dédoublonnage)
+	return CITY_ALIASES[s] ?? s;
 }
 
 /**
@@ -192,12 +228,14 @@ function parseRelation(longName: string): { from: string; to: string } | null {
 	return { from, to };
 }
 
-/** Une extrémité est-elle une vraie ville exploitable (≠ région/abréviation) ? */
+/** Une extrémité est-elle une vraie ville française exploitable (≠ région/étranger) ? */
 function isUsableCity(name: string): boolean {
 	if (name.length < 3) return false;
 	if (name.includes('/')) return false; // « Lux/Alsace/Lorraine »
 	if (/^[A-Z]{2,4}$/.test(name)) return false; // « LR », « IS », « BPL »
-	if (REGION_TOKENS.has(name.toLowerCase())) return false;
+	const key = name.toLowerCase();
+	if (REGION_TOKENS.has(key)) return false;
+	if (FOREIGN_TOKENS.has(key)) return false; // recentrage France
 	return true;
 }
 
@@ -230,7 +268,7 @@ async function main() {
 			if (!longName) continue;
 			const rel = parseRelation(longName);
 			if (!rel || rel.from === rel.to) {
-				dropped.push(longName || r.route_short_name || r.route_id);
+				dropped.push(longName); // longName est garanti non vide ici
 				continue;
 			}
 			if (!isUsableCity(rel.from) || !isUsableCity(rel.to)) {

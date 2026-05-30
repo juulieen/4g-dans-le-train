@@ -91,18 +91,11 @@
 		"to": "Lille"
 	},
 	{
-		"slug": "clermont-beziers",
-		"name": "Clermont – Béziers",
+		"slug": "clermont-ferrand-beziers",
+		"name": "Clermont-Ferrand – Béziers",
 		"service": "Intercités",
-		"from": "Clermont",
+		"from": "Clermont-Ferrand",
 		"to": "Béziers"
-	},
-	{
-		"slug": "francfort-marseille",
-		"name": "Francfort – Marseille",
-		"service": "TGV INOUI",
-		"from": "Francfort",
-		"to": "Marseille"
 	},
 	{
 		"slug": "nantes-bordeaux",
@@ -133,11 +126,11 @@
 		"to": "Arcachon"
 	},
 	{
-		"slug": "paris-besancon-viotte",
-		"name": "Paris – Besançon Viotte",
+		"slug": "paris-besancon",
+		"name": "Paris – Besançon",
 		"service": "TGV INOUI",
 		"from": "Paris",
-		"to": "Besançon Viotte"
+		"to": "Besançon"
 	},
 	{
 		"slug": "paris-brest",
@@ -161,13 +154,6 @@
 		"to": "Brive"
 	},
 	{
-		"slug": "paris-bruxelles",
-		"name": "Paris – Bruxelles",
-		"service": "Intercités",
-		"from": "Paris",
-		"to": "Bruxelles"
-	},
-	{
 		"slug": "paris-cahors",
 		"name": "Paris – Cahors",
 		"service": "Intercités",
@@ -175,32 +161,11 @@
 		"to": "Cahors"
 	},
 	{
-		"slug": "paris-clermont",
-		"name": "Paris – Clermont",
-		"service": "Intercités",
-		"from": "Paris",
-		"to": "Clermont"
-	},
-	{
 		"slug": "paris-dunkerque",
 		"name": "Paris – Dunkerque",
 		"service": "TGV INOUI",
 		"from": "Paris",
 		"to": "Dunkerque"
-	},
-	{
-		"slug": "paris-francfort",
-		"name": "Paris – Francfort",
-		"service": "TGV INOUI",
-		"from": "Paris",
-		"to": "Francfort"
-	},
-	{
-		"slug": "paris-geneve",
-		"name": "Paris – Genève",
-		"service": "TGV INOUI",
-		"from": "Paris",
-		"to": "Genève"
 	},
 	{
 		"slug": "paris-grenoble",
@@ -231,13 +196,6 @@
 		"to": "Latour-de-Carol"
 	},
 	{
-		"slug": "paris-lausanne",
-		"name": "Paris – Lausanne",
-		"service": "TGV INOUI",
-		"from": "Paris",
-		"to": "Lausanne"
-	},
-	{
 		"slug": "paris-le-croisic",
 		"name": "Paris – Le Croisic",
 		"service": "TGV INOUI",
@@ -245,18 +203,11 @@
 		"to": "Le Croisic"
 	},
 	{
-		"slug": "paris-les-sables-d-olonnes",
-		"name": "Paris – Les Sables d'Olonnes",
+		"slug": "paris-les-sables-d-olonne",
+		"name": "Paris – Les Sables-d'Olonne",
 		"service": "TGV INOUI",
 		"from": "Paris",
-		"to": "Les Sables d'Olonnes"
-	},
-	{
-		"slug": "paris-luxembourg",
-		"name": "Paris – Luxembourg",
-		"service": "TGV INOUI",
-		"from": "Paris",
-		"to": "Luxembourg"
+		"to": "Les Sables-d'Olonne"
 	},
 	{
 		"slug": "paris-metz",
@@ -302,10 +253,10 @@
 	},
 	{
 		"slug": "paris-saint-etienne",
-		"name": "Paris – Saint-Etienne",
+		"name": "Paris – Saint-Étienne",
 		"service": "TGV INOUI",
 		"from": "Paris",
-		"to": "Saint-Etienne"
+		"to": "Saint-Étienne"
 	},
 	{
 		"slug": "paris-sedan",
@@ -313,13 +264,6 @@
 		"service": "TGV INOUI",
 		"from": "Paris",
 		"to": "Sedan"
-	},
-	{
-		"slug": "paris-stuttgart-munich",
-		"name": "Paris – Stuttgart Munich",
-		"service": "TGV INOUI",
-		"from": "Paris",
-		"to": "Stuttgart Munich"
 	},
 	{
 		"slug": "paris-tarbes",
@@ -355,20 +299,6 @@
 		"service": "TGV INOUI",
 		"from": "Paris",
 		"to": "Valenciennes"
-	},
-	{
-		"slug": "paris-zurich",
-		"name": "Paris – Zurich",
-		"service": "TGV INOUI",
-		"from": "Paris",
-		"to": "Zurich"
-	},
-	{
-		"slug": "strasbourg-bruxelles",
-		"name": "Strasbourg – Bruxelles",
-		"service": "TGV INOUI",
-		"from": "Strasbourg",
-		"to": "Bruxelles"
 	},
 	{
 		"slug": "toulouse-hendaye",
