@@ -1,0 +1,310 @@
+[
+	{
+		"slug": "paris-lyon",
+		"name": "Paris – Lyon",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Lyon"
+	},
+	{
+		"slug": "paris-marseille",
+		"name": "Paris – Marseille",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Marseille"
+	},
+	{
+		"slug": "paris-bordeaux",
+		"name": "Paris – Bordeaux",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Bordeaux"
+	},
+	{
+		"slug": "paris-nantes",
+		"name": "Paris – Nantes",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Nantes"
+	},
+	{
+		"slug": "paris-rennes",
+		"name": "Paris – Rennes",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Rennes"
+	},
+	{
+		"slug": "paris-lille",
+		"name": "Paris – Lille",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Lille"
+	},
+	{
+		"slug": "paris-strasbourg",
+		"name": "Paris – Strasbourg",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Strasbourg"
+	},
+	{
+		"slug": "paris-toulouse",
+		"name": "Paris – Toulouse",
+		"service": "TGV INOUI / Intercités",
+		"from": "Paris",
+		"to": "Toulouse"
+	},
+	{
+		"slug": "lyon-marseille",
+		"name": "Lyon – Marseille",
+		"service": "TGV INOUI",
+		"from": "Lyon",
+		"to": "Marseille"
+	},
+	{
+		"slug": "paris-clermont-ferrand",
+		"name": "Paris – Clermont-Ferrand",
+		"service": "Intercités",
+		"from": "Paris",
+		"to": "Clermont-Ferrand"
+	},
+	{
+		"slug": "bordeaux-marseille",
+		"name": "Bordeaux – Marseille",
+		"service": "Intercités",
+		"from": "Bordeaux",
+		"to": "Marseille"
+	},
+	{
+		"slug": "paris-nice",
+		"name": "Paris – Nice",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Nice"
+	},
+	{
+		"slug": "bordeaux-lille",
+		"name": "Bordeaux – Lille",
+		"service": "TGV INOUI",
+		"from": "Bordeaux",
+		"to": "Lille"
+	},
+	{
+		"slug": "clermont-ferrand-beziers",
+		"name": "Clermont-Ferrand – Béziers",
+		"service": "Intercités",
+		"from": "Clermont-Ferrand",
+		"to": "Béziers"
+	},
+	{
+		"slug": "nantes-bordeaux",
+		"name": "Nantes – Bordeaux",
+		"service": "Intercités",
+		"from": "Nantes",
+		"to": "Bordeaux"
+	},
+	{
+		"slug": "nantes-lyon",
+		"name": "Nantes – Lyon",
+		"service": "Intercités",
+		"from": "Nantes",
+		"to": "Lyon"
+	},
+	{
+		"slug": "paris-annecy",
+		"name": "Paris – Annecy",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Annecy"
+	},
+	{
+		"slug": "paris-arcachon",
+		"name": "Paris – Arcachon",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Arcachon"
+	},
+	{
+		"slug": "paris-besancon",
+		"name": "Paris – Besançon",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Besançon"
+	},
+	{
+		"slug": "paris-brest",
+		"name": "Paris – Brest",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Brest"
+	},
+	{
+		"slug": "paris-briancon",
+		"name": "Paris – Briançon",
+		"service": "Intercités",
+		"from": "Paris",
+		"to": "Briançon"
+	},
+	{
+		"slug": "paris-brive",
+		"name": "Paris – Brive",
+		"service": "Intercités",
+		"from": "Paris",
+		"to": "Brive"
+	},
+	{
+		"slug": "paris-cahors",
+		"name": "Paris – Cahors",
+		"service": "Intercités",
+		"from": "Paris",
+		"to": "Cahors"
+	},
+	{
+		"slug": "paris-dunkerque",
+		"name": "Paris – Dunkerque",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Dunkerque"
+	},
+	{
+		"slug": "paris-grenoble",
+		"name": "Paris – Grenoble",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Grenoble"
+	},
+	{
+		"slug": "paris-hendaye",
+		"name": "Paris – Hendaye",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Hendaye"
+	},
+	{
+		"slug": "paris-la-rochelle",
+		"name": "Paris – La Rochelle",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "La Rochelle"
+	},
+	{
+		"slug": "paris-latour-de-carol",
+		"name": "Paris – Latour-de-Carol",
+		"service": "Intercités",
+		"from": "Paris",
+		"to": "Latour-de-Carol"
+	},
+	{
+		"slug": "paris-le-croisic",
+		"name": "Paris – Le Croisic",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Le Croisic"
+	},
+	{
+		"slug": "paris-les-sables-d-olonne",
+		"name": "Paris – Les Sables-d'Olonne",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Les Sables-d'Olonne"
+	},
+	{
+		"slug": "paris-metz",
+		"name": "Paris – Metz",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Metz"
+	},
+	{
+		"slug": "paris-montpellier",
+		"name": "Paris – Montpellier",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Montpellier"
+	},
+	{
+		"slug": "paris-mulhouse",
+		"name": "Paris – Mulhouse",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Mulhouse"
+	},
+	{
+		"slug": "paris-nancy",
+		"name": "Paris – Nancy",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Nancy"
+	},
+	{
+		"slug": "paris-quimper",
+		"name": "Paris – Quimper",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Quimper"
+	},
+	{
+		"slug": "paris-saint-brieuc",
+		"name": "Paris – Saint-Brieuc",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Saint-Brieuc"
+	},
+	{
+		"slug": "paris-saint-etienne",
+		"name": "Paris – Saint-Étienne",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Saint-Étienne"
+	},
+	{
+		"slug": "paris-sedan",
+		"name": "Paris – Sedan",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Sedan"
+	},
+	{
+		"slug": "paris-tarbes",
+		"name": "Paris – Tarbes",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Tarbes"
+	},
+	{
+		"slug": "paris-toulon",
+		"name": "Paris – Toulon",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Toulon"
+	},
+	{
+		"slug": "paris-tourcoing",
+		"name": "Paris – Tourcoing",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Tourcoing"
+	},
+	{
+		"slug": "paris-tours",
+		"name": "Paris – Tours",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Tours"
+	},
+	{
+		"slug": "paris-valenciennes",
+		"name": "Paris – Valenciennes",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Valenciennes"
+	},
+	{
+		"slug": "toulouse-hendaye",
+		"name": "Toulouse – Hendaye",
+		"service": "Intercités",
+		"from": "Toulouse",
+		"to": "Hendaye"
+	}
+]

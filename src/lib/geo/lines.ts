@@ -1,17 +1,16 @@
 /**
  * Utilitaires sur les lignes ferroviaires (slugs SEO, chargement de la liste).
+ *
+ * Les briques de base (slugifyLine, CommercialLine, CURATED_LINES) vivent dans
+ * `lines-base.ts`, qui ne dépend PAS du JSON généré, pour que les scripts d'import
+ * puissent l'utiliser sans cycle. Ce module y ajoute le référentiel effectif
+ * `RAIL_LINES`, chargé depuis `commercial-lines.json`.
  */
 import type { FeatureCollection } from 'geojson';
+import generatedLines from './commercial-lines.json';
+import { CURATED_LINES, type CommercialLine } from './lines-base';
 
-/** Transforme un libellé de ligne en slug d'URL SEO-friendly. */
-export function slugifyLine(label: string): string {
-	return label
-		.normalize('NFD')
-		.replace(/[̀-ͯ]/g, '') // retire les accents
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, '-')
-		.replace(/^-+|-+$/g, '');
-}
+export { slugifyLine, CURATED_LINES, type CommercialLine } from './lines-base';
 
 export interface RailLine {
 	code: string | null;
@@ -20,89 +19,17 @@ export interface RailLine {
 }
 
 /**
- * Référentiel curaté des grandes lignes commerciales, pensé pour le SEO.
+ * Référentiel effectif des lignes commerciales, généré depuis le GTFS SNCF
+ * (scripts/import-commercial-lines.ts → commercial-lines.json, committé) et
+ * fusionné avec le noyau curaté.
  *
- * Le GeoJSON RFN (loadLines) décrit le réseau *technique* avec des libellés peu
- * parlants ; ces entrées-là correspondent à ce que les voyageurs recherchent
- * réellement (« couverture Paris-Lyon ») et alimentent /ligne/[slug] + le sitemap.
+ * `commercial-lines.json` est importé statiquement : il est committé, donc
+ * toujours présent à la compilation (un fichier absent/corrompu ferait échouer
+ * le build, pas un fallback runtime). Le repli sur CURATED_LINES ne couvre donc
+ * que le cas « JSON présent mais tableau vide » (placeholder non régénéré).
  */
-export interface CommercialLine {
-	slug: string;
-	name: string;
-	/** Service principal exploité (TGV INOUI, OUIGO, Intercités, TER…). */
-	service: string;
-	from: string;
-	to: string;
-}
-
-export const RAIL_LINES: CommercialLine[] = [
-	{ slug: 'paris-lyon', name: 'Paris – Lyon', service: 'TGV INOUI', from: 'Paris', to: 'Lyon' },
-	{
-		slug: 'paris-marseille',
-		name: 'Paris – Marseille',
-		service: 'TGV INOUI',
-		from: 'Paris',
-		to: 'Marseille'
-	},
-	{
-		slug: 'paris-bordeaux',
-		name: 'Paris – Bordeaux',
-		service: 'TGV INOUI',
-		from: 'Paris',
-		to: 'Bordeaux'
-	},
-	{
-		slug: 'paris-nantes',
-		name: 'Paris – Nantes',
-		service: 'TGV INOUI',
-		from: 'Paris',
-		to: 'Nantes'
-	},
-	{
-		slug: 'paris-rennes',
-		name: 'Paris – Rennes',
-		service: 'TGV INOUI',
-		from: 'Paris',
-		to: 'Rennes'
-	},
-	{ slug: 'paris-lille', name: 'Paris – Lille', service: 'TGV INOUI', from: 'Paris', to: 'Lille' },
-	{
-		slug: 'paris-strasbourg',
-		name: 'Paris – Strasbourg',
-		service: 'TGV INOUI',
-		from: 'Paris',
-		to: 'Strasbourg'
-	},
-	{
-		slug: 'paris-toulouse',
-		name: 'Paris – Toulouse',
-		service: 'TGV INOUI / Intercités',
-		from: 'Paris',
-		to: 'Toulouse'
-	},
-	{
-		slug: 'lyon-marseille',
-		name: 'Lyon – Marseille',
-		service: 'TGV INOUI',
-		from: 'Lyon',
-		to: 'Marseille'
-	},
-	{
-		slug: 'paris-clermont-ferrand',
-		name: 'Paris – Clermont-Ferrand',
-		service: 'Intercités',
-		from: 'Paris',
-		to: 'Clermont-Ferrand'
-	},
-	{
-		slug: 'bordeaux-marseille',
-		name: 'Bordeaux – Marseille',
-		service: 'Intercités',
-		from: 'Bordeaux',
-		to: 'Marseille'
-	},
-	{ slug: 'paris-nice', name: 'Paris – Nice', service: 'TGV INOUI', from: 'Paris', to: 'Nice' }
-];
+const generated = generatedLines as CommercialLine[];
+export const RAIL_LINES: CommercialLine[] = generated.length > 0 ? generated : CURATED_LINES;
 
 /** Les quatre opérateurs mobiles français, pour les pages SEO /operateur/[slug]. */
 export interface MobileOperator {
