@@ -42,10 +42,19 @@ export function revokeConsent(): void {
  */
 export function hasOnboarded(): boolean {
 	if (typeof localStorage === 'undefined') return true;
-	return localStorage.getItem(ONBOARDED_KEY) === 'done';
+	try {
+		return localStorage.getItem(ONBOARDED_KEY) === 'done';
+	} catch {
+		// Stockage bloqué (contexte durci/privé) : on évite de ré-afficher en boucle.
+		return true;
+	}
 }
 
 export function markOnboarded(): void {
 	if (typeof localStorage === 'undefined') return;
-	localStorage.setItem(ONBOARDED_KEY, 'done');
+	try {
+		localStorage.setItem(ONBOARDED_KEY, 'done');
+	} catch {
+		/* stockage bloqué : best-effort, on ignore */
+	}
 }

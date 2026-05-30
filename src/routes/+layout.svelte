@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { onMount, setContext } from 'svelte';
+	import { setContext } from 'svelte';
 	import Onboarding from '$components/Onboarding/Onboarding.svelte';
 	import Icon from '$components/Icon.svelte';
 
@@ -21,13 +21,15 @@
 		openOnboarding: () => (onboardingOpen = true)
 	});
 
-	// --- Thème clair / sombre (initialisé par le script anti-FOUC dans app.html) ---
-	let theme = $state<'light' | 'dark'>('dark');
-
-	onMount(() => {
-		const cur = document.documentElement.getAttribute('data-theme');
-		theme = cur === 'light' ? 'light' : 'dark';
-	});
+	// --- Thème clair / sombre (le script anti-FOUC d'app.html a déjà posé
+	// data-theme avant le 1er paint ; on lit cette valeur dès l'init pour éviter
+	// un clignotement d'icône à l'hydratation). ---
+	let theme = $state<'light' | 'dark'>(
+		typeof document !== 'undefined' &&
+			document.documentElement.getAttribute('data-theme') === 'light'
+			? 'light'
+			: 'dark'
+	);
 
 	function toggleTheme() {
 		theme = theme === 'dark' ? 'light' : 'dark';
@@ -233,7 +235,7 @@
 	}
 	@media (prefers-reduced-transparency: reduce) {
 		:global(.glass) {
-			background: var(--glass-bg-strong);
+			background: var(--panel);
 			backdrop-filter: none;
 			-webkit-backdrop-filter: none;
 		}

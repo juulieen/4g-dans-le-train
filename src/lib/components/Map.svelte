@@ -31,6 +31,10 @@
 	// changement de fond de carte qui réinitialise les couches).
 	let railData: GeoJSON.FeatureCollection | null = null;
 	let arcepData: GeoJSON.FeatureCollection | null = null;
+	// On ne retente pas un fetch déjà tenté (évite de marteler l'endpoint à
+	// chaque bascule de thème si la 1re requête a échoué).
+	let railTried = false;
+	let arcepTried = false;
 
 	// Couleurs par usage (niveau ARCEP → ce qu'on peut faire).
 	const USAGE_COLORS = {
@@ -59,7 +63,7 @@
 				}
 			},
 			layers: [{ id: 'carto', type: 'raster', source: 'carto' }]
-		} as unknown as maplibregl.StyleSpecification;
+		} satisfies maplibregl.StyleSpecification;
 	}
 
 	function currentTheme(): 'light' | 'dark' {
@@ -87,7 +91,8 @@
 	}
 
 	async function ensureData() {
-		if (!railData) {
+		if (!railData && !railTried) {
+			railTried = true;
 			try {
 				const res = await fetch(railLinesUrl);
 				if (res.ok) railData = (await res.json()) as GeoJSON.FeatureCollection;
@@ -95,7 +100,8 @@
 				/* pas de tracés : on ignore */
 			}
 		}
-		if (!arcepData) {
+		if (!arcepData && !arcepTried) {
+			arcepTried = true;
 			try {
 				const res = await fetch(arcepLinesUrl);
 				if (res.ok) arcepData = (await res.json()) as GeoJSON.FeatureCollection;
@@ -202,6 +208,9 @@
 		});
 
 		// Bascule de thème : on échange le fond et on ré-ajoute les couches.
+		// `setStyle` repart d'un style vierge ; `styledata` (après parsing du
+		// nouveau style) est le moment fiable pour ré-ajouter nos sources/couches.
+		// addOverlays est idempotent (gardes getSource) → pas de doublon.
 		const observer = new MutationObserver(() => {
 			if (!map) return;
 			map.setStyle(basemapStyle(currentTheme()));
@@ -435,5 +444,12 @@
 	:global(.maplibregl-popup-close-button:hover) {
 		background: transparent;
 		color: var(--text);
+	}
+	@media (prefers-reduced-transparency: reduce) {
+		:global(.maplibregl-popup-content) {
+			background: var(--panel);
+			-webkit-backdrop-filter: none;
+			backdrop-filter: none;
+		}
 	}
 </style>

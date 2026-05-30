@@ -115,7 +115,6 @@
 	let showHint = $state(false);
 
 	// --- Bottom-sheet : glisser pour ouvrir/fermer (mobile) ---
-	const PEEK = 188; // doit correspondre à --peek dans le CSS
 	let sheetEl: HTMLElement | undefined = $state();
 	let dragging = $state(false);
 	let dragTranslate = $state(0);
@@ -125,7 +124,10 @@
 	let suppressClick = false;
 
 	function collapsedPx(): number {
-		return sheetEl ? sheetEl.offsetHeight - PEEK : 0;
+		if (!sheetEl) return 0;
+		// Source unique de vérité = la variable CSS --peek (définie plus bas).
+		const peek = parseFloat(getComputedStyle(sheetEl).getPropertyValue('--peek')) || 188;
+		return sheetEl.offsetHeight - peek;
 	}
 	function onHandleDown(e: PointerEvent) {
 		if (window.innerWidth > 760) return; // drag mobile uniquement
@@ -200,7 +202,12 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div class="map-wrap" onpointerdown={onMapInteract}>
 		<Map coverage={filteredCoverage} operator={viewOperator} {showArcep} {showCommunity} />
-		<button class="info-fab glass" onclick={openOnboarding} aria-label="Comment ça marche">
+		<button
+			class="info-fab glass"
+			onpointerdown={(e) => e.stopPropagation()}
+			onclick={openOnboarding}
+			aria-label="Comment ça marche"
+		>
 			<Icon name="info" size={20} />
 		</button>
 	</div>

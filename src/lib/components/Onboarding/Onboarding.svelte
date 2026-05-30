@@ -6,10 +6,24 @@
 	let { open = false, onclose }: { open?: boolean; onclose?: () => void } = $props();
 
 	let index = $state(0);
+	let dialogEl: HTMLElement | undefined = $state();
+	let trigger: HTMLElement | null = null;
 
 	// Repart du début à chaque ouverture.
 	$effect(() => {
 		if (open) index = 0;
+	});
+
+	// Gestion du focus : on déplace le focus dans la modale à l'ouverture et on le
+	// rend au déclencheur à la fermeture (accessibilité clavier / lecteur d'écran).
+	$effect(() => {
+		if (open && dialogEl) {
+			if (!trigger) trigger = document.activeElement as HTMLElement | null;
+			dialogEl.focus();
+		} else if (!open && trigger) {
+			trigger.focus();
+			trigger = null;
+		}
 	});
 
 	const last = $derived(index === STEPS.length - 1);
@@ -28,6 +42,26 @@
 		if (e.key === 'Escape') close();
 		else if (e.key === 'ArrowRight') next();
 		else if (e.key === 'ArrowLeft') prev();
+		else if (e.key === 'Tab') trapFocus(e);
+	}
+	// Piège le focus à l'intérieur de la modale (cycle Tab / Shift+Tab).
+	function trapFocus(e: KeyboardEvent) {
+		if (!dialogEl) return;
+		const items = dialogEl.querySelectorAll<HTMLElement>(
+			'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+		);
+		const focusable = [...items].filter((el) => !el.hasAttribute('disabled'));
+		if (!focusable.length) return;
+		const first = focusable[0];
+		const lastEl = focusable[focusable.length - 1];
+		const active = document.activeElement;
+		if (e.shiftKey && (active === first || active === dialogEl)) {
+			e.preventDefault();
+			lastEl.focus();
+		} else if (!e.shiftKey && active === lastEl) {
+			e.preventDefault();
+			first.focus();
+		}
 	}
 </script>
 
@@ -42,6 +76,7 @@
 			tabindex="-1"
 			aria-modal="true"
 			aria-label="Comment ça marche"
+			bind:this={dialogEl}
 			transition:scale={{ duration: 260, start: 0.94, opacity: 0 }}
 		>
 			<button class="close" onclick={close} aria-label="Fermer">✕</button>
