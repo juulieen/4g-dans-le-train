@@ -6,7 +6,7 @@
 ## Le problème
 
 Dans le train, on ne sait pas à l'avance où le réseau mobile va passer ou
-couper. Les cartes officielles donnent une couverture *théorique* ; la réalité
+couper. Les cartes officielles donnent une couverture _théorique_ ; la réalité
 dans un TGV lancé à 300 km/h (tunnels, zones rurales, carrosserie métallique)
 est souvent différente. Personne ne couvrait spécifiquement la niche
 **train + ligne ferroviaire + crowdsourcing**.
@@ -18,8 +18,8 @@ une vidéo, faire une recherche, juste envoyer un message… ou rien du tout ? �
 
 Elle croise deux sources, et **leur distinction est le cœur du projet** :
 
-1. **Couverture ARCEP (théorique)** — ce que les opérateurs *annoncent*.
-2. **Mesures communautaires (réel)** — ce que les voyageurs *constatent*.
+1. **Couverture ARCEP (théorique)** — ce que les opérateurs _annoncent_.
+2. **Mesures communautaires (réel)** — ce que les voyageurs _constatent_.
 
 Tout l'intérêt est de **révéler les écarts** entre la promesse et le vécu. Donc
 **le réel prime visuellement sur le théorique**.
@@ -33,12 +33,12 @@ Tout l'intérêt est de **révéler les écarts** entre la promesse et le vécu.
 
 Code couleur **par usage** (et non par jargon technique) :
 
-| Couleur | Usage concret | Niveau ARCEP | Taux de réussite mesuré |
-|---|---|---|---|
-| 🟢 vert `#22c55e` | Streaming vidéo, visio | TBC (très bonne) | ≥ 80 % |
-| 🟢 vert-clair `#84cc16` | Web, réseaux sociaux | BC (bonne) | — |
-| 🟠 orange `#f59e0b` | Messages, navigation lente | CL (limitée) | 40–80 % |
-| 🔴 rouge `#ef4444` | Zone blanche, rien | aucune | < 40 % |
+| Couleur                 | Usage concret              | Niveau ARCEP     | Taux de réussite mesuré |
+| ----------------------- | -------------------------- | ---------------- | ----------------------- |
+| 🟢 vert `#22c55e`       | Streaming vidéo, visio     | TBC (très bonne) | ≥ 80 %                  |
+| 🟢 vert-clair `#84cc16` | Web, réseaux sociaux       | BC (bonne)       | —                       |
+| 🟠 orange `#f59e0b`     | Messages, navigation lente | CL (limitée)     | 40–80 %                 |
+| 🔴 rouge `#ef4444`      | Zone blanche, rien         | aucune           | < 40 %                  |
 
 Un **filtre d'affichage** par opérateur (Tous / Orange / SFR / Free / Bouygues)
 recolore les voies ARCEP **et** filtre les mesures communautaires. Il est
@@ -58,7 +58,7 @@ recolore les voies ARCEP **et** filtre les mesures communautaires. Il est
   avec ces cellules pour produire `static/data/arcep-lines.geojson` (segments
   de voie portant le niveau par opérateur + `best`). C'est ce que la carte
   affiche. Niveaux : `TBC` > `BC` > `CL`.
-- **Nature** : c'est une *prévision officielle*, pas une garantie de débit réel.
+- **Nature** : c'est une _prévision officielle_, pas une garantie de débit réel.
 
 ## Comment sont calculées les mesures communautaires (les nôtres)
 
@@ -83,7 +83,7 @@ recolore les voies ARCEP **et** filtre les mesures communautaires. Il est
   (« 4g dans le train » est recherché ; « réseau dans le train » est confondu
   avec le réseau ferroviaire). Le SEO repose sur des **pages programmatiques** :
   `/ligne/[slug]`, `/operateur/[slug]`, croisées `/ligne/[slug]/[operateur]`,
-  + FAQ, sitemap, JSON-LD. Référentiel curaté dans `src/lib/geo/lines.ts`.
+  - FAQ, sitemap, JSON-LD. Référentiel curaté dans `src/lib/geo/lines.ts`.
 - **Périmètre** : France (réseau SNCF) d'abord ; architecture extensible.
 - **H3 résolutions** : mesures communautaires en **res 9** (~200 m, précis) ;
   couche ARCEP en **res 7** (~1,4 km, suffisant pour un fond théorique et léger).

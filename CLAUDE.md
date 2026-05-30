@@ -70,4 +70,7 @@ Avant de livrer : `bun run check && bun run lint && bun run build` doivent passe
 - `src/routes/{lignes,ligne/[slug],ligne/[slug]/[operateur],operateurs,operateur/[slug]}/`
   — pages SEO prerendues. Référentiel dans `src/lib/geo/lines.ts`.
 - `scripts/` — imports de données (SNCF, ARCEP) et migrations.
+
+```
+
 ```
