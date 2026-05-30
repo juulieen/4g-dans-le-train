@@ -6,9 +6,9 @@
  * étaient alimentées par 12 lignes écrites à la main. Ce script les génère depuis
  * une source ouverte pour élargir la couverture et la maintenir facilement.
  *
- * Source : « Horaires des TGV (GTFS) » — SNCF Open Data (OpenDataSoft).
- * Le flux ne contient que des TGV (route_type=2, agence « SNCF VOYAGEURS ») ; les
- * libellés `route_long_name` sont des relations commerciales (« Paris - Lyon »).
+ * Sources : GTFS SNCF Open Data (OpenDataSoft) — « Voyages » (TGV INOUI) et
+ * « Intercités », agrégés via le tableau `SOURCES`. Les libellés `route_long_name`
+ * sont des relations commerciales (« Paris - Lyon ») exploitées pour le SEO.
  *
  * Le fichier produit est COMMITTÉ (≠ static/data/, gitignoré) pour que le build et
  * le prerender fonctionnent sans rejouer l'import. À régénérer périodiquement
@@ -21,7 +21,10 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import sevenZip from '7zip-min';
-import { slugifyLine, CURATED_LINES, type CommercialLine } from '../src/lib/geo/lines';
+// On importe depuis `lines-base` (sans dépendance au JSON généré) et non depuis
+// `lines.ts` : sinon un commercial-lines.json absent/corrompu empêcherait ce
+// script de démarrer pour le régénérer.
+import { slugifyLine, CURATED_LINES, type CommercialLine } from '../src/lib/geo/lines-base';
 
 const unpack = promisify(sevenZip.unpack);
 
@@ -74,7 +77,8 @@ const REGION_TOKENS = new Set(
 		'Languedoc Roussillon',
 		'Lux',
 		'Alsace',
-		'Loraine',
+		'Lorraine',
+		'Loraine', // variante fautive présente dans le GTFS (« Lux/Alsace/Loraine »)
 		'Bas-Rhin',
 		'Haut-Rhin',
 		'Vosges',
@@ -188,7 +192,7 @@ function parseRelation(longName: string): { from: string; to: string } | null {
 /** Une extrémité est-elle une vraie ville exploitable (≠ région/abréviation) ? */
 function isUsableCity(name: string): boolean {
 	if (name.length < 3) return false;
-	if (name.includes('/')) return false; // « Lux/Alsace/Loraine »
+	if (name.includes('/')) return false; // « Lux/Alsace/Lorraine »
 	if (/^[A-Z]{2,4}$/.test(name)) return false; // « LR », « IS », « BPL »
 	if (REGION_TOKENS.has(name.toLowerCase())) return false;
 	return true;

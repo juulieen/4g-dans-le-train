@@ -12,22 +12,22 @@
  */
 import { spawn } from 'node:child_process';
 
-const STEPS: { label: string; script: string }[] = [
-	{ label: 'Tracés SNCF (rail-lines.geojson)', script: 'scripts/import-sncf-lines.ts' },
-	{
-		label: 'Lignes commerciales (commercial-lines.json)',
-		script: 'scripts/import-commercial-lines.ts'
-	},
-	{ label: 'Couverture ARCEP (arcep-coverage.geojson)', script: 'scripts/import-arcep.ts' },
-	{ label: 'Voies colorées (arcep-lines.geojson)', script: 'scripts/build-arcep-lines.ts' }
+// On délègue aux scripts npm (`bun run data:*`) plutôt qu'aux chemins de fichiers
+// pour garder package.json comme unique source de vérité : si un script est
+// renommé/déplacé, `data:all` reste cohérent.
+const STEPS: { label: string; task: string }[] = [
+	{ label: 'Tracés SNCF (rail-lines.geojson)', task: 'data:sncf' },
+	{ label: 'Lignes commerciales (commercial-lines.json)', task: 'data:lines' },
+	{ label: 'Couverture ARCEP (arcep-coverage.geojson)', task: 'data:arcep' },
+	{ label: 'Voies colorées (arcep-lines.geojson)', task: 'data:arcep-lines' }
 ];
 
-function run(script: string): Promise<void> {
+function run(task: string): Promise<void> {
 	return new Promise((resolve, reject) => {
-		const child = spawn('bun', ['run', script], { stdio: 'inherit', env: process.env });
+		const child = spawn('bun', ['run', task], { stdio: 'inherit', env: process.env });
 		child.on('error', reject);
 		child.on('exit', (code) =>
-			code === 0 ? resolve() : reject(new Error(`${script} a quitté avec le code ${code}`))
+			code === 0 ? resolve() : reject(new Error(`${task} a quitté avec le code ${code}`))
 		);
 	});
 }
@@ -35,9 +35,9 @@ function run(script: string): Promise<void> {
 async function main() {
 	const total = STEPS.length;
 	for (let i = 0; i < total; i++) {
-		const { label, script } = STEPS[i];
+		const { label, task } = STEPS[i];
 		console.log(`\n=== [data:all] Étape ${i + 1}/${total} — ${label} ===`);
-		await run(script);
+		await run(task);
 	}
 	console.log('\n[data:all] Toutes les données ont été régénérées ✅');
 }

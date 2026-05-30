@@ -20,21 +20,23 @@ SEO `/ligne/[slug]`.
 
 ## 2. Lignes commerciales — GTFS SNCF
 
-- **Jeu** : « Horaires des TGV (GTFS) » — SNCF Open Data (OpenDataSoft).
-- **URL** : https://eu.ftp.opendatasoft.com/sncf/gtfs/export_gtfs_voyages.zip
+- **Jeux** : « Horaires GTFS » SNCF Open Data (OpenDataSoft), agrégés via le tableau
+  `SOURCES` du script :
+  - TGV INOUI : https://eu.ftp.opendatasoft.com/sncf/gtfs/export_gtfs_voyages.zip
+  - Intercités : https://eu.ftp.opendatasoft.com/sncf/gtfs/export-intercites-gtfs-last.zip
 - **Import** : `bun run data:lines`
 - **Sortie** : `src/lib/geo/commercial-lines.json` (**committé**, ≠ `static/data/`)
 
-`scripts/import-commercial-lines.ts` lit `routes.txt` du GTFS, extrait les relations
+`scripts/import-commercial-lines.ts` lit `routes.txt` de chaque GTFS, extrait les relations
 commerciales (`route_long_name` → `{ from, to }`), normalise et filtre les libellés non
 exploitables (axes régionaux, abréviations…), puis **fusionne** le résultat avec le noyau
-curaté `CURATED_LINES` (`src/lib/geo/lines.ts`) qui prime pour la qualité SEO. La sortie
+curaté `CURATED_LINES` (`src/lib/geo/lines-base.ts`) qui prime pour la qualité SEO. La sortie
 alimente `RAIL_LINES`, donc les pages `/ligne/[slug]`, `/lignes`, le `sitemap.xml` et
 `/operateur/[slug]`.
 
 Le fichier est committé pour que le build/prerender tourne sans rejouer l'import ; il est
-à **régénérer + commiter** périodiquement. Pour élargir (Intercités, TER), ajouter une
-entrée dans le tableau `SOURCES` du script (URL du GTFS concerné).
+à **régénérer + commiter** périodiquement. Pour ajouter une source (ex. TER), ajouter une
+entrée dans le tableau `SOURCES` du script (URL du GTFS + libellé de service).
 
 ## 3. Couverture officielle — ARCEP « Mon Réseau Mobile »
 
