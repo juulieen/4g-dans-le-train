@@ -209,10 +209,20 @@
 							<dd>{live.sent}</dd>
 						</div>
 						<div>
+							<dt>En attente d'envoi</dt>
+							<dd>{live.queued}</dd>
+						</div>
+						<div>
 							<dt>Écran maintenu</dt>
 							<dd>{live.wakeLockActive ? 'oui' : 'non'}</dd>
 						</div>
 					</dl>
+					{#if live.queued > 0}
+						<p class="queued-note">
+							{live.queued} mesure{live.queued > 1 ? 's' : ''} en attente — gardées hors-ligne et envoyées
+							dès le retour du réseau.
+						</p>
+					{/if}
 				</div>
 			{/if}
 
@@ -334,6 +344,11 @@
 	.error {
 		color: #fca5a5;
 		font-size: 0.85rem;
+	}
+	.queued-note {
+		color: var(--muted);
+		font-size: 0.78rem;
+		margin: 0.5rem 0 0;
 	}
 	.live {
 		margin-top: 1rem;

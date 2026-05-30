@@ -3,6 +3,18 @@
 > Ajoute ici une entrée (date + résumé) pour toute évolution fonctionnelle ou de
 > contenu notable. Le plus récent en haut. Voir `../CLAUDE.md`.
 
+## 2026-05-31
+
+- **Mode mesure robuste (branche `feat/mesure-robuste`)** : file d'attente
+  persistante (`src/lib/measure/queue.ts`) qui conserve les mesures non envoyées
+  au lieu de les jeter. Crucial : les zones blanches (où l'envoi échoue) étaient
+  perdues — c'est précisément la donnée la plus précieuse. Les mesures sont
+  rejouées au retour `online` + toutes les 15 s, file bornée à 500 (FIFO),
+  persistée en localStorage. Erreurs GPS distinguées (permission refusée = arrêt,
+  tunnel/timeout = transitoire). Compteur « en attente d'envoi » dans l'UI.
+  Tests Vitest sur la file (8 cas). Correctif eslint : ignore `.claude/`
+  (worktrees imbriqués). _Non encore mergé sur `main`._
+
 ## 2026-05-30
 
 - **Pages SEO opérateur** : `/operateurs`, `/operateur/[slug]` (×4) et croisées
