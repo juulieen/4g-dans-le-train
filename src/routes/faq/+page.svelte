@@ -1,4 +1,6 @@
 <script lang="ts">
+	import PageWrap from '$components/PageWrap.svelte';
+
 	const faqs = [
 		{
 			q: 'Pourquoi ça capte mal dans le TGV ?',
@@ -47,7 +49,7 @@
 	{@html jsonLd}
 </svelte:head>
 
-<div class="wrap">
+<PageWrap>
 	<h1>Questions fréquentes</h1>
 	{#each faqs as f (f.q)}
 		<details>
@@ -55,28 +57,4 @@
 			<p>{f.a}</p>
 		</details>
 	{/each}
-</div>
-
-<style>
-	.wrap {
-		max-width: 720px;
-		margin: 0 auto;
-		padding: 2rem 1rem;
-	}
-	details {
-		border: 1px solid var(--border);
-		border-radius: 10px;
-		padding: 0.5rem 1rem;
-		margin-bottom: 0.75rem;
-		background: var(--panel);
-	}
-	summary {
-		cursor: pointer;
-		font-weight: 600;
-		padding: 0.5rem 0;
-	}
-	p {
-		color: var(--muted);
-		line-height: 1.6;
-	}
-</style>
+</PageWrap>

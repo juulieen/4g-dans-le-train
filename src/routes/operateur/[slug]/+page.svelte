@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { RAIL_LINES } from '$geo/lines';
+	import PageWrap from '$components/PageWrap.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -42,7 +43,7 @@
 	{@html jsonLd}
 </svelte:head>
 
-<article class="wrap">
+<PageWrap>
 	<nav class="crumbs"><a href="/">Accueil</a> › Opérateur {op.name}</nav>
 	<h1>Couverture {op.name} dans le train</h1>
 	<p class="lede">
@@ -54,7 +55,7 @@
 
 	<section>
 		<h2>La couverture {op.name} ligne par ligne</h2>
-		<ul class="lines">
+		<ul class="cards">
 			{#each RAIL_LINES as line (line.slug)}
 				<li>
 					<a href="/ligne/{line.slug}/{op.slug}">{op.name} sur {line.name}</a>
@@ -77,58 +78,4 @@
 			<a href="/operateur/free">Free</a>, <a href="/operateur/bouygues">Bouygues</a>.
 		</p>
 	</section>
-</article>
-
-<style>
-	.wrap {
-		max-width: 720px;
-		margin: 0 auto;
-		padding: 2rem 1rem;
-		line-height: 1.6;
-	}
-	.crumbs {
-		font-size: 0.8rem;
-		color: var(--muted);
-		margin-bottom: 1rem;
-	}
-	h1 {
-		font-size: 1.6rem;
-	}
-	.lede {
-		color: var(--muted);
-	}
-	.cta {
-		display: inline-block;
-		margin: 1rem 0 2rem;
-		padding: 0.7rem 1.2rem;
-		background: var(--accent);
-		color: #052e16;
-		font-weight: 700;
-		border-radius: 10px;
-		text-decoration: none;
-	}
-	h2 {
-		font-size: 1.15rem;
-		margin-top: 1.5rem;
-	}
-	.lines {
-		list-style: none;
-		padding: 0;
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-		gap: 0.5rem;
-	}
-	.lines a {
-		display: block;
-		padding: 0.6rem 0.8rem;
-		background: var(--panel);
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		text-decoration: none;
-		color: var(--text);
-		font-size: 0.9rem;
-	}
-	.lines a:hover {
-		border-color: var(--accent);
-	}
-</style>
+</PageWrap>
