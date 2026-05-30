@@ -227,10 +227,13 @@ class RailGraph {
 	nearestNode(c: Coord): number {
 		let best = -1;
 		let bestD = MAX_SNAP_KM;
-		// élargit la recherche par anneaux de buckets jusqu'à trouver
-		for (let ring = 1; ring <= 60 && best < 0; ring++) {
-			const cx = Math.floor(c[0] / this.cellDeg);
-			const cy = Math.floor(c[1] / this.cellDeg);
+		let foundRing = Infinity;
+		const cx = Math.floor(c[0] / this.cellDeg);
+		const cy = Math.floor(c[1] / this.cellDeg);
+		// Élargit par anneaux de buckets. Un sommet trouvé à l'anneau `r` peut être
+		// plus loin qu'un sommet de l'anneau `r+1` : on prolonge donc d'un anneau
+		// après la première trouvaille avant de conclure.
+		for (let ring = 1; ring <= 60 && ring <= foundRing + 1; ring++) {
 			for (let dx = -ring; dx <= ring; dx++)
 				for (let dy = -ring; dy <= ring; dy++) {
 					if (ring > 1 && Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue; // anneau seulement
@@ -242,6 +245,7 @@ class RailGraph {
 						}
 					}
 				}
+			if (best >= 0 && foundRing === Infinity) foundRing = ring;
 		}
 		return best;
 	}
@@ -334,6 +338,10 @@ function sampleLine(coords: Coord[], stepKm: number): Coord[] {
 		}
 		carry = segLen - (d - stepKm);
 	}
+	// Garantit l'échantillonnage du dernier sommet (cellule de terminus), même si
+	// la portion finale est plus courte que le pas restant. Doublon inoffensif
+	// (les cellules sont dédupliquées par un Set en aval).
+	pts.push(coords[coords.length - 1]);
 	return pts;
 }
 
