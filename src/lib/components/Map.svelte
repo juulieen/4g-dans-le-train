@@ -153,11 +153,20 @@
 				const p = f.properties as Record<string, string>;
 				const field = operator === 'inconnu' || operator === 'autre' ? 'best' : operator;
 				const lvl = p[field] ?? null;
+				const opLine = [
+					['Orange', p.orange],
+					['SFR', p.sfr],
+					['Free', p.free],
+					['Bouygues', p.bouygues]
+				]
+					.map(([name, l]) => `${name} ${dot(l)}`)
+					.join(' · ');
 				new maplibregl.Popup()
 					.setLngLat(e.lngLat)
 					.setHTML(
-						`<strong>Couverture théorique (ARCEP)</strong><br>${usageLabel(lvl)}` +
-							`<br><span style="opacity:.7;font-size:.85em">Orange ${badge(p.orange)} · SFR ${badge(p.sfr)} · Free ${badge(p.free)} · Bouygues ${badge(p.bouygues)}</span>`
+						`<strong>Couverture théorique (ARCEP)</strong>` +
+							`<div style="margin:.35em 0">${usageLabel(lvl)}</div>` +
+							`<div style="font-size:.82em;color:#94a3b8">${opLine}</div>`
 					)
 					.addTo(map);
 			});
@@ -172,9 +181,9 @@
 				new maplibregl.Popup()
 					.setLngLat(e.lngLat)
 					.setHTML(
-						`<strong>Mesuré par la communauté</strong><br>` +
-							`${rate}% de réussite — ${usageFromRate(rate)}<br>` +
-							`<span style="opacity:.7;font-size:.85em">Opérateur ${p.operator ?? 'inconnu'} · ${p.samples ?? 0} mesures · latence ${rtt}</span>`
+						`<strong>Mesuré par la communauté</strong>` +
+							`<div style="margin:.35em 0">${usageFromRate(rate)} — ${rate}% de réussite</div>` +
+							`<div style="font-size:.82em;color:#94a3b8">Opérateur ${p.operator ?? 'inconnu'} · ${p.samples ?? 0} mesures · latence ${rtt}</div>`
 					)
 					.addTo(map);
 			});
@@ -211,8 +220,18 @@
 		if (rate >= 40) return '🟠 réseau dégradé';
 		return '🔴 ça coupe';
 	}
-	function badge(lvl: string | null | undefined): string {
-		return lvl ?? '—';
+	/** Pastille emoji par niveau ARCEP, pour les badges opérateurs des popups. */
+	function dot(lvl: string | null | undefined): string {
+		switch (lvl) {
+			case 'TBC':
+				return '🟢';
+			case 'BC':
+				return '🟡';
+			case 'CL':
+				return '🟠';
+			default:
+				return '🔴';
+		}
 	}
 
 	// Rafraîchit la couverture communautaire quand la prop change.
@@ -295,5 +314,44 @@
 		margin-top: 2px;
 		border-top: 1px solid rgba(255, 255, 255, 0.15);
 		padding-top: 3px;
+	}
+
+	/* Popups MapLibre (injectées hors du composant → :global) : thème sombre lisible. */
+	:global(.maplibregl-popup-content) {
+		background: #131c2e;
+		color: #e2e8f0;
+		border: 1px solid #1e293b;
+		border-radius: 10px;
+		padding: 0.7rem 0.9rem;
+		font-size: 0.9rem;
+		line-height: 1.45;
+		box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+		max-width: 240px;
+	}
+	:global(.maplibregl-popup-content strong) {
+		color: #fff;
+		font-size: 0.95rem;
+	}
+	/* La pointe du bulle prend la couleur du fond sombre. */
+	:global(.maplibregl-popup-anchor-top .maplibregl-popup-tip) {
+		border-bottom-color: #131c2e;
+	}
+	:global(.maplibregl-popup-anchor-bottom .maplibregl-popup-tip) {
+		border-top-color: #131c2e;
+	}
+	:global(.maplibregl-popup-anchor-left .maplibregl-popup-tip) {
+		border-right-color: #131c2e;
+	}
+	:global(.maplibregl-popup-anchor-right .maplibregl-popup-tip) {
+		border-left-color: #131c2e;
+	}
+	:global(.maplibregl-popup-close-button) {
+		color: #94a3b8;
+		font-size: 1.1rem;
+		padding: 0 0.3rem;
+	}
+	:global(.maplibregl-popup-close-button:hover) {
+		background: transparent;
+		color: #fff;
 	}
 </style>
