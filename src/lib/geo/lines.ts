@@ -2,6 +2,7 @@
  * Utilitaires sur les lignes ferroviaires (slugs SEO, chargement de la liste).
  */
 import type { FeatureCollection } from 'geojson';
+import generatedLines from './commercial-lines.json';
 
 /** Transforme un libellé de ligne en slug d'URL SEO-friendly. */
 export function slugifyLine(label: string): string {
@@ -20,11 +21,11 @@ export interface RailLine {
 }
 
 /**
- * Référentiel curaté des grandes lignes commerciales, pensé pour le SEO.
- *
- * Le GeoJSON RFN (loadLines) décrit le réseau *technique* avec des libellés peu
- * parlants ; ces entrées-là correspondent à ce que les voyageurs recherchent
- * réellement (« couverture Paris-Lyon ») et alimentent /ligne/[slug] + le sitemap.
+ * Une ligne commerciale = une relation origine→destination présentée aux
+ * voyageurs (« Paris – Lyon »). Alimente /ligne/[slug], /lignes, le sitemap et
+ * les pages /operateur/[slug]. Le GeoJSON RFN (loadLines) décrit le réseau
+ * *technique* avec des libellés peu parlants ; ce référentiel-ci correspond à ce
+ * que les gens recherchent réellement (« couverture Paris-Lyon »).
  */
 export interface CommercialLine {
 	slug: string;
@@ -35,7 +36,12 @@ export interface CommercialLine {
 	to: string;
 }
 
-export const RAIL_LINES: CommercialLine[] = [
+/**
+ * Noyau curaté des grandes relations, maintenu à la main pour la qualité
+ * éditoriale et le SEO. Sert aussi de tête de liste « featured » et de source
+ * d'override / fallback pour le référentiel généré (cf. scripts/import-commercial-lines.ts).
+ */
+export const CURATED_LINES: CommercialLine[] = [
 	{ slug: 'paris-lyon', name: 'Paris – Lyon', service: 'TGV INOUI', from: 'Paris', to: 'Lyon' },
 	{
 		slug: 'paris-marseille',
@@ -103,6 +109,15 @@ export const RAIL_LINES: CommercialLine[] = [
 	},
 	{ slug: 'paris-nice', name: 'Paris – Nice', service: 'TGV INOUI', from: 'Paris', to: 'Nice' }
 ];
+
+/**
+ * Référentiel effectif des lignes commerciales, généré depuis le GTFS SNCF
+ * (scripts/import-commercial-lines.ts → commercial-lines.json, committé) et
+ * fusionné avec le noyau curaté. On retombe sur CURATED_LINES si le fichier
+ * généré est vide (sécurité au cas où la génération n'a jamais tourné).
+ */
+const generated = generatedLines as CommercialLine[];
+export const RAIL_LINES: CommercialLine[] = generated.length > 0 ? generated : CURATED_LINES;
 
 /** Les quatre opérateurs mobiles français, pour les pages SEO /operateur/[slug]. */
 export interface MobileOperator {

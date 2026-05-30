@@ -1,7 +1,11 @@
 # Données sources
 
-Le projet combine deux familles de données ouvertes, importées via des scripts
-(`bun run data:*`) et écrites dans `static/data/` (gitignoré, régénérable).
+Le projet combine plusieurs familles de données ouvertes, importées via des
+scripts (`bun run data:*`). Les GeoJSON volumineux vont dans `static/data/`
+(gitignoré, régénérable) ; le référentiel des lignes commerciales est un petit
+JSON committé dans `src/lib/geo/`.
+
+> **Tout régénérer en une commande : `bun run data:all`** (cf. § Mise à jour).
 
 ## 1. Tracés ferroviaires — SNCF Open Data
 
@@ -14,7 +18,25 @@ Le script télécharge l'export GeoJSON de l'API Opendatasoft, simplifie les
 tracés (Turf, ~50 m de tolérance) et calcule un `slug` par ligne pour les pages
 SEO `/ligne/[slug]`.
 
-## 2. Couverture officielle — ARCEP « Mon Réseau Mobile »
+## 2. Lignes commerciales — GTFS SNCF
+
+- **Jeu** : « Horaires des TGV (GTFS) » — SNCF Open Data (OpenDataSoft).
+- **URL** : https://eu.ftp.opendatasoft.com/sncf/gtfs/export_gtfs_voyages.zip
+- **Import** : `bun run data:lines`
+- **Sortie** : `src/lib/geo/commercial-lines.json` (**committé**, ≠ `static/data/`)
+
+`scripts/import-commercial-lines.ts` lit `routes.txt` du GTFS, extrait les relations
+commerciales (`route_long_name` → `{ from, to }`), normalise et filtre les libellés non
+exploitables (axes régionaux, abréviations…), puis **fusionne** le résultat avec le noyau
+curaté `CURATED_LINES` (`src/lib/geo/lines.ts`) qui prime pour la qualité SEO. La sortie
+alimente `RAIL_LINES`, donc les pages `/ligne/[slug]`, `/lignes`, le `sitemap.xml` et
+`/operateur/[slug]`.
+
+Le fichier est committé pour que le build/prerender tourne sans rejouer l'import ; il est
+à **régénérer + commiter** périodiquement. Pour élargir (Intercités, TER), ajouter une
+entrée dans le tableau `SOURCES` du script (URL du GTFS concerné).
+
+## 3. Couverture officielle — ARCEP « Mon Réseau Mobile »
 
 - **Portail** : https://data.arcep.fr/mobile/couvertures_theoriques/ et https://www.data.gouv.fr/datasets/mon-reseau-mobile
 - **Contenu** : couverture _théorique_ 2G/3G/4G/5G par opérateur (Orange, SFR, Free, Bouygues),
@@ -47,6 +69,26 @@ servis au navigateur.
 
 > Si le fichier de sortie est absent, la carte fonctionne sans la couche ARCEP
 > (mesures communautaires uniquement).
+
+## Mise à jour — une seule commande
+
+```bash
+bun run data:all
+```
+
+`scripts/data-all.ts` enchaîne, dans le bon ordre de dépendances :
+`data:sncf` → `data:lines` → `data:arcep` → `data:arcep-lines` (arrêt au premier
+échec). On peut aussi rejouer chaque étape isolément.
+
+**Cadence :**
+
+- **ARCEP** : trimestrielle. À chaque nouvelle publication, bumper la variable
+  `ARCEP_QUARTER` (ex. `ARCEP_QUARTER=2026_T1 bun run data:all`).
+- **SNCF (tracés + lignes commerciales)** : peu fréquent ; rejouer lors d'un
+  changement de réseau ou d'offre commerciale.
+
+Après régénération, **commiter `src/lib/geo/commercial-lines.json`** (les GeoJSON de
+`static/data/` restent gitignorés et sont régénérés au déploiement si besoin).
 
 ## Licences
 
