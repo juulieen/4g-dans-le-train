@@ -48,14 +48,15 @@ markup pour le style, c'est OK, mais ne casse aucune fonctionnalité existante.
 La carte superpose **deux couches** dont la distinction est essentielle :
 
 1. **Couverture ARCEP (théorique)** — la voie ferrée est **colorée** selon ce
-   qu'on peut y faire. C'est la couverture *officielle annoncée* par les
+   qu'on peut y faire. C'est la couverture _officielle annoncée_ par les
    opérateurs (régulateur télécom ARCEP).
 2. **Mesures communautaires (réel)** — des **pastilles vives cerclées de blanc**,
-   posées par-dessus. C'est le *vécu réel* des voyageurs. **Le réel prime
+   posées par-dessus. C'est le _vécu réel_ des voyageurs. **Le réel prime
    visuellement sur le théorique** : tout l'intérêt du projet est de révéler les
    écarts entre la promesse opérateur et la réalité du train.
 
 Code couleur par **usage** (déjà en place, à conserver / sublimer) :
+
 - 🟢 vert `#22c55e` → streaming vidéo, visio (niveau ARCEP « TBC »)
 - 🟢 vert-clair `#84cc16` → web, réseaux sociaux (« BC »)
 - 🟠 orange `#f59e0b` → messages seulement (« CL »)
@@ -74,10 +75,10 @@ ré-ouvrable via un bouton « ℹ️ / Comment ça marche ». Il explique :
 3. **D'où viennent les données ARCEP** : couverture théorique officielle publiée
    par l'ARCEP (le régulateur), par opérateur et par technologie. On la projette
    le long des voies ferrées et on la traduit en usages concrets (streaming /
-   web / messages / zone blanche). C'est une *prévision*, pas une garantie.
+   web / messages / zone blanche). C'est une _prévision_, pas une garantie.
 4. **Comment sont calculées les mesures communautaires (les nôtres)** : quand un
    voyageur active le « mode mesure », l'app teste la connexion en continu (un
-   petit *ping* réseau → ça passe / c'est lent / ça coupe) + sa position GPS.
+   petit _ping_ réseau → ça passe / c'est lent / ça coupe) + sa position GPS.
    **Vie privée** : la position est **arrondie à ~150 m** (cellules H3) avant
    tout envoi, **aucune donnée personnelle**, aucune trace continue
    ré-identifiable. Les mesures sont **agrégées par zone et par opérateur**
@@ -116,8 +117,12 @@ Soigne la **pédagogie visuelle** (petits schémas, icônes, exemples concrets t
 ### Tokens de design actuels (dans `src/routes/+layout.svelte`, `:global(:root)`)
 
 ```css
---bg: #0b1220;      --panel: #131c2e;   --accent: #22c55e;
---text: #e2e8f0;    --muted: #94a3b8;   --border: #1e293b;
+--bg: #0b1220;
+--panel: #131c2e;
+--accent: #22c55e;
+--text: #e2e8f0;
+--muted: #94a3b8;
+--border: #1e293b;
 ```
 
 Thème **sombre** actuellement. Tu peux faire évoluer la palette (garde une bonne
@@ -200,7 +205,7 @@ pris fort par défaut — l'objectif est un résultat « waouh » et pro.
 ## Notes pour Julien (hors prompt)
 
 - Quand la branche est prête : revue, puis `git checkout main && git merge
-  feat/ui-liquid-glass && git push`. Le déploiement se fait ensuite côté serveur :
+feat/ui-liquid-glass && git push`. Le déploiement se fait ensuite côté serveur :
   `ssh 100.117.235.23` → `cd ~/apps/4g-dans-le-train && git pull && COMPOSE_BAKE=false docker compose build && docker compose up -d --no-build --force-recreate`.
   (Le `COMPOSE_BAKE=false` évite un bug de build qui se bloque sur l'export d'image.)
 - Tu peux supprimer ce fichier de handoff une fois la refonte mergée.
