@@ -46,6 +46,7 @@ import { distance } from '@turf/turf';
 import { latLngToCell } from 'h3-js';
 import { H3_RESOLUTION } from '../src/lib/geo/h3';
 import { RAIL_LINES, slugifyLine } from '../src/lib/geo/lines';
+import { bestLevel, toLevel, type Level, type UsageOp } from '../src/lib/usage';
 import { GTFS_SOURCES, download, unzipTo, readCsv, parseCommercialRoute } from './lib/gtfs';
 
 // --- Paramètres -------------------------------------------------------------
@@ -83,21 +84,14 @@ interface Station {
 	name: string;
 }
 
-/** Niveau de couverture ARCEP par usage (ordre décroissant), `none` = zone blanche. */
-type Level = 'TBC' | 'BC' | 'CL' | 'none';
-const OPS = ['orange', 'sfr', 'free', 'bouygues'] as const;
-type Op = (typeof OPS)[number];
-type OpLevels = Record<Op, Level>;
-const LEVEL_RANK: Record<Level, number> = { TBC: 3, BC: 2, CL: 1, none: 0 };
+/**
+ * Niveaux de couverture ARCEP par opérateur d'une cellule (`none` = zone blanche).
+ * Les types et helpers d'usage (`Level`, `bestLevel`, `toLevel`) sont partagés avec
+ * le front via `src/lib/usage.ts` — source unique des couleurs/rangs/labels.
+ */
+type OpLevels = Record<UsageOp, Level>;
 
 const km = (a: Coord, b: Coord) => distance(a, b, { units: 'kilometers' });
-
-/** Niveau le plus élevé parmi les opérateurs (équivalent du champ `best` ARCEP). */
-function bestLevel(l: OpLevels): Level {
-	let best: Level = 'none';
-	for (const op of OPS) if (LEVEL_RANK[l[op]] > LEVEL_RANK[best]) best = l[op];
-	return best;
-}
 
 // --- 1) GTFS : suite ordonnée des gares par slug ----------------------------
 
@@ -451,16 +445,15 @@ function sampleWithDist(coords: Coord[], stepKm: number): DistPoint[] {
 async function loadArcep(): Promise<Map<string, OpLevels>> {
 	const fc = JSON.parse(await readFile(ARCEP_FILE, 'utf8')) as FeatureCollection;
 	const map = new Map<string, OpLevels>();
-	const lvl = (v: unknown): Level => (v === 'TBC' || v === 'BC' || v === 'CL' ? v : 'none');
 	for (const f of fc.features) {
 		const p = f.properties ?? {};
 		const cell = p.cellId as string | undefined;
 		if (!cell) continue;
 		map.set(cell, {
-			orange: lvl(p.orange),
-			sfr: lvl(p.sfr),
-			free: lvl(p.free),
-			bouygues: lvl(p.bouygues)
+			orange: toLevel(p.orange),
+			sfr: toLevel(p.sfr),
+			free: toLevel(p.free),
+			bouygues: toLevel(p.bouygues)
 		});
 	}
 	return map;
