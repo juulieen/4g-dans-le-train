@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { USAGE_TEXT, USAGE_SHORT, type Level } from '$lib/usage';
+	import { USAGE_TEXT, USAGE_SHORT, USAGE_OPS, type Level, type UsageOp } from '$lib/usage';
 
 	let {
 		slug,
@@ -60,18 +60,21 @@
 	let real = $state<RealPoint[]>([]);
 	let outages = $state<OutageP[]>([]);
 
-	const SPECIFIC = ['orange', 'sfr', 'free', 'bouygues'];
+	const isSpecific = $derived((USAGE_OPS as readonly string[]).includes(operator));
 	/** Champ ARCEP lu selon l'opérateur (ou `best` pour « tous »). */
-	const arcepField = $derived(SPECIFIC.includes(operator) ? (operator as keyof ArcepSeg) : 'best');
+	const arcepField = $derived<UsageOp | 'best'>(isSpecific ? (operator as UsageOp) : 'best');
 	/** Opérateur précis à passer aux API réel/coupures (null = tous). */
-	const specificOp = $derived(SPECIFIC.includes(operator) ? operator : null);
+	const specificOp = $derived(isSpecific ? (operator as UsageOp) : null);
 
-	const segLevel = (s: ArcepSeg): Level => (s[arcepField] as Level) ?? s.best;
+	const segLevel = (s: ArcepSeg): Level => s[arcepField] ?? s.best;
 
 	// --- Chargement du profil (au changement de ligne) ------------------------
 
 	$effect(() => {
 		const s = slug;
+		// Garde anti-course : une réponse périmée (slug changé entre-temps) ne doit
+		// pas écraser l'état courant. Invalidée par le cleanup de l'effet.
+		let cancelled = false;
 		loading = true;
 		notFound = false;
 		profile = null;
@@ -80,17 +83,23 @@
 		(async () => {
 			try {
 				const res = await fetch(`/data/route-profiles/${s}.json`);
+				if (cancelled) return;
 				if (!res.ok) {
 					notFound = true;
 				} else {
-					profile = (await res.json()) as Profile;
+					const data = (await res.json()) as Profile;
+					if (cancelled) return;
+					profile = data;
 				}
 			} catch {
-				notFound = true;
+				if (!cancelled) notFound = true;
 			} finally {
-				loading = false;
+				if (!cancelled) loading = false;
 			}
 		})();
+		return () => {
+			cancelled = true;
+		};
 	});
 
 	/** Plus proche distance cumulée sur la polyligne (équirectangulaire approché). */
@@ -111,7 +120,13 @@
 		return best <= 0.0025 ? dist : null;
 	}
 
-	/** Niveau d'usage « réel » dérivé du taux de réussite mesuré (seuils produit 80/40). */
+	/**
+	 * Niveau d'usage « réel » dérivé du taux de réussite mesuré (seuils produit 80/40,
+	 * cohérents avec `usageFromRate` de la carte). Le niveau intermédiaire `BC` est
+	 * volontairement absent : la mesure est un ping binaire (OK/KO), trop grossier
+	 * pour distinguer « web » de « streaming ». Le réel n'a donc que 3 paliers
+	 * (vert/orange/rouge), là où le théorique ARCEP en distingue 4.
+	 */
 	function rateLevel(rate: number): Level {
 		if (rate >= 0.8) return 'TBC';
 		if (rate >= 0.4) return 'CL';
@@ -124,54 +139,60 @@
 		const p = profile;
 		const op = specificOp;
 		if (!p) return;
+		// Même garde anti-course que pour le profil : si ligne/opérateur changent
+		// avant la fin des fetch, on ignore les réponses périmées.
+		let cancelled = false;
 		const qs = `line=${encodeURIComponent(p.slug)}${op ? `&operator=${op}` : ''}`;
 		(async () => {
 			try {
 				const r = await fetch(`/api/coverage?${qs}`);
-				if (r.ok) {
-					const fc = await r.json();
-					const pts: RealPoint[] = [];
-					for (const f of fc.features ?? []) {
-						const [lng, lat] = f.geometry.coordinates;
-						const d = distOf(p, lng, lat);
-						if (d === null) continue;
-						const rate = Number(f.properties.successRate) || 0;
-						pts.push({
-							distKm: d,
-							level: rateLevel(rate),
-							successRate: rate,
-							samples: Number(f.properties.samples) || 0
-						});
-					}
-					pts.sort((a, b) => a.distKm - b.distKm);
-					real = pts;
+				if (cancelled || !r.ok) return;
+				const fc = await r.json();
+				if (cancelled) return;
+				const pts: RealPoint[] = [];
+				for (const f of fc.features ?? []) {
+					const [lng, lat] = f.geometry.coordinates;
+					const d = distOf(p, lng, lat);
+					if (d === null) continue;
+					const rate = Number(f.properties.successRate) || 0;
+					pts.push({
+						distKm: d,
+						level: rateLevel(rate),
+						successRate: rate,
+						samples: Number(f.properties.samples) || 0
+					});
 				}
+				pts.sort((a, b) => a.distKm - b.distKm);
+				real = pts;
 			} catch {
 				/* réel indisponible : la frise reste théorique */
 			}
 			try {
 				const r = await fetch(`/api/outages?${qs}`);
-				if (r.ok) {
-					const fc = await r.json();
-					const os: OutageP[] = [];
-					for (const f of fc.features ?? []) {
-						const [lng, lat] = f.geometry.coordinates;
-						const d = distOf(p, lng, lat);
-						if (d === null) continue;
-						os.push({
-							distKm: d,
-							durationS: Number(f.properties.medianDurationS) || 0,
-							lengthM: Number(f.properties.medianLengthM) || 0,
-							count: Number(f.properties.count) || 0
-						});
-					}
-					os.sort((a, b) => a.distKm - b.distKm);
-					outages = os;
+				if (cancelled || !r.ok) return;
+				const fc = await r.json();
+				if (cancelled) return;
+				const os: OutageP[] = [];
+				for (const f of fc.features ?? []) {
+					const [lng, lat] = f.geometry.coordinates;
+					const d = distOf(p, lng, lat);
+					if (d === null) continue;
+					os.push({
+						distKm: d,
+						durationS: Number(f.properties.medianDurationS) || 0,
+						lengthM: Number(f.properties.medianLengthM) || 0,
+						count: Number(f.properties.count) || 0
+					});
 				}
+				os.sort((a, b) => a.distKm - b.distKm);
+				outages = os;
 			} catch {
 				/* coupures indisponibles */
 			}
 		})();
+		return () => {
+			cancelled = true;
+		};
 	});
 
 	// --- Helpers d'affichage --------------------------------------------------
@@ -241,7 +262,7 @@
 		>
 			<div class="track" style="width:{trackPx}px">
 				<!-- Coupures (au-dessus de la frise) -->
-				{#each outages as o (o.distKm)}
+				{#each outages as o, i (i)}
 					<div
 						class="outage"
 						style="left:{pct(o.distKm)}%"
@@ -263,7 +284,7 @@
 				</div>
 
 				<!-- Mesures réelles (vives, par-dessus — le réel prime) -->
-				{#each real as r (r.distKm)}
+				{#each real as r, i (i)}
 					<div
 						class="real-tick lvl-{r.level}"
 						style="left:{pct(r.distKm)}%"
@@ -273,7 +294,7 @@
 
 				<!-- Gares -->
 				<div class="stations">
-					{#each profile.stations as st, i (st.distKm)}
+					{#each profile.stations as st, i (i)}
 						<div
 							class="station"
 							class:at-start={i === 0}

@@ -518,6 +518,7 @@ async function writeRouteProfiles(
 		const m0 = meta.get(slug);
 		if (m0 && stations.length >= 2) {
 			const first = slugifyLine(stations[0].name);
+			const last = slugifyLine(stations[stations.length - 1].name);
 			const fromC = slugifyLine(m0.from);
 			const toC = slugifyLine(m0.to);
 			const startIsTo = toC.length > 0 && first.includes(toC);
@@ -525,6 +526,14 @@ async function writeRouteProfiles(
 			if (startIsTo && !startIsFrom) {
 				coords = [...coords].reverse();
 				stations = [...stations].reverse();
+			} else if (!startIsFrom && !startIsTo) {
+				// Aucune extrémité ne matche le référentiel (libellé GTFS divergent) :
+				// on garde l'ordre GTFS, mais on le signale pour repérer les régressions.
+				const endMatchesFrom = fromC.length > 0 && last.includes(fromC);
+				if (!endMatchesFrom)
+					console.warn(
+						`[line-index]   ⚠ ${slug} : orientation incertaine (gares « ${stations[0].name} » → « ${stations[stations.length - 1].name} » ≠ ${m0.from}/${m0.to}), ordre GTFS conservé`
+					);
 			}
 		}
 
