@@ -10,7 +10,7 @@
  * Source : GTFS « Voyages » (TGV INOUI) et « Intercités » SNCF Open Data.
  * Licence : Licence Ouverte / Open Licence (Etalab).
  */
-import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rm, rename } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { promisify } from 'node:util';
 import sevenZip from '7zip-min';
@@ -40,7 +40,11 @@ export async function download(url: string, dest: string): Promise<void> {
 	}
 	const res = await fetch(url);
 	if (!res.ok) throw new Error(`HTTP ${res.status} sur ${url}`);
-	await writeFile(dest, Buffer.from(await res.arrayBuffer()));
+	// Écriture atomique : on n'expose `dest` (réutilisé tel quel aux runs suivants)
+	// qu'une fois le téléchargement complet, pour ne jamais réutiliser un ZIP tronqué.
+	const part = `${dest}.part`;
+	await writeFile(part, Buffer.from(await res.arrayBuffer()));
+	await rename(part, dest);
 }
 
 /** Décompresse un .zip GTFS dans un dossier (recréé) et renvoie ce dossier. */
@@ -96,6 +100,18 @@ export async function readCsv(path: string): Promise<Record<string, string>[]> {
 /** Qualificatif de service/itinéraire en suffixe à retirer (« … TGV », « … Route Nord »). */
 const SUFFIX_RE = /\s+(TGV|SEA|BPL|Route\s+(Nord|Sud))$/i;
 
+/**
+ * Canonicalisation des extrémités : corrige les libellés GTFS (noms de gare,
+ * abréviations, accents manquants, fautes) vers un nom de ville unique. Évite
+ * notamment les pages SEO en double (« Clermont » vs « Clermont-Ferrand »).
+ */
+const CITY_ALIASES: Record<string, string> = {
+	Clermont: 'Clermont-Ferrand',
+	'Besançon Viotte': 'Besançon',
+	'Saint-Etienne': 'Saint-Étienne',
+	"Les Sables d'Olonnes": "Les Sables-d'Olonne"
+};
+
 /** Nettoie une extrémité : retire suffixes/qualificatifs, normalise les espaces. */
 export function cleanEndpoint(raw: string): string {
 	let s = raw
@@ -110,7 +126,9 @@ export function cleanEndpoint(raw: string): string {
 		s = s.replace(SUFFIX_RE, '').trim();
 	} while (s !== prev);
 	// « Paris Austerlitz », « Paris Gare de Lyon »… → « Paris » (gares parisiennes)
-	return s.replace(/^Paris\s+\S.*$/, 'Paris');
+	s = s.replace(/^Paris\s+\S.*$/, 'Paris');
+	// canonicalisation finale (gare→ville, accents, fautes, dédoublonnage)
+	return CITY_ALIASES[s] ?? s;
 }
 
 /**
@@ -173,12 +191,32 @@ const REGION_TOKENS = new Set(
 	].map((s) => s.toLowerCase())
 );
 
-/** Une extrémité est-elle une vraie ville exploitable (≠ région/abréviation) ? */
+/**
+ * Destinations hors de France : on recentre le SEO sur « la 4G dans le train en
+ * France ». Une relation dont une extrémité est étrangère est écartée (cela
+ * élimine aussi des libellés bruités comme « Stuttgart Munich »).
+ */
+const FOREIGN_TOKENS = new Set(
+	[
+		'Francfort',
+		'Bruxelles',
+		'Genève',
+		'Lausanne',
+		'Luxembourg',
+		'Zurich',
+		'Milan',
+		'Stuttgart Munich'
+	].map((s) => s.toLowerCase())
+);
+
+/** Une extrémité est-elle une vraie ville française exploitable (≠ région/étranger) ? */
 export function isUsableCity(name: string): boolean {
 	if (name.length < 3) return false;
 	if (name.includes('/')) return false; // « Lux/Alsace/Lorraine »
 	if (/^[A-Z]{2,4}$/.test(name)) return false; // « LR », « IS », « BPL »
-	if (REGION_TOKENS.has(name.toLowerCase())) return false;
+	const key = name.toLowerCase();
+	if (REGION_TOKENS.has(key)) return false;
+	if (FOREIGN_TOKENS.has(key)) return false; // recentrage France
 	return true;
 }
 

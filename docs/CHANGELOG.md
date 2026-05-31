@@ -15,7 +15,7 @@
   est **acceptée sans `lineSlug`** (pas de rejet). `recomputeCell` dérive désormais
   `lineSlug` de la cellule (corrige un bug de propagation `rows[0]`). Helpers GTFS
   mutualisés dans `scripts/lib/gtfs.ts` (slugs garantis identiques au référentiel).
-  Couvre 51/54 lignes. Aucun changement de schéma (colonne `line_slug` déjà présente).
+  Couvre 42/44 lignes. Aucun changement de schéma (colonne `line_slug` déjà présente).
 
 ## 2026-05-30
 

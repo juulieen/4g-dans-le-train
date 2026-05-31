@@ -15,6 +15,7 @@
  * (cf. `bun run data:all` et docs/DATA.md).
  *
  * Le téléchargement, le parsing CSV et surtout la dérivation du slug d'une route
+ * (canonicalisation des villes, exclusion des régions/destinations étrangères)
  * sont mutualisés dans `scripts/lib/gtfs.ts` (mêmes helpers que build-line-index)
  * pour garantir des slugs identiques entre le référentiel et l'index spatial.
  *
@@ -57,7 +58,7 @@ async function main() {
 			if (!longName) continue;
 			const rel = parseCommercialRoute(longName);
 			if (!rel) {
-				dropped.push(longName || r.route_short_name || r.route_id);
+				dropped.push(longName); // longName est garanti non vide ici
 				continue;
 			}
 			if (bySlug.has(rel.slug)) continue;

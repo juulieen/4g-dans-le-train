@@ -71,11 +71,11 @@ ligne(s) commerciale(s)** qui permet de renseigner `lineSlug` à l'ingestion en 
    `measurements.lineSlug`) à la plus générale. La liste complète sert aux pages de
    couverture par ligne (à venir).
 
-Couverture actuelle : 51/54 lignes routées, ~40 800 cellules. Lignes sans tracé :
-relations curatées sans équivalent direct dans les feeds TGV/Intercités (`paris-rennes`,
-`lyon-marseille`, `paris-clermont-ferrand` — cette dernière couverte via `paris-clermont`).
-Limite : seules les cellules **sur une voie** reçoivent un slug ; une mesure dont la
-cellule n'est sur aucune voie connue est **acceptée sans `lineSlug`** (jamais rejetée).
+Couverture actuelle : 42/44 lignes routées, ~36 100 cellules. Lignes sans tracé :
+`paris-rennes` et `lyon-marseille` (relations sans course directe dans les feeds
+TGV/Intercités). Limite : seules les cellules **sur une voie** reçoivent un slug ;
+une mesure dont la cellule n'est sur aucune voie connue est **acceptée sans
+`lineSlug`** (jamais rejetée).
 
 ## 4. Couverture officielle — ARCEP « Mon Réseau Mobile »
 
