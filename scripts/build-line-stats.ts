@@ -41,12 +41,28 @@ import {
 } from './lib/rail-routing';
 
 const DATA = 'static/data';
-const ARCEP_RES = 7; // doit correspondre à ARCEP_RESOLUTION de import-arcep / build-arcep-lines
+// Résolution H3 de la couche ARCEP. DOIT suivre celle d'import-arcep
+// (variable d'env ARCEP_H3_RES, défaut 7) et de build-arcep-lines.
+const ARCEP_RES = 7;
 const OPERATORS: OperatorKey[] = ['orange', 'sfr', 'free', 'bouygues'];
 /** Longueur minimale d'un tronçon sans couverture pour le compter en zone blanche (km). */
 const MIN_WHITE_KM = 3;
+/** Deux trous séparés par moins de ce covert sont fusionnés (anti-fragmentation res 7). */
+const MERGE_GAP_KM = 3;
 /** Nombre max de zones blanches détaillées conservées par ligne (les plus longues). */
 const MAX_WHITE_ZONES = 6;
+/**
+ * Garde-fou de fiabilité. `import-arcep` n'écrit QUE les cellules couvertes
+ * (best > 0) : une cellule absente du jeu ARCEP signifie donc soit « vraie zone
+ * blanche », soit « point hors du corridor qu'ARCEP a échantillonné ». Tant que
+ * le tracé routé suit la voie indexée, l'absence ≈ zone blanche réelle. Mais sur
+ * quelques lignes à gares GTFS rares, le routage s'écarte du corridor ARCEP et
+ * gonfle artificiellement le « sans réseau » (ex. paris-nancy ~40 %, paris-sedan
+ * ~30 %, contre ≤ 18 % pour les vraies lignes POLT). Au-delà de ce seuil, l'overlay
+ * ARCEP de la ligne n'est pas fiable : on EXCLUT la ligne de line-stats.json
+ * (la page retombe sur son contenu générique) plutôt que d'afficher de faux chiffres.
+ */
+const MAX_NODATA_FRACTION = 0.2;
 
 const LEVEL_RANK: Record<string, number> = { TBC: 3, BC: 2, CL: 1 };
 
@@ -58,9 +74,17 @@ const r1 = (x: number) => Math.round(x * 10) / 10;
 
 /** Nettoie un libellé de gare GTFS pour un usage rédactionnel (« Mâcon Loché TGV » → « Mâcon Loché »). */
 function prettyStation(name: string): string {
-	return name
+	const s = name
 		.replace(/\s*\([^)]*\)\s*/g, ' ') // retire les parenthèses
-		.replace(/\s+(TGV|Ville|Gare|SNCF)\b/gi, '') // qualificatifs de gare
+		.replace(/\s+/g, ' ')
+		.trim();
+	// Gares parisiennes (« Paris Gare de Lyon », « Paris Est »…) → « Paris ».
+	if (/^Paris\b/.test(s)) return 'Paris';
+	// Qualificatifs de gare en suffixe (« … Ville », « … TGV », « Gare de … »).
+	return s
+		.replace(/\s+(TGV|Ville|SNCF)\b/gi, '')
+		.replace(/\bGare\s+(de|du|des|d')\s+/gi, '')
+		.replace(/\s+Gare\b/gi, '')
 		.replace(/\s+/g, ' ')
 		.trim();
 }
@@ -109,6 +133,8 @@ async function main() {
 	// 3) Par ligne : route le tracé, échantillonne, agrège ARCEP + zones blanches.
 	const out: Record<string, LineStats> = {};
 	let missing = 0;
+	let unreliable = 0;
+	const dropped: string[] = [];
 
 	for (const line of RAIL_LINES) {
 		const route = routes.get(line.slug);
@@ -174,25 +200,44 @@ async function main() {
 			return label;
 		};
 
-		// Zones blanches : suites contiguës de best === null d'au moins MIN_WHITE_KM.
-		const zones: { after: string; lengthKm: number }[] = [];
-		for (let i = 0; i < n; ) {
-			if (bestAt[i] === null) {
-				let j = i;
-				while (j < n && bestAt[j] === null) j++;
-				const len = cum[j - 1] - cum[i];
-				if (len >= MIN_WHITE_KM) zones.push({ after: stationBefore(cum[i]), lengthKm: r1(len) });
-				i = j;
-			} else i++;
-		}
-		zones.sort((a, b) => b.lengthKm - a.lengthKm);
-
 		const toFractions = (d: LevelDist): LevelDist => ({
 			TBC: r4(d.TBC / n),
 			BC: r4(d.BC / n),
 			CL: r4(d.CL / n),
 			none: r4(d.none / n)
 		});
+
+		// Garde-fou : un « sans réseau » trop élevé trahit un tracé routé qui sort
+		// du corridor ARCEP → overlay non fiable, on écarte la ligne entièrement.
+		const best = toFractions(bestDist);
+		if (best.none > MAX_NODATA_FRACTION) {
+			unreliable++;
+			dropped.push(line.slug);
+			continue;
+		}
+
+		// Zones blanches : suites contiguës best === null, fusionnées si séparées par
+		// un court tronçon couvert (la grille res 7 fragmente un même trou), puis
+		// filtrées par longueur minimale et nommées par la gare amont.
+		const raw: { start: number; end: number }[] = [];
+		for (let i = 0; i < n; ) {
+			if (bestAt[i] === null) {
+				let j = i;
+				while (j < n && bestAt[j] === null) j++;
+				raw.push({ start: cum[i], end: cum[j - 1] });
+				i = j;
+			} else i++;
+		}
+		const merged: { start: number; end: number }[] = [];
+		for (const r of raw) {
+			const last = merged[merged.length - 1];
+			if (last && r.start - last.end < MERGE_GAP_KM) last.end = r.end;
+			else merged.push({ ...r });
+		}
+		const zones = merged
+			.map((r) => ({ after: stationBefore(r.start), lengthKm: r1(r.end - r.start) }))
+			.filter((z) => z.lengthKm >= MIN_WHITE_KM)
+			.sort((a, b) => b.lengthKm - a.lengthKm);
 
 		out[line.slug] = {
 			lengthKm: r1(cum[n - 1]),
@@ -203,7 +248,7 @@ async function main() {
 				free: toFractions(arcepDist.free),
 				bouygues: toFractions(arcepDist.bouygues)
 			},
-			best: toFractions(bestDist),
+			best,
 			zonesBlanches: { count: zones.length, zones: zones.slice(0, MAX_WHITE_ZONES) }
 		};
 	}
@@ -211,8 +256,9 @@ async function main() {
 	await writeFile('src/lib/geo/line-stats.json', JSON.stringify(out) + '\n');
 	console.log(
 		`[line-stats] écrit src/lib/geo/line-stats.json — ${Object.keys(out).length}/${RAIL_LINES.length} lignes ` +
-			`(${missing} sans tracé GTFS) ✅`
+			`(${missing} sans tracé GTFS, ${unreliable} écartées car overlay ARCEP peu fiable) ✅`
 	);
+	if (dropped.length) console.log(`[line-stats]   écartées : ${dropped.join(', ')}`);
 }
 
 main().catch((e) => {

@@ -128,6 +128,15 @@ servis au navigateur.
   parcours, répartition du « meilleur des 4 », et **zones blanches** (tronçons
   contigus sans aucune couverture ≥ 3 km, étiquetés par la gare amont — « après
   Mâcon »).
+- **Fiabilité** : `import-arcep` n'écrit que les cellules _couvertes_, donc une
+  cellule absente = « vraie zone blanche » **ou** « hors du corridor qu'ARCEP a
+  échantillonné ». Tant que le tracé routé suit la voie indexée, l'absence ≈ zone
+  blanche réelle ; mais quand une ligne a trop peu de gares GTFS, le routage
+  s'écarte et gonfle le « sans réseau ». Garde-fou : si la part « sans données »
+  d'une ligne dépasse **20 %**, son overlay est jugé non fiable et la ligne est
+  **exclue** de `line-stats.json` (sa page retombe sur le contenu générique).
+  Aujourd'hui 40/44 lignes ont des stats (2 sans tracé GTFS, 2 écartées). Les
+  trous fragmentés par la grille res 7 sont fusionnés (< 3 km de couvert entre deux).
 
 Ces stats alimentent les **pages SEO prerendues** (`/ligne`, `/operateur`,
 croisées) en chiffres réels figés au build — zéro coût runtime. La couche

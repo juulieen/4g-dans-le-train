@@ -48,7 +48,7 @@
 						acceptedAnswer: { '@type': 'Answer', text: faqAnswer }
 					}
 				]
-			}) +
+			}).replace(/</g, '\\u003c') +
 			'</' +
 			'script>'
 	);

@@ -41,9 +41,13 @@
 		]
 	});
 
-	// Balise JSON-LD assemblée par concaténation pour ne pas fermer le <script> hôte.
+	// Balise JSON-LD assemblée par concaténation pour ne pas fermer le <script> hôte ;
+	// `<` échappé dans les données par sécurité (défensif, données build-time).
 	const jsonLd = $derived(
-		'<script type="application/ld+json">' + JSON.stringify(faqLd) + '</' + 'script>'
+		'<script type="application/ld+json">' +
+			JSON.stringify(faqLd).replace(/</g, '\\u003c') +
+			'</' +
+			'script>'
 	);
 </script>
 

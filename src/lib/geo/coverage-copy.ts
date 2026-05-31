@@ -11,9 +11,13 @@ import type { LevelDist, LineStats } from './line-stats';
 
 const NBSP = ' ';
 
-/** Formate une fraction (0..1) en pourcentage entier français (« 78 % »). */
+/**
+ * Formate une fraction en pourcentage entier français (« 78 % »). Borné à
+ * [0, 100] : les fractions sont arrondies indépendamment côté build, donc une
+ * somme (ex. TBC+BC) peut frôler 100,01 % — on évite tout « 101 % ».
+ */
 export function pct(x: number): string {
-	return `${Math.round(x * 100)}${NBSP}%`;
+	return `${Math.min(100, Math.max(0, Math.round(x * 100)))}${NBSP}%`;
 }
 
 /** Énumération française : [a] → « a » ; [a,b] → « a et b » ; [a,b,c] → « a, b et c ». */

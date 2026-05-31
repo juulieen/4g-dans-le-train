@@ -19,7 +19,10 @@
   **réelle** (mesures communautaires, mouvante) reste hydratée **côté client** via
   un nouveau bloc `CommunityComparison.svelte` (→ `GET /api/coverage?line=…`, qui
   accepte désormais le filtre `?line=`). Sitemap et maillage interne inchangés.
-  _Non encore mergé sur `main`._
+  Garde-fou de fiabilité : `import-arcep` n'écrivant que les cellules couvertes,
+  une ligne dont le tracé routé s'écarte du corridor ARCEP (> 20 % « sans
+  données ») est exclue plutôt que d'afficher de faux chiffres (40/44 lignes
+  retenues). _Non encore mergé sur `main`._
 - **Durée des coupures réseau (branche `feat/duree-coupure`)** : on mesure
   désormais les **épisodes de coupure** (`ok → none… → ok`), pas seulement des
   points isolés — la donnée à plus forte valeur produit (« tu perdras le réseau
