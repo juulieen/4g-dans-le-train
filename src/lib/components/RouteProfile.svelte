@@ -66,6 +66,8 @@
 	/** Opérateur précis à passer aux API réel/coupures (null = tous). */
 	const specificOp = $derived(isSpecific ? (operator as UsageOp) : null);
 
+	// `?? s.best` : garde défensive si un champ opérateur manquait dans le JSON
+	// (en pratique toujours présent — `writeRouteProfiles` écrit les 4 ops + best).
 	const segLevel = (s: ArcepSeg): Level => s[arcepField] ?? s.best;
 
 	// --- Chargement du profil (au changement de ligne) ------------------------
@@ -102,7 +104,13 @@
 		};
 	});
 
-	/** Plus proche distance cumulée sur la polyligne (équirectangulaire approché). */
+	/**
+	 * Plus proche distance cumulée sur la polyligne (équirectangulaire approché).
+	 * Limite connue : sur une ligne qui se replie (un tronçon parcouru deux fois,
+	 * ex. `paris-annecy`), un point peut se projeter sur la mauvaise branche et donc
+	 * sur un mauvais km. Impact faible aujourd'hui (peu de mesures réelles, écart
+	 * visuel mineur) ; un placement par continuité serait nécessaire pour le lever.
+	 */
 	function distOf(p: Profile, lng: number, lat: number): number | null {
 		let best = Infinity;
 		let dist = 0;
@@ -139,53 +147,65 @@
 		const p = profile;
 		const op = specificOp;
 		if (!p) return;
-		// Même garde anti-course que pour le profil : si ligne/opérateur changent
-		// avant la fin des fetch, on ignore les réponses périmées.
+		// Réinitialise les couches : au changement d'opérateur (profil inchangé) on ne
+		// doit pas laisser s'afficher les mesures de l'opérateur précédent en attendant.
+		real = [];
+		outages = [];
+		// Garde anti-course : si ligne/opérateur changent avant la fin des fetch, on
+		// ignore les réponses périmées (drapeau invalidé par le cleanup de l'effet).
 		let cancelled = false;
 		const qs = `line=${encodeURIComponent(p.slug)}${op ? `&operator=${op}` : ''}`;
+		// Les deux couches sont chargées INDÉPENDAMMENT : un échec de /api/coverage ne
+		// doit pas empêcher /api/outages (et inversement).
 		(async () => {
 			try {
 				const r = await fetch(`/api/coverage?${qs}`);
-				if (cancelled || !r.ok) return;
-				const fc = await r.json();
-				if (cancelled) return;
-				const pts: RealPoint[] = [];
-				for (const f of fc.features ?? []) {
-					const [lng, lat] = f.geometry.coordinates;
-					const d = distOf(p, lng, lat);
-					if (d === null) continue;
-					const rate = Number(f.properties.successRate) || 0;
-					pts.push({
-						distKm: d,
-						level: rateLevel(rate),
-						successRate: rate,
-						samples: Number(f.properties.samples) || 0
-					});
+				if (!cancelled && r.ok) {
+					const fc = await r.json();
+					if (!cancelled) {
+						const pts: RealPoint[] = [];
+						for (const f of fc.features ?? []) {
+							const [lng, lat] = f.geometry.coordinates;
+							const d = distOf(p, lng, lat);
+							if (d === null) continue;
+							const rate = Number(f.properties.successRate) || 0;
+							pts.push({
+								distKm: d,
+								level: rateLevel(rate),
+								successRate: rate,
+								samples: Number(f.properties.samples) || 0
+							});
+						}
+						pts.sort((a, b) => a.distKm - b.distKm);
+						real = pts;
+					}
 				}
-				pts.sort((a, b) => a.distKm - b.distKm);
-				real = pts;
 			} catch {
 				/* réel indisponible : la frise reste théorique */
 			}
+		})();
+		(async () => {
 			try {
 				const r = await fetch(`/api/outages?${qs}`);
-				if (cancelled || !r.ok) return;
-				const fc = await r.json();
-				if (cancelled) return;
-				const os: OutageP[] = [];
-				for (const f of fc.features ?? []) {
-					const [lng, lat] = f.geometry.coordinates;
-					const d = distOf(p, lng, lat);
-					if (d === null) continue;
-					os.push({
-						distKm: d,
-						durationS: Number(f.properties.medianDurationS) || 0,
-						lengthM: Number(f.properties.medianLengthM) || 0,
-						count: Number(f.properties.count) || 0
-					});
+				if (!cancelled && r.ok) {
+					const fc = await r.json();
+					if (!cancelled) {
+						const os: OutageP[] = [];
+						for (const f of fc.features ?? []) {
+							const [lng, lat] = f.geometry.coordinates;
+							const d = distOf(p, lng, lat);
+							if (d === null) continue;
+							os.push({
+								distKm: d,
+								durationS: Number(f.properties.medianDurationS) || 0,
+								lengthM: Number(f.properties.medianLengthM) || 0,
+								count: Number(f.properties.count) || 0
+							});
+						}
+						os.sort((a, b) => a.distKm - b.distKm);
+						outages = os;
+					}
 				}
-				os.sort((a, b) => a.distKm - b.distKm);
-				outages = os;
 			} catch {
 				/* coupures indisponibles */
 			}
@@ -228,9 +248,18 @@
 				: ' Pas encore de mesures réelles.')
 		);
 	});
+
+	/** Libellé accessible de la figure selon l'état (évite un `aria-label=""` au chargement). */
+	const figureLabel = $derived(
+		loading
+			? 'Chargement du profil de trajet…'
+			: notFound
+				? 'Profil de trajet indisponible pour cette ligne'
+				: summary
+	);
 </script>
 
-<figure class="route-profile glass" role="img" aria-label={summary}>
+<figure class="route-profile glass" role="img" aria-label={figureLabel} aria-busy={loading}>
 	<figcaption class="head">
 		<strong>Profil du trajet&nbsp;: {profile?.name ?? slug}</strong>
 		{#if profile}

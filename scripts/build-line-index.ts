@@ -95,9 +95,44 @@ const km = (a: Coord, b: Coord) => distance(a, b, { units: 'kilometers' });
 
 // --- 1) GTFS : suite ordonnée des gares par slug ----------------------------
 
-/** Renvoie, par slug de ligne du référentiel, l'itinéraire de gares le plus riche. */
+/**
+ * Vrai si le slug d'une gare correspond à une ville (slug du référentiel), par
+ * **segment** et non sous-chaîne brute : « latour-de-carol-enveitg » matche
+ * « latour-de-carol », mais « tourcoing » ne matche PAS « tours ». Évite les faux
+ * positifs silencieux de scoring/orientation.
+ */
+function cityMatches(stationSlug: string, citySlug: string): boolean {
+	if (!citySlug) return false;
+	return (
+		stationSlug === citySlug ||
+		stationSlug.startsWith(citySlug + '-') ||
+		stationSlug.endsWith('-' + citySlug) ||
+		stationSlug.includes('-' + citySlug + '-')
+	);
+}
+
+/**
+ * Combien des deux terminus du référentiel (`from`/`to`) sont couverts par les
+ * gares extrêmes d'un itinéraire (0, 1 ou 2). Sert à préférer un trajet qui va
+ * VRAIMENT de la gare de départ à la gare d'arrivée, plutôt que le plus riche en
+ * arrêts (qui peut dépasser le terminus ou bifurquer — ex. Paris–Saint-Brieuc
+ * prolongé jusqu'à Saint-Malo).
+ */
+function endpointScore(stops: Station[], from: string, to: string): number {
+	if (stops.length < 2) return 0;
+	const a = slugifyLine(stops[0].name);
+	const b = slugifyLine(stops[stops.length - 1].name);
+	const f = slugifyLine(from);
+	const t = slugifyLine(to);
+	const coversFrom = cityMatches(a, f) || cityMatches(b, f);
+	const coversTo = cityMatches(a, t) || cityMatches(b, t);
+	return (coversFrom ? 1 : 0) + (coversTo ? 1 : 0);
+}
+
+/** Renvoie, par slug de ligne du référentiel, l'itinéraire de gares le plus pertinent. */
 async function stationsBySlug(): Promise<Map<string, Station[]>> {
 	const known = new Set(RAIL_LINES.map((l) => l.slug));
+	const meta = new Map(RAIL_LINES.map((l) => [l.slug, l]));
 	await mkdir(TMP, { recursive: true });
 	const best = new Map<string, Station[]>();
 
@@ -152,7 +187,9 @@ async function stationsBySlug(): Promise<Map<string, Station[]>> {
 			arr.push({ seq, stopId: st.stop_id });
 		}
 
-		// Par course : gares ordonnées ; on garde par slug l'itinéraire le plus long.
+		// Par course : gares ordonnées. On garde par slug le meilleur itinéraire :
+		// d'abord celui dont les terminus correspondent le mieux à `from`/`to` du
+		// référentiel, puis — à correspondance égale — le plus riche en arrêts.
 		for (const [tripId, stopsOfTrip] of seqByTrip) {
 			const slug = slugOfTrip.get(tripId)!;
 			const stops: Station[] = [];
@@ -165,8 +202,17 @@ async function stationsBySlug(): Promise<Map<string, Station[]>> {
 				prev = c;
 			}
 			if (stops.length < 2) continue;
+			const m = meta.get(slug);
 			const cur = best.get(slug);
-			if (!cur || stops.length > cur.length) best.set(slug, stops);
+			if (!cur) {
+				best.set(slug, stops);
+			} else if (m) {
+				const sc = endpointScore(stops, m.from, m.to);
+				const scCur = endpointScore(cur, m.from, m.to);
+				if (sc > scCur || (sc === scCur && stops.length > cur.length)) best.set(slug, stops);
+			} else if (stops.length > cur.length) {
+				best.set(slug, stops);
+			}
 		}
 	}
 	return best;
@@ -514,15 +560,15 @@ async function writeRouteProfiles(
 			const last = slugifyLine(stations[stations.length - 1].name);
 			const fromC = slugifyLine(m0.from);
 			const toC = slugifyLine(m0.to);
-			const startIsTo = toC.length > 0 && first.includes(toC);
-			const startIsFrom = fromC.length > 0 && first.includes(fromC);
+			const startIsTo = cityMatches(first, toC);
+			const startIsFrom = cityMatches(first, fromC);
 			if (startIsTo && !startIsFrom) {
 				coords = [...coords].reverse();
 				stations = [...stations].reverse();
 			} else if (!startIsFrom && !startIsTo) {
 				// Aucune extrémité ne matche le référentiel (libellé GTFS divergent) :
 				// on garde l'ordre GTFS, mais on le signale pour repérer les régressions.
-				const endMatchesFrom = fromC.length > 0 && last.includes(fromC);
+				const endMatchesFrom = cityMatches(last, fromC);
 				if (!endMatchesFrom)
 					console.warn(
 						`[line-index]   ⚠ ${slug} : orientation incertaine (gares « ${stations[0].name} » → « ${stations[stations.length - 1].name} » ≠ ${m0.from}/${m0.to}), ordre GTFS conservé`
