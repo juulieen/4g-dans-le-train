@@ -125,4 +125,69 @@ describe('OutageDetector', () => {
 		expect(ordered[0].startedAt).toBe(10 * S);
 		expect(ordered[0].durationS).toBe(20);
 	});
+
+	it('coupure dès le premier échantillon (none sans ok préalable)', () => {
+		const eps = run([sample(0, 'none'), sample(10 * S, 'none'), sample(20 * S, 'ok')]);
+		expect(eps).toHaveLength(1);
+		expect(eps[0].startedAt).toBe(0);
+		expect(eps[0].durationS).toBe(20);
+		expect(eps[0].terminated).toBe(true);
+	});
+
+	it('séquence vide → aucun épisode', () => {
+		expect(detectOutages([])).toEqual([]);
+		expect(run([sample(0, 'ok'), sample(10 * S, 'ok')])).toHaveLength(0);
+	});
+
+	it('GPS totalement absent : cellStart/cellEnd null, longueur via vitesse pré-coupure', () => {
+		const noGps = { lat: null, lng: null };
+		const eps = run([
+			sample(0, 'ok', { ...noGps, speedKmh: 60 }),
+			sample(10 * S, 'none', { ...noGps, speedKmh: null }),
+			sample(30 * S, 'ok', { ...noGps, speedKmh: 60 })
+		]);
+		expect(eps).toHaveLength(1);
+		expect(eps[0].cellStart).toBeNull();
+		expect(eps[0].cellEnd).toBeNull();
+		// 60 km/h = 16,67 m/s × 20 s ≈ 333 m
+		expect(eps[0].lengthM).toBe(Math.round((60 / 3.6) * 20));
+	});
+
+	it('tunnel : vitesse absente pendant la coupure → repli sur la vitesse d’avant', () => {
+		const pos = { lat: 48.85, lng: 2.35 };
+		const eps = run([
+			sample(0, 'ok', { ...pos, speedKmh: 90 }),
+			sample(10 * S, 'none', { ...pos, speedKmh: null }),
+			sample(20 * S, 'none', { ...pos, speedKmh: null }),
+			sample(30 * S, 'ok', { ...pos, speedKmh: 90 })
+		]);
+		expect(eps).toHaveLength(1);
+		expect(eps[0].lengthM).toBe(Math.round((90 / 3.6) * 20));
+	});
+
+	it('GPS figé ET vitesse inconnue partout → longueur 0', () => {
+		const frozen = { lat: 48.85, lng: 2.35, speedKmh: null };
+		const eps = run([
+			sample(0, 'ok', frozen),
+			sample(10 * S, 'none', frozen),
+			sample(20 * S, 'ok', frozen)
+		]);
+		expect(eps[0].lengthM).toBe(0);
+	});
+
+	it('trou de mesure > 5 min : clôt l’épisode en cours (non terminé) et en démarre un autre', () => {
+		const M = 60 * S;
+		const eps = detectOutages([
+			sample(0, 'ok'),
+			sample(10 * S, 'none'),
+			sample(20 * S, 'none'), // l'app est quittée ici
+			sample(20 * S + 10 * M, 'none'), // retour 10 min plus tard, nouveau trajet
+			sample(20 * S + 11 * M, 'ok')
+		]);
+		expect(eps).toHaveLength(2);
+		expect(eps[0].terminated).toBe(false); // coupé par le trou, fin inconnue
+		expect(eps[0].endedAt).toBe(20 * S);
+		expect(eps[1].terminated).toBe(true);
+		expect(eps[1].startedAt).toBe(20 * S + 10 * M);
+	});
 });

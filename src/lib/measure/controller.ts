@@ -113,6 +113,13 @@ export class MeasurementController {
 		}
 
 		const wakeOk = await this.wake.acquire();
+		// stop() a pu être appelé pendant l'attente (ex. refus de géoloc qui déclenche
+		// handleGeoError → stop). On ne doit pas réarmer listener/timer ni garder le
+		// wake lock dans ce cas.
+		if (!this.state.running) {
+			await this.wake.release();
+			return;
+		}
 		this.patch({ wakeLockActive: wakeOk });
 
 		// Rejoue la file dès que la connexion revient + à intervalle régulier.

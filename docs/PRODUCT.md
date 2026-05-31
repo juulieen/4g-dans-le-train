@@ -96,12 +96,24 @@ recolore les voies ARCEP **et** filtre les mesures communautaires. Il est
     logique de détection tourne (1) **côté client** pendant la mesure → retour
     éphémère « coupure de X » + compteur (rien n'est persisté en plus) ; (2)
     **côté serveur à la lecture** (`src/lib/server/outages.ts`) sur les mesures
-    brutes groupées par session → **agrégats seulement**. Longueur d'une coupure
-    estimée par la distance GPS parcourue, avec repli `vitesse × durée` quand le
-    GPS est figé (tunnel).
+    brutes groupées par session → **agrégats seulement**.
+  - **Longueur d'une coupure** : distance GPS parcourue, avec repli
+    `vitesse × durée` (vitesse pendant la coupure, sinon la dernière connue juste
+    avant — le GPS d'un tunnel ne donne souvent plus de vitesse). ⚠️ Côté serveur, les
+    positions stockées sont des **centres de cellule H3** (anonymisées), donc le
+    chemin y est quantifié au pas de cellule : la longueur serveur **repose
+    surtout sur le repli vitesse×durée**. La distance GPS fine n'est exacte qu'en
+    live (où le client a la position brute).
+  - **Trou de mesure / app quittée** : une même `session_id` survit entre trajets.
+    Au-delà de **5 min** sans échantillon, l'épisode en cours est clos comme **non
+    terminé** (on ne sait pas quand le réseau est revenu). Les épisodes non
+    terminés (trou, ou arrêt en zone blanche) sont **exclus des agrégats serveur**
+    pour ne pas biaiser la durée médiane.
   - **Vie privée** : `GET /api/outages` ne renvoie **que des agrégats** (durée et
     longueur médianes par cellule de début × opérateur, ligne dérivée de la
-    cellule) — jamais les points bruts ni les séquences par session.
+    cellule) — jamais les points bruts ni les séquences par session. On affiche
+    une cellule même avec une seule coupure observée : la session n'identifie
+    personne (jeton anonyme jetable), pas de risque de ré-identification.
   - **Perf** : dérivation à la lecture (scan + reconstruction). Suffisant au
     volume actuel ; si ça devient lent, matérialiser une table d'agrégats
     recalculée à l'ingestion (façon `cell_aggregates`).
