@@ -8,6 +8,7 @@
  *   4. index ligne + profils de trajet → src/lib/geo/line-index.json
  *      + static/data/route-profiles/*.json (dépend de rail-lines + commercial-lines + ARCEP)
  *   5. voies colorées → static/data/arcep-lines.geojson (dépend des deux précédents)
+ *   6. stats par ligne → src/lib/geo/line-stats.json (dépend de line-index + ARCEP)
  *
  * S'arrête au premier échec (code de sortie non nul). Le trimestre ARCEP se règle
  * via la variable d'environnement ARCEP_QUARTER (cf. docs/DATA.md).
@@ -25,7 +26,8 @@ const STEPS: { label: string; task: string }[] = [
 		label: 'Index ligne + profils de trajet (line-index.json + route-profiles/)',
 		task: 'data:line-index'
 	},
-	{ label: 'Voies colorées (arcep-lines.geojson)', task: 'data:arcep-lines' }
+	{ label: 'Voies colorées (arcep-lines.geojson)', task: 'data:arcep-lines' },
+	{ label: 'Stats par ligne (line-stats.json)', task: 'data:line-stats' }
 ];
 
 function run(task: string): Promise<void> {

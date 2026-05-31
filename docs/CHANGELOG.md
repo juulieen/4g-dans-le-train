@@ -5,6 +5,24 @@
 
 ## 2026-05-31
 
+- **Pages SEO remplies de vraies données (branche `feat/seo-data`)** : les pages
+  `/ligne`, `/operateur` et croisées n'avaient aucun chiffre. Elles portent
+  désormais la **couverture ARCEP réelle par ligne** — pourcentages `TBC/BC/CL/none`
+  par opérateur, couverture « au mieux », et **zones blanches nommées
+  automatiquement** (« notamment après Vierzon et Châteauroux »). Calcul au build :
+  nouveau script `scripts/build-line-stats.ts` (`data:line-stats`) qui **agrège les
+  profils de trajet** déjà produits par `data:line-index`
+  (`static/data/route-profiles/*.json`, handoff B1) — aucun re-routage, pondéré par
+  la longueur → `src/lib/geo/line-stats.json` (committé, lu par
+  `src/lib/geo/line-stats.ts`, figé dans le HTML prerendu). `<meta description>` et
+  FAQ JSON-LD enrichis d'un chiffre saillant. Les pages `/ligne` et croisées
+  montrent la **frise RouteProfile** (B1) pour le réel ; la page `/operateur`
+  (sans frise) garde un bloc `CommunityComparison.svelte` hydraté côté client
+  (`/api/coverage`, qui expose désormais `lastSeen`). Sitemap et maillage interne
+  inchangés. Garde-fou de fiabilité : `import-arcep` n'écrivant que les cellules
+  couvertes, une ligne dont le tracé s'écarte du corridor ARCEP (> 20 % « sans
+  données ») est exclue plutôt que d'afficher de faux chiffres. _Non encore mergé
+  sur `main`._
 - **Profil de trajet — frise de couverture gare→gare (branche `feat/profil-trajet`)** :
   nouvelle vue signature qui tient enfin la promesse produit (« sur MON trajet,
   quand pourrai-je regarder une vidéo… ou rien ? »). Composant réutilisable

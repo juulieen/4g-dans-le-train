@@ -8,7 +8,8 @@ import type { RequestHandler } from './$types';
  * Renvoie les agrégats de couverture au format GeoJSON (FeatureCollection de
  * points), prêt à être affiché par MapLibre. Filtrable par opérateur via ?operator=
  * et par ligne via ?line= (slug commercial, ex. paris-lyon) — ce dernier alimente
- * la couche « réel » de la frise « profil de trajet ».
+ * la couche « réel » de la frise « profil de trajet » et le bloc de comparaison
+ * des pages SEO opérateur (CommunityComparison.svelte).
  */
 export const GET: RequestHandler = async ({ url, setHeaders }) => {
 	const operator = url.searchParams.get('operator');
@@ -35,7 +36,8 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
 			samples: r.samples,
 			successRate: r.successRate,
 			medianRtt: r.medianRtt,
-			lineSlug: r.lineSlug
+			lineSlug: r.lineSlug,
+			lastSeen: r.lastSeen
 		}
 	}));
 

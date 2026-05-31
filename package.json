@@ -21,6 +21,7 @@
 		"data:line-index": "bun run scripts/build-line-index.ts",
 		"data:arcep": "bun run scripts/import-arcep.ts",
 		"data:arcep-lines": "bun run scripts/build-arcep-lines.ts",
+		"data:line-stats": "bun run scripts/build-line-stats.ts",
 		"data:all": "bun run scripts/data-all.ts"
 	},
 	"devDependencies": {

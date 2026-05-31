@@ -132,6 +132,38 @@ servis au navigateur.
 > Si le fichier de sortie est absent, la carte fonctionne sans la couche ARCEP
 > (mesures communautaires uniquement).
 
+## Stats de couverture par ligne (`data:line-stats`)
+
+- **Jeu** : dérivé, aucune source externe nouvelle.
+- **Entrées** : les **profils de trajet** `static/data/route-profiles/*.json`
+  produits par `data:line-index` (§ 3) — chacun porte le tracé routé découpé en
+  segments ARCEP run-length `{ fromKm, toKm, orange, sfr, free, bouygues, best }`
+  et les gares ordonnées `{ name, distKm }`.
+- **Commande** : `bun run data:line-stats`.
+- **Sortie** : `src/lib/geo/line-stats.json` (**committé**, lu par
+  `src/lib/geo/line-stats.ts`).
+- **Pipeline** (`scripts/build-line-stats.ts`) : **aucun re-routage** — on lit les
+  segments ARCEP de chaque profil et on agrège, **pondéré par la longueur** :
+  répartition `TBC/BC/CL/none` par opérateur et « au mieux » (`best`), et **zones
+  blanches** (segments `best === 'none'` contigus, fusionnés si séparés par < 3 km
+  de couvert, ≥ 3 km, nommés par la gare amont — « après Mâcon »). Types d'usage
+  partagés via `src/lib/usage.ts`.
+- **Fiabilité** : `import-arcep` n'écrit que les cellules _couvertes_, donc un
+  segment `none` vaut « vraie zone blanche » **ou** « hors du corridor qu'ARCEP a
+  échantillonné ». Tant que le tracé suit la voie indexée, l'absence ≈ zone
+  blanche réelle ; mais quand une ligne a trop peu de gares GTFS, le tracé s'écarte
+  et gonfle le « sans réseau ». Garde-fou : si la part « sans données » d'une ligne
+  dépasse **20 %**, son overlay est jugé non fiable et la ligne est **exclue** de
+  `line-stats.json` (sa page retombe sur le contenu générique).
+
+Ces stats alimentent les **pages SEO prerendues** en chiffres réels figés au
+build — zéro coût runtime. Le **réel** (mesures communautaires, mouvant) n'est PAS
+figé ici : les pages `/ligne` et croisées affichent la frise `RouteProfile` (§ 3),
+la page `/operateur` un bloc `CommunityComparison.svelte` (→ `/api/coverage`).
+
+> Dépend des **profils de trajet** : à lancer après `data:line-index` (c'est la
+> fin de l'ordre de `data:all`).
+
 ## Mise à jour — une seule commande
 
 ```bash
@@ -140,9 +172,10 @@ bun run data:all
 
 `scripts/data-all.ts` enchaîne, dans le bon ordre de dépendances :
 `data:sncf` → `data:lines` → `data:arcep` → `data:line-index` → `data:arcep-lines`
-(arrêt au premier échec). On peut aussi rejouer chaque étape isolément. Note :
-`data:arcep` passe **avant** `data:line-index` car ce dernier lit
-`arcep-coverage.geojson` pour générer les profils de trajet (§ 3).
+→ `data:line-stats` (arrêt au premier échec). On peut aussi rejouer chaque étape
+isolément. Note : `data:arcep` passe **avant** `data:line-index` car ce dernier lit
+`arcep-coverage.geojson` pour générer les profils de trajet (§ 3) ; `data:line-stats`
+clôt la chaîne car il agrège ces profils.
 
 **Cadence :**
 
@@ -151,9 +184,9 @@ bun run data:all
 - **SNCF (tracés + lignes commerciales)** : peu fréquent ; rejouer lors d'un
   changement de réseau ou d'offre commerciale.
 
-Après régénération, **commiter `src/lib/geo/commercial-lines.json` et
-`src/lib/geo/line-index.json`** (les GeoJSON de `static/data/` restent gitignorés et
-sont régénérés au déploiement si besoin).
+Après régénération, **commiter `src/lib/geo/commercial-lines.json`,
+`src/lib/geo/line-index.json` et `src/lib/geo/line-stats.json`** (les GeoJSON de
+`static/data/` restent gitignorés et sont régénérés au déploiement si besoin).
 
 ## Licences
 

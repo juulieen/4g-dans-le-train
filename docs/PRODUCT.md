@@ -146,6 +146,17 @@ réel et coupures chargés à la volée via `/api/coverage?line=` et `/api/outag
   avec le réseau ferroviaire). Le SEO repose sur des **pages programmatiques** :
   `/ligne/[slug]`, `/operateur/[slug]`, croisées `/ligne/[slug]/[operateur]`,
   - FAQ, sitemap, JSON-LD. Référentiel curaté dans `src/lib/geo/lines.ts`.
+- **Contenu des pages SEO — théorique figé, réel hydraté** : ces pages portent de
+  **vraies données ARCEP** par ligne (chiffres + zones blanches nommées),
+  agrégées au build depuis les profils de trajet dans `src/lib/geo/line-stats.json`
+  (script `data:line-stats`, cf. `docs/DATA.md`) et **figées dans le HTML prerendu**
+  — indexables, zéro coût runtime. La couche **réelle** (mesures communautaires)
+  étant **mouvante** et souvent clairsemée, on ne la fige PAS : les pages `/ligne`
+  et croisées affichent la **frise `RouteProfile`** (réel par-dessus le théorique),
+  et la page `/operateur` (sans frise) un bloc « Et en vrai ? »
+  (`CommunityComparison.svelte`) chargé **côté client** (`/api/coverage`), qui
+  dégrade proprement sans mesures. C'est l'incarnation de l'ADN du projet :
+  l'**écart** entre couverture annoncée et constatée.
 - **Périmètre** : France (réseau SNCF) d'abord ; architecture extensible.
 - **Snapping ligne — décisions** : (1) une mesure hors de toute ligne connue est
   **acceptée sans `lineSlug`**, jamais rejetée (on ne perd aucune donnée ; le filtre
