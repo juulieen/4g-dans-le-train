@@ -102,6 +102,12 @@ export class MeasurementController {
 	private throughputInFlight = false;
 	/** Dernier débit mesuré, en attente d'être rattaché à un envoi (consume-once). */
 	private pendingDownlinkKbps: number | null = null;
+	/**
+	 * Génération de session, incrémentée à chaque `start()`. Capturée par une
+	 * mesure de débit en vol : si elle change (stop/start entre-temps), le résultat
+	 * tardif est ignoré → il ne pollue pas la session suivante.
+	 */
+	private generation = 0;
 
 	constructor(opts: ControllerOptions) {
 		this.opts = opts;
@@ -130,6 +136,8 @@ export class MeasurementController {
 		this.detector.reset();
 		this.sampleCount = 0;
 		this.pendingDownlinkKbps = null;
+		this.throughputInFlight = false;
+		this.generation++;
 		this.patch({ ...initialState, running: true, queued: this.queue.size });
 
 		const ok = this.geo.start(
@@ -245,6 +253,11 @@ export class MeasurementController {
 				});
 			}
 
+			// Consomme le dernier débit mesuré à CHAQUE sample, même sans consentement :
+			// borne son âge à ~1 cycle (sinon il s'accumulerait et serait rattaché bien
+			// plus tard, en paraissant frais, à une cellule très différente).
+			const downlinkKbps = this.consumePendingDownlink();
+
 			if (hasConsent()) {
 				// On ENFILE systématiquement (même « none »), puis on tente de vider.
 				// Ainsi les zones blanches — où l'envoi direct échouerait — sont gardées.
@@ -255,9 +268,7 @@ export class MeasurementController {
 					rttMs,
 					jitterMs,
 					loss,
-					// Rattache le dernier débit mesuré (une seule fois) : la mesure de
-					// débit est asynchrone et n'arrive pas forcément sur ce sample.
-					downlinkKbps: this.consumePendingDownlink(),
+					downlinkKbps,
 					operator: this.opts.operator,
 					netType,
 					speedKmh: sample.speedKmh,
@@ -279,16 +290,22 @@ export class MeasurementController {
 	 * résultat est affiché dès réception et mémorisé pour le prochain envoi.
 	 */
 	private measureThroughputDetached(): void {
+		const gen = this.generation;
 		this.throughputInFlight = true;
 		void measureDownlink('/api/probe', PROBE_SIZE_BYTES)
 			.then((t) => {
+				// Résultat d'une session précédente, ou arrivé après l'arrêt : on l'ignore
+				// pour ne pas afficher/rattacher un débit étranger à la session courante.
+				if (gen !== this.generation || !this.state.running) return;
 				if (t.downlinkKbps != null) {
 					this.pendingDownlinkKbps = t.downlinkKbps;
 					this.patch({ downlinkKbps: t.downlinkKbps });
 				}
 			})
 			.finally(() => {
-				this.throughputInFlight = false;
+				// Ne libère le verrou que s'il s'agit toujours de la même session
+				// (sinon on écraserait le verrou d'une mesure de la nouvelle session).
+				if (gen === this.generation) this.throughputInFlight = false;
 			});
 	}
 

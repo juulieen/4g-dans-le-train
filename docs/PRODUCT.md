@@ -87,8 +87,9 @@ recolore les voies ARCEP **et** filtre les mesures communautaires. Il est
   carte) : streaming ≥ 2000 kbps, web ≥ 500, messages ≥ 100, sinon rien. La mesure
   tourne **en tâche de fond** (hors du chemin bloquant) pour ne jamais retarder la
   rafale ni la détection de coupure ; son résultat est rattaché à l'envoi suivant.
-  L'endpoint ne reçoit aucune donnée client (juste `size`), ne logge rien et n'a pas
-  de rate-limit par IP (ce serait ré-identifiant) — le coût est borné par la taille.
+  L'endpoint ne reçoit aucune donnée client (juste `size`), ne logge rien, n'expose
+  pas de CORS (appelé en same-origin) et n'a pas de rate-limit par IP (ce serait
+  ré-identifiant) — le coût est borné par la taille et un blob pré-généré.
 - **Vie privée (non négociable)** : la position est **arrondie au centre de sa
   cellule H3 (~150 m)** AVANT envoi ; aucune donnée personnelle ; session =
   jeton anonyme jetable ; pas de trace continue ré-identifiable. Consentement

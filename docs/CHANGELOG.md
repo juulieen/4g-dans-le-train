@@ -25,7 +25,14 @@
   Suite à la revue : mesure de débit déplacée **hors du verrou de mesure** (tâche de
   fond, ne décime plus les échantillons GPS en zone blanche), **timeout de ping de
   rafale ramené à 2,5 s** (borne la fenêtre bloquante), et verdict `none` clarifié
-  (absence totale de réponse, plus de pseudo-seuil de perte). _Non encore mergé sur `main`._
+  (absence totale de réponse, plus de pseudo-seuil de perte).
+  2ᵉ tour de revues (Opus + Sonnet + Copilot) : **jeton de génération de session**
+  pour qu'une mesure de débit tardive ne pollue pas la session suivante (+ reset du
+  verrou `throughputInFlight` au démarrage, garde « plus en cours ») ; débit en attente
+  **consommé à chaque échantillon** (borne son âge, évite un rattachement tardif sans
+  consentement) ; `/api/probe` **sans en-tête CORS** (appelé en same-origin, évite l'abus
+  tiers) et **blob aléatoire pré-généré une fois** (plus de CSPRNG par requête) ;
+  borne `max` sur `jitterMs` côté Zod. _Non encore mergé sur `main`._
 - **Durée des coupures réseau (branche `feat/duree-coupure`)** : on mesure
   désormais les **épisodes de coupure** (`ok → none… → ok`), pas seulement des
   points isolés — la donnée à plus forte valeur produit (« tu perdras le réseau

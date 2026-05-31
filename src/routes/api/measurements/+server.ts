@@ -16,7 +16,7 @@ const MeasurementInput = z.object({
 	lng: z.number().min(-180).max(180),
 	status: z.enum(['ok', 'degraded', 'none']),
 	rttMs: z.number().int().nonnegative().nullable().optional(),
-	jitterMs: z.number().nonnegative().nullable().optional(),
+	jitterMs: z.number().nonnegative().max(10_000).nullable().optional(),
 	loss: z.number().min(0).max(1).nullable().optional(),
 	downlinkKbps: z.number().int().nonnegative().nullable().optional(),
 	operator: z.enum(['orange', 'sfr', 'free', 'bouygues', 'autre', 'inconnu']).default('inconnu'),
