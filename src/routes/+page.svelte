@@ -9,8 +9,11 @@
 		grantConsent,
 		revokeConsent,
 		hasOnboarded,
-		markOnboarded
+		markOnboarded,
+		getThroughputOptIn,
+		setThroughputOptIn
 	} from '$measure/session';
+	import { usageFromKbps } from '$lib/usage';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -26,6 +29,8 @@
 
 	let operator = $state<Operator>('inconnu');
 	let consent = $state(false);
+	// Opt-in débit (OFF par défaut ; consomme la data mobile de l'utilisateur).
+	let measureThroughput = $state(false);
 	let showArcep = $state(true);
 	let showCommunity = $state(true);
 	// Filtre d'AFFICHAGE de la carte (distinct de l'opérateur du mode mesure).
@@ -51,17 +56,26 @@
 
 	$effect(() => {
 		consent = hasConsent();
+		measureThroughput = getThroughputOptIn();
 	});
 
 	function ensureController(): MeasurementController {
 		if (!controller) {
 			controller = new MeasurementController({
 				operator,
-				onState: (s) => (live = s)
+				onState: (s) => (live = s),
+				measureThroughput
 			});
 		}
 		controller.setOperator(operator);
+		controller.setMeasureThroughput(measureThroughput);
 		return controller;
+	}
+
+	function toggleThroughput() {
+		measureThroughput = !measureThroughput;
+		setThroughputOptIn(measureThroughput);
+		controller?.setMeasureThroughput(measureThroughput);
 	}
 
 	async function toggleMeasure() {
@@ -305,6 +319,17 @@
 					</select>
 				</label>
 
+				<label class="throughput-opt">
+					<input
+						type="checkbox"
+						name="measure-throughput"
+						checked={measureThroughput}
+						onchange={toggleThroughput}
+						disabled={live?.running}
+					/>
+					Mesurer aussi le débit <span class="data-warn">(consomme un peu de données)</span>
+				</label>
+
 				<button class="cta" class:running={live?.running} onclick={toggleMeasure}>
 					{live?.running ? 'Arrêter la mesure' : 'Démarrer la mesure'}
 				</button>
@@ -320,6 +345,25 @@
 							<div>
 								<dt>Latence</dt>
 								<dd>{live.rttMs != null ? `${live.rttMs} ms` : '—'}</dd>
+							</div>
+							<div>
+								<dt>Gigue</dt>
+								<dd>{live.jitterMs != null ? `${live.jitterMs} ms` : '—'}</dd>
+							</div>
+							<div>
+								<dt>Perte</dt>
+								<dd>{live.loss != null ? `${Math.round(live.loss * 100)} %` : '—'}</dd>
+							</div>
+							<div>
+								<dt>Débit</dt>
+								<dd>
+									{#if live.downlinkKbps != null}
+										{(live.downlinkKbps / 1000).toFixed(1)} Mb/s
+										<span class="usage-tag">· {usageFromKbps(live.downlinkKbps).label}</span>
+									{:else}
+										—
+									{/if}
+								</dd>
 							</div>
 							<div>
 								<dt>Vitesse</dt>
@@ -619,6 +663,25 @@
 		font-size: 0.78rem;
 		color: var(--muted);
 		line-height: 1.4;
+	}
+	.throughput-opt {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.82rem;
+		color: var(--muted);
+		margin-bottom: 0.75rem;
+		cursor: pointer;
+		min-height: 32px;
+	}
+	.data-warn {
+		font-size: 0.72rem;
+		opacity: 0.8;
+	}
+	.usage-tag {
+		font-size: 0.7rem;
+		font-weight: 400;
+		color: var(--muted);
 	}
 
 	/* --- Desktop : panneau latéral glass (pas de sheet) --- */

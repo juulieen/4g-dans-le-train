@@ -15,6 +15,13 @@
       "when": 1780186800040,
       "tag": "0001_dapper_wong",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1780217166799,
+      "tag": "0002_complete_maelstrom",
+      "breakpoints": true
     }
   ]
 }

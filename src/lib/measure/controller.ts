@@ -9,7 +9,8 @@
  *
  * Conçu pour être piloté par l'UI Svelte via des callbacks d'état réactifs.
  */
-import { ping, type PingStatus } from './ping';
+import { pingBurst, type PingStatus } from './ping';
+import { measureDownlink } from './throughput';
 import { GeoTracker, type GeoSample } from './geolocation';
 import { ScreenWakeLock } from './wakeLock';
 import { readNetworkType } from './netinfo';
@@ -23,6 +24,12 @@ export interface LiveState {
 	running: boolean;
 	status: PingStatus | 'idle';
 	rttMs: number | null;
+	/** Gigue (ms) de la dernière rafale. null si <2 succès. */
+	jitterMs: number | null;
+	/** Taux de perte de la dernière rafale, 0..1. */
+	loss: number | null;
+	/** Débit descendant (kbps) de la dernière mesure de débit. null si non mesuré. */
+	downlinkKbps: number | null;
 	lat: number | null;
 	lng: number | null;
 	speedKmh: number | null;
@@ -44,12 +51,17 @@ export interface ControllerOptions {
 	operator: Operator;
 	onState: (s: LiveState) => void;
 	endpoint?: string;
+	/** Active la mesure de débit (opt-in : consomme la data mobile). Défaut false. */
+	measureThroughput?: boolean;
 }
 
 const initialState: LiveState = {
 	running: false,
 	status: 'idle',
 	rttMs: null,
+	jitterMs: null,
+	loss: null,
+	downlinkKbps: null,
 	lat: null,
 	lng: null,
 	speedKmh: null,
@@ -65,6 +77,10 @@ const initialState: LiveState = {
 
 /** Intervalle de tentative de vidage de la file (ms) tant que le mode tourne. */
 const FLUSH_INTERVAL_MS = 15_000;
+/** Mesure de débit 1 position sur N (parcimonie data). */
+const THROUGHPUT_EVERY_N = 5;
+/** Taille du blob de débit téléchargé (octets). */
+const PROBE_SIZE_BYTES = 128 * 1024;
 
 export class MeasurementController {
 	private geo = new GeoTracker();
@@ -80,6 +96,18 @@ export class MeasurementController {
 	/** Évite les vidages de file concurrents. */
 	private flushing = false;
 	private flushTimer: ReturnType<typeof setInterval> | null = null;
+	/** Compteur de positions échantillonnées, pour cadencer la mesure de débit. */
+	private sampleCount = 0;
+	/** Une mesure de débit est en cours (évite les chevauchements). */
+	private throughputInFlight = false;
+	/** Dernier débit mesuré, en attente d'être rattaché à un envoi (consume-once). */
+	private pendingDownlinkKbps: number | null = null;
+	/**
+	 * Génération de session, incrémentée à chaque `start()`. Capturée par une
+	 * mesure de débit en vol : si elle change (stop/start entre-temps), le résultat
+	 * tardif est ignoré → il ne pollue pas la session suivante.
+	 */
+	private generation = 0;
 
 	constructor(opts: ControllerOptions) {
 		this.opts = opts;
@@ -93,6 +121,11 @@ export class MeasurementController {
 		this.opts.operator = operator;
 	}
 
+	/** Active/désactive la mesure de débit (opt-in). Modifiable même mode arrêté. */
+	setMeasureThroughput(on: boolean) {
+		this.opts.measureThroughput = on;
+	}
+
 	async start(): Promise<void> {
 		if (this.state.running) return;
 		if (!this.geo.isSupported) {
@@ -101,6 +134,10 @@ export class MeasurementController {
 		}
 		// On conserve la file existante (mesures d'une session précédente non envoyées).
 		this.detector.reset();
+		this.sampleCount = 0;
+		this.pendingDownlinkKbps = null;
+		this.throughputInFlight = false;
+		this.generation++;
 		this.patch({ ...initialState, running: true, queued: this.queue.size });
 
 		const ok = this.geo.start(
@@ -177,10 +214,28 @@ export class MeasurementController {
 		});
 		if (this.busy) return;
 		this.busy = true;
+		this.sampleCount++;
 		try {
-			const { status, rttMs } = await ping(this.opts.endpoint);
+			// Rafale de pings → RTT médian + gigue + perte, puis verdict consolidé
+			// (robuste au bruit, vs un ping unique malchanceux).
+			const burst = await pingBurst(this.opts.endpoint);
+			const { status, jitterMs, loss } = burst;
+			const rttMs = burst.rttMedian;
 			const netType = readNetworkType();
-			this.patch({ status, rttMs, netType });
+			this.patch({ status, rttMs, jitterMs, loss, netType });
+
+			// Mesure de débit : opt-in + cadencée (1 position sur N). Lancée HORS du
+			// verrou `busy` (fire-and-forget) pour ne PAS bloquer les échantillons GPS
+			// suivants — sinon, en zone blanche, un téléchargement lent décimerait la
+			// détection de coupure. Le résultat est affiché dès réception et rattaché
+			// au prochain envoi (consume-once via `pendingDownlinkKbps`).
+			if (
+				this.opts.measureThroughput &&
+				!this.throughputInFlight &&
+				this.sampleCount % THROUGHPUT_EVERY_N === 0
+			) {
+				this.measureThroughputDetached();
+			}
 
 			// Détection live des coupures (indépendante du consentement : c'est de
 			// l'affichage éphémère sur SA session, rien n'est envoyé d'ici).
@@ -198,6 +253,11 @@ export class MeasurementController {
 				});
 			}
 
+			// Consomme le dernier débit mesuré à CHAQUE sample, même sans consentement :
+			// borne son âge à ~1 cycle (sinon il s'accumulerait et serait rattaché bien
+			// plus tard, en paraissant frais, à une cellule très différente).
+			const downlinkKbps = this.consumePendingDownlink();
+
 			if (hasConsent()) {
 				// On ENFILE systématiquement (même « none »), puis on tente de vider.
 				// Ainsi les zones blanches — où l'envoi direct échouerait — sont gardées.
@@ -206,6 +266,9 @@ export class MeasurementController {
 					lng: sample.lng,
 					status,
 					rttMs,
+					jitterMs,
+					loss,
+					downlinkKbps,
 					operator: this.opts.operator,
 					netType,
 					speedKmh: sample.speedKmh,
@@ -219,6 +282,38 @@ export class MeasurementController {
 		} finally {
 			this.busy = false;
 		}
+	}
+
+	/**
+	 * Lance une mesure de débit en tâche de fond (hors du verrou `busy`) : elle
+	 * ne doit jamais retarder la prochaine rafale ni la détection de coupure. Le
+	 * résultat est affiché dès réception et mémorisé pour le prochain envoi.
+	 */
+	private measureThroughputDetached(): void {
+		const gen = this.generation;
+		this.throughputInFlight = true;
+		void measureDownlink('/api/probe', PROBE_SIZE_BYTES)
+			.then((t) => {
+				// Résultat d'une session précédente, ou arrivé après l'arrêt : on l'ignore
+				// pour ne pas afficher/rattacher un débit étranger à la session courante.
+				if (gen !== this.generation || !this.state.running) return;
+				if (t.downlinkKbps != null) {
+					this.pendingDownlinkKbps = t.downlinkKbps;
+					this.patch({ downlinkKbps: t.downlinkKbps });
+				}
+			})
+			.finally(() => {
+				// Ne libère le verrou que s'il s'agit toujours de la même session
+				// (sinon on écraserait le verrou d'une mesure de la nouvelle session).
+				if (gen === this.generation) this.throughputInFlight = false;
+			});
+	}
+
+	/** Récupère le dernier débit mesuré et le consomme (ne le rattache qu'une fois). */
+	private consumePendingDownlink(): number | null {
+		const v = this.pendingDownlinkKbps;
+		this.pendingDownlinkKbps = null;
+		return v;
 	}
 
 	/** Vide la file vers l'API ; s'arrête à la première erreur (réseau coupé). */

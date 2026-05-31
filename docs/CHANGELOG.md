@@ -5,6 +5,34 @@
 
 ## 2026-05-31
 
+- **Mesure riche : jitter, perte de paquets & débit (branche `feat/qualite-mesure`)** :
+  le ping unique par position est remplacé par une **petite rafale** (4 HEAD
+  rapprochés) dont on tire **RTT médian + gigue + taux de perte** — robuste au bruit
+  d'un échantillon isolé à 300 km/h. Le verdict `ok/degraded/none` est consolidé et
+  **ancré sur le ressenti** (gigue > 200 ms ou perte > 25 % → `degraded`), seuils
+  centralisés/configurables. Calcul isolé dans un module pur (`src/lib/measure/stats.ts`).
+  Nouveau **débit léger opt-in** (OFF par défaut, consomme la data) : 1 position sur 5,
+  téléchargement d'un blob incompressible ~128 Ko via le nouvel endpoint
+  `GET /api/probe` (aléatoire, `no-store`, taille bornée 64–512 Ko, aucune donnée
+  client), traduit en **usage concret** (streaming/web/messages/rien) par un util
+  partagé `src/lib/usage.ts` (centralise `USAGE_COLORS`, dé-duplique `Map.svelte`).
+  Nouveaux champs nullables `jitter_ms`, `loss`, `downlink_kbps` (mesures) + médianes
+  `median_jitter`, `median_loss`, `median_downlink` (`cell_aggregates`, exposées par
+  `/api/coverage`) ; payload, file hors-ligne et validation Zod étendus ;
+  rétro-compat totale (champs optionnels, anciens items de file acceptés). UI : toggle
+  débit + lignes Gigue/Perte/Débit dans le panneau mesure (style sobre). Tests Vitest
+  (stats 13 cas, usage 5, débit 4). Migration `0002_complete_maelstrom.sql` (additive).
+  Suite à la revue : mesure de débit déplacée **hors du verrou de mesure** (tâche de
+  fond, ne décime plus les échantillons GPS en zone blanche), **timeout de ping de
+  rafale ramené à 2,5 s** (borne la fenêtre bloquante), et verdict `none` clarifié
+  (absence totale de réponse, plus de pseudo-seuil de perte).
+  2ᵉ tour de revues (Opus + Sonnet + Copilot) : **jeton de génération de session**
+  pour qu'une mesure de débit tardive ne pollue pas la session suivante (+ reset du
+  verrou `throughputInFlight` au démarrage, garde « plus en cours ») ; débit en attente
+  **consommé à chaque échantillon** (borne son âge, évite un rattachement tardif sans
+  consentement) ; `/api/probe` **sans en-tête CORS** (appelé en same-origin, évite l'abus
+  tiers) et **blob aléatoire pré-généré une fois** (plus de CSPRNG par requête) ;
+  borne `max` sur `jitterMs` côté Zod. _Non encore mergé sur `main`._
 - **Durée des coupures réseau (branche `feat/duree-coupure`)** : on mesure
   désormais les **épisodes de coupure** (`ok → none… → ok`), pas seulement des
   points isolés — la donnée à plus forte valeur produit (« tu perdras le réseau
