@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { lineSlugForCell } from '$geo/line-snap';
 import { db } from './db/client';
 import { cellAggregates, measurements, type NewMeasurement } from './db/schema';
@@ -50,7 +50,20 @@ async function recomputeCell(cellId: string, operator: Operator): Promise<void> 
 		.where(and(eq(cellAggregates.cellId, cellId), eq(cellAggregates.operator, operator)))
 		.limit(1);
 
-	const values = { cellId, operator, lat, lng, samples, successRate, medianRtt, lineSlug };
+	// `lastSeen` = instant de la dernière mesure : à réécrire à CHAQUE recalcul
+	// (sinon l'UPDATE garderait l'instant du premier insert, faussant la fraîcheur
+	// affichée par les pages SEO / la frise).
+	const values = {
+		cellId,
+		operator,
+		lat,
+		lng,
+		samples,
+		successRate,
+		medianRtt,
+		lineSlug,
+		lastSeen: sql`(unixepoch())`
+	};
 
 	if (existing.length) {
 		await db

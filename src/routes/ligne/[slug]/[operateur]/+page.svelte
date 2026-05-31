@@ -31,7 +31,7 @@
 			? `${describeOperator(op.name, dist)} ${
 					stats && describeWhiteZones(stats)
 						? describeWhiteZones(stats)
-						: 'Peu de zones blanches sont connues sur ce trajet.'
+						: 'Aucune zone blanche majeure n’est connue sur ce trajet.'
 				} Ces chiffres sont la couverture théorique annoncée par l'ARCEP ; la carte montre aussi les mesures réelles des voyageurs.`
 			: `La couverture ${op.name} sur la ligne ${line.name} varie selon les sections traversées. Consultez la carte interactive pour voir où le réseau ${op.name} passe en 4G/5G et où il coupe entre ${line.from} et ${line.to}.`
 	);

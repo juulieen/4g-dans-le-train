@@ -16,22 +16,20 @@ export const load: PageLoad = ({ params }) => {
 	const operator = findOperator(params.slug);
 	if (!operator) throw error(404, 'Opérateur inconnu');
 
-	// Chaque ligne + la répartition ARCEP de cet opérateur (null si pas de tracé).
-	const lines = RAIL_LINES.map((line) => ({
-		line,
-		dist: lineStats(line.slug)?.arcep[operator.key] ?? null
-	}));
-
-	// Synthèse : part « utilisable » (TBC+BC) moyenne, pondérée par la longueur.
+	// Pour chaque ligne : la répartition ARCEP de cet opérateur (null si pas de
+	// tracé) ; et en parallèle la synthèse « utilisable » (TBC+BC) moyenne,
+	// pondérée par la longueur.
 	let wSum = 0;
 	let usableSum = 0;
-	for (const line of RAIL_LINES) {
+	const lines = RAIL_LINES.map((line) => {
 		const s = lineStats(line.slug);
-		if (!s) continue;
-		const d: LevelDist = s.arcep[operator.key];
-		wSum += s.lengthKm;
-		usableSum += (d.TBC + d.BC) * s.lengthKm;
-	}
+		const dist: LevelDist | null = s?.arcep[operator.key] ?? null;
+		if (s && dist) {
+			wSum += s.lengthKm;
+			usableSum += (dist.TBC + dist.BC) * s.lengthKm;
+		}
+		return { line, dist };
+	});
 	const avgUsable = wSum > 0 ? usableSum / wSum : null;
 
 	return { operator, lines, avgUsable };
