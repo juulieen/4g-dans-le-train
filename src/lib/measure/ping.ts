@@ -27,6 +27,13 @@ export interface BurstResult extends BurstStats {
 }
 
 const TIMEOUT_MS = 5000;
+/**
+ * Timeout par ping de rafale, volontairement plus court que `TIMEOUT_MS` : à
+ * 300 km/h un RTT > 2,5 s est inutilisable, on le compte donc comme une perte
+ * plutôt que d'attendre. Borne aussi la fenêtre où le contrôleur est `busy` en
+ * zone blanche (4 × 2,5 s au pire vs 4 × 5 s) — cf. détection de coupure.
+ */
+const BURST_TIMEOUT_MS = 2500;
 /** Au-delà de ce RTT, la connexion est jugée dégradée (mais présente). */
 const DEGRADED_RTT_MS = 1500;
 /** Nombre de pings par rafale (compromis robustesse / coût data). */
@@ -37,11 +44,12 @@ const BURST_SPACING_MS = 150;
 /**
  * Effectue UN HEAD vers l'endpoint et renvoie le RTT en ms, ou `null` si échec
  * (timeout, réseau mort, statut non-ok). Brique bas niveau partagée par `ping`
- * et `pingBurst`.
+ * et `pingBurst`. Le RTT est arrondi → la médiane d'une rafale reste un entier
+ * (contrat de la colonne `rtt_ms integer`).
  */
-async function pingOnce(endpoint: string): Promise<number | null> {
+async function pingOnce(endpoint: string, timeoutMs = TIMEOUT_MS): Promise<number | null> {
 	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+	const timer = setTimeout(() => controller.abort(), timeoutMs);
 	const start = performance.now();
 	try {
 		// cache-buster pour éviter toute réponse servie hors-ligne par le SW.
@@ -82,11 +90,12 @@ export async function ping(endpoint = '/api/ping'): Promise<PingResult> {
 export async function pingBurst(
 	endpoint = '/api/ping',
 	count = BURST_COUNT,
-	spacingMs = BURST_SPACING_MS
+	spacingMs = BURST_SPACING_MS,
+	timeoutMs = BURST_TIMEOUT_MS
 ): Promise<BurstResult> {
 	const rtts: Array<number | null> = [];
 	for (let i = 0; i < count; i++) {
-		rtts.push(await pingOnce(endpoint));
+		rtts.push(await pingOnce(endpoint, timeoutMs));
 		if (i < count - 1) await sleep(spacingMs);
 	}
 	const stats = computeBurstStats(rtts);

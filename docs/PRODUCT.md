@@ -84,9 +84,11 @@ recolore les voies ARCEP **et** filtre les mesures communautaires. Il est
   `GET /api/probe?size=…` (données aléatoires `crypto.getRandomValues`, `no-store`,
   taille bornée 64–512 Ko serveur) et en déduit un **débit (kbps)**. Le débit est
   traduit en **usage concret** (`src/lib/usage.ts`, source unique partagée avec la
-  carte) : streaming ≥ 2000 kbps, web ≥ 500, messages ≥ 100, sinon rien. L'endpoint
-  ne reçoit aucune donnée client (juste `size`) et ne logge rien → pas de
-  fingerprinting.
+  carte) : streaming ≥ 2000 kbps, web ≥ 500, messages ≥ 100, sinon rien. La mesure
+  tourne **en tâche de fond** (hors du chemin bloquant) pour ne jamais retarder la
+  rafale ni la détection de coupure ; son résultat est rattaché à l'envoi suivant.
+  L'endpoint ne reçoit aucune donnée client (juste `size`), ne logge rien et n'a pas
+  de rate-limit par IP (ce serait ré-identifiant) — le coût est borné par la taille.
 - **Vie privée (non négociable)** : la position est **arrondie au centre de sa
   cellule H3 (~150 m)** AVANT envoi ; aucune donnée personnelle ; session =
   jeton anonyme jetable ; pas de trace continue ré-identifiable. Consentement

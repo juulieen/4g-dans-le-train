@@ -50,6 +50,9 @@ export async function measureDownlink(
 		const bytes = buf.byteLength;
 		return { downlinkKbps: kbpsFrom(bytes, ms), bytes, ms: Math.round(ms) };
 	} catch {
+		// Timeout/abort/erreur → `null` (et non un débit partiel) : un téléchargement
+		// qui n'aboutit pas ne donne pas une mesure de débit fiable, mieux vaut « non
+		// mesuré » qu'une valeur trompeuse.
 		return { downlinkKbps: null, bytes: 0, ms: 0 };
 	} finally {
 		clearTimeout(timer);

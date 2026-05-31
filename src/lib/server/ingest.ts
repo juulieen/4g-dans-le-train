@@ -17,7 +17,12 @@ export async function ingestMeasurement(m: NewMeasurement): Promise<void> {
 	await recomputeCell(m.cellId, m.operator ?? 'inconnu');
 }
 
-/** Médiane (haute) des valeurs non nulles d'une colonne ; null si aucune. */
+/**
+ * Médiane (haute) des valeurs non nulles d'une colonne ; null si aucune.
+ * Sur un nombre pair d'éléments on prend le central supérieur (pas de moyenne) :
+ * micro-biais négligeable au volume, et garde une valeur entière pour rtt/débit.
+ * Le filtrage des null est voulu : une cellule sans mesure de débit reste à null.
+ */
 function median(values: Array<number | null>): number | null {
 	const nums = values.filter((v): v is number => v != null).sort((a, b) => a - b);
 	return nums.length ? nums[Math.floor(nums.length / 2)] : null;

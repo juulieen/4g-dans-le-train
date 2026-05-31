@@ -87,6 +87,13 @@ describe('verdictFromBurst', () => {
 		expect(verdictFromBurst(stats({ rttMedian: 80, jitterMs: 250 }))).toBe('degraded');
 	});
 
+	it('perte partielle élevée (1 ping passe sur 4) → degraded, pas none', () => {
+		// loss 0.75 mais un ping a répondu → réseau présent mais dégradé.
+		expect(verdictFromBurst(stats({ loss: 0.75, ok: 1, rttMedian: 80, jitterMs: null }))).toBe(
+			'degraded'
+		);
+	});
+
 	it('perte totale → none', () => {
 		expect(verdictFromBurst(stats({ loss: 1, ok: 0, rttMedian: null, jitterMs: null }))).toBe(
 			'none'

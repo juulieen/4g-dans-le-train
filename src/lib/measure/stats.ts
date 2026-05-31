@@ -39,8 +39,6 @@ export interface BurstThresholds {
 	degradedJitterMs: number;
 	/** Au-delà de ce taux de perte, connexion jugée dégradée (pages qui timeout). */
 	degradedLoss: number;
-	/** À partir de ce taux de perte, plus rien ne passe → 'none'. */
-	noneLoss: number;
 }
 
 /**
@@ -48,14 +46,14 @@ export interface BurstThresholds {
  * - 200 ms de gigue : au-delà, visio/streaming saccadent, les appels coupent.
  * - 25 % de perte : pages web qui timeout, ressenti « ça rame / ça coupe » même
  *   si un ping passe de temps en temps.
- * - 100 % de perte : plus rien ne répond → zone blanche.
  * `degradedRttMs` reprend l'ancien seuil unique (1500 ms) pour la continuité.
+ * Le verdict `none` n'est PAS un seuil de perte (il serait trompeur avec 4 pings) :
+ * c'est l'absence totale de réponse — voir `verdictFromBurst`.
  */
 export const DEFAULT_BURST_THRESHOLDS: BurstThresholds = {
 	degradedRttMs: 1500,
 	degradedJitterMs: 200,
-	degradedLoss: 0.25,
-	noneLoss: 1
+	degradedLoss: 0.25
 };
 
 /** Médiane (haute) d'une liste non vide déjà ou non triée. */
@@ -98,8 +96,9 @@ export function verdictFromBurst(
 	s: BurstStats,
 	t: BurstThresholds = DEFAULT_BURST_THRESHOLDS
 ): PingStatus {
-	// Aucune tentative ou perte totale → pas de réseau.
-	if (s.total === 0 || s.loss >= t.noneLoss || s.rttMedian == null) return 'none';
+	// Aucun ping n'a répondu (rafale vide, ou 100 % de perte) → pas de réseau.
+	// `rttMedian == null` ⇔ `ok === 0` : un seul test suffit, pas de seuil de perte.
+	if (s.ok === 0 || s.rttMedian == null) return 'none';
 	if (
 		s.loss >= t.degradedLoss ||
 		s.rttMedian > t.degradedRttMs ||

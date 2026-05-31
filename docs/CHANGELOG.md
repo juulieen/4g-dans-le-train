@@ -21,8 +21,11 @@
   `/api/coverage`) ; payload, file hors-ligne et validation Zod étendus ;
   rétro-compat totale (champs optionnels, anciens items de file acceptés). UI : toggle
   débit + lignes Gigue/Perte/Débit dans le panneau mesure (style sobre). Tests Vitest
-  (stats 12 cas, usage 5, débit 4). Migration `0002_complete_maelstrom.sql` (additive).
-  _Non encore mergé sur `main`._
+  (stats 13 cas, usage 5, débit 4). Migration `0002_complete_maelstrom.sql` (additive).
+  Suite à la revue : mesure de débit déplacée **hors du verrou de mesure** (tâche de
+  fond, ne décime plus les échantillons GPS en zone blanche), **timeout de ping de
+  rafale ramené à 2,5 s** (borne la fenêtre bloquante), et verdict `none` clarifié
+  (absence totale de réponse, plus de pseudo-seuil de perte). _Non encore mergé sur `main`._
 - **Durée des coupures réseau (branche `feat/duree-coupure`)** : on mesure
   désormais les **épisodes de coupure** (`ok → none… → ok`), pas seulement des
   points isolés — la donnée à plus forte valeur produit (« tu perdras le réseau

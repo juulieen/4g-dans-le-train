@@ -11,7 +11,12 @@ import type { RequestHandler } from './$types';
  * rien et ne peut donc pas servir à fingerprinter.
  */
 
-/** Bornes de taille pour rester économe en data mobile (64 Ko – 512 Ko). */
+/**
+ * Bornes de taille pour rester économe en data mobile (64 Ko – 512 Ko). Le
+ * bornage est aussi la garde anti-abus : pas de rate-limit par IP ici, car ce
+ * serait la seule donnée ré-identifiante du projet (vie privée non négociable) ;
+ * on borne plutôt le coût unitaire (CPU `getRandomValues` + bande passante).
+ */
 const MIN_SIZE = 64 * 1024;
 const MAX_SIZE = 512 * 1024;
 const DEFAULT_SIZE = 128 * 1024;
