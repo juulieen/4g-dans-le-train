@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { OPERATORS } from '$geo/lines';
+	import PageWrap from '$components/PageWrap.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -46,7 +47,7 @@
 	{@html jsonLd}
 </svelte:head>
 
-<article class="wrap">
+<PageWrap>
 	<nav class="crumbs">
 		<a href="/lignes">Lignes</a> › <a href="/ligne/{line.slug}">{line.name}</a> › {op.name}
 	</nav>
@@ -69,7 +70,7 @@
 		</p>
 
 		<h2>Comparer les opérateurs sur {line.name}</h2>
-		<ul class="ops">
+		<ul class="pills">
 			{#each others as o (o.slug)}
 				<li><a href="/ligne/{line.slug}/{o.slug}">{o.name} sur {line.name}</a></li>
 			{/each}
@@ -80,62 +81,4 @@
 			<a href="/operateur/{op.slug}">couverture {op.name} sur toutes les lignes</a>
 		</p>
 	</section>
-</article>
-
-<style>
-	.wrap {
-		max-width: 720px;
-		margin: 0 auto;
-		padding: 2rem 1rem;
-		line-height: 1.6;
-	}
-	.crumbs {
-		font-size: 0.8rem;
-		color: var(--muted);
-		margin-bottom: 1rem;
-	}
-	h1 {
-		font-size: 1.6rem;
-	}
-	.lede {
-		color: var(--muted);
-	}
-	.cta {
-		display: inline-block;
-		margin: 1rem 0 2rem;
-		padding: 0.7rem 1.2rem;
-		background: var(--accent);
-		color: #052e16;
-		font-weight: 700;
-		border-radius: 10px;
-		text-decoration: none;
-	}
-	h2 {
-		font-size: 1.15rem;
-		margin-top: 1.5rem;
-	}
-	.ops {
-		list-style: none;
-		padding: 0;
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
-	}
-	.ops a {
-		display: inline-block;
-		padding: 0.4rem 0.8rem;
-		background: var(--panel);
-		border: 1px solid var(--border);
-		border-radius: 999px;
-		text-decoration: none;
-		color: var(--text);
-		font-size: 0.85rem;
-	}
-	.ops a:hover {
-		border-color: var(--accent);
-	}
-	.links {
-		font-size: 0.9rem;
-		margin-top: 1.5rem;
-	}
-</style>
+</PageWrap>

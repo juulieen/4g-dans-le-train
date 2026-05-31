@@ -1,8 +1,16 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
+	import { onDestroy, getContext } from 'svelte';
 	import Map from '$components/Map.svelte';
+	import Icon from '$components/Icon.svelte';
+	import HintChip from '$components/Onboarding/HintChip.svelte';
 	import { MeasurementController, type LiveState, type Operator } from '$measure/controller';
-	import { hasConsent, grantConsent, revokeConsent } from '$measure/session';
+	import {
+		hasConsent,
+		grantConsent,
+		revokeConsent,
+		hasOnboarded,
+		markOnboarded
+	} from '$measure/session';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -113,6 +121,80 @@
 	function formatLongueur(m: number): string {
 		return m >= 1000 ? `${(m / 1000).toFixed(1).replace('.', ',')} km` : `${Math.round(m)} m`;
 	}
+
+	// --- Présentation : bottom-sheet + onboarding (aucune logique métier) ---
+	const ui = getContext<{ openOnboarding: () => void }>('ui');
+
+	let sheetExpanded = $state(false);
+	let showHint = $state(false);
+
+	// --- Bottom-sheet : glisser pour ouvrir/fermer (mobile) ---
+	let sheetEl: HTMLElement | undefined = $state();
+	let dragging = $state(false);
+	let dragTranslate = $state(0);
+	let dragStartY = 0;
+	let dragStartTranslate = 0;
+	let dragMoved = 0;
+	let suppressClick = false;
+
+	function collapsedPx(): number {
+		if (!sheetEl) return 0;
+		// Source unique de vérité = la variable CSS --peek (définie plus bas).
+		const peek = parseFloat(getComputedStyle(sheetEl).getPropertyValue('--peek')) || 188;
+		return sheetEl.offsetHeight - peek;
+	}
+	function onHandleDown(e: PointerEvent) {
+		if (window.innerWidth > 760) return; // drag mobile uniquement
+		dragging = true;
+		dragMoved = 0;
+		dragStartY = e.clientY;
+		dragStartTranslate = sheetExpanded ? 0 : collapsedPx();
+		dragTranslate = dragStartTranslate;
+		try {
+			(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+		} catch {
+			/* capture indisponible : le drag reste fonctionnel sans */
+		}
+	}
+	function onHandleMove(e: PointerEvent) {
+		if (!dragging) return;
+		const dy = e.clientY - dragStartY;
+		dragMoved = Math.max(dragMoved, Math.abs(dy));
+		dragTranslate = Math.min(Math.max(dragStartTranslate + dy, 0), collapsedPx());
+	}
+	function onHandleUp() {
+		if (!dragging) return;
+		dragging = false;
+		if (dragMoved < 6) return; // tap : on laisse le clic basculer
+		suppressClick = true; // c'était un glissement : on neutralise le clic suivant
+		sheetExpanded = dragTranslate < collapsedPx() / 2;
+	}
+	function onHandleClick() {
+		if (suppressClick) {
+			suppressClick = false;
+			return;
+		}
+		sheetExpanded = !sheetExpanded;
+	}
+
+	// Lecture seule : on n'écrit jamais la persistance ici (sinon la 1re visite
+	// serait « consommée » sans avoir rien montré).
+	$effect(() => {
+		if (!hasOnboarded()) showHint = true;
+	});
+
+	function dismissHint() {
+		showHint = false;
+		markOnboarded();
+	}
+	function openOnboarding() {
+		if (showHint) dismissHint();
+		ui?.openOnboarding();
+	}
+	function onMapInteract() {
+		// Premier geste sur la carte = l'utilisateur sait naviguer : on retire l'invite.
+		if (showHint) dismissHint();
+	}
 </script>
 
 <svelte:head>
@@ -131,167 +213,271 @@
 </svelte:head>
 
 <section class="layout">
-	<div class="map-wrap">
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div class="map-wrap" onpointerdown={onMapInteract}>
 		<Map coverage={filteredCoverage} operator={viewOperator} {showArcep} {showCommunity} />
+		<button
+			class="info-fab glass"
+			onpointerdown={(e) => e.stopPropagation()}
+			onclick={openOnboarding}
+			aria-label="Comment ça marche"
+		>
+			<Icon name="info" size={20} />
+		</button>
 	</div>
 
-	<aside class="panel">
-		<h1>Où ça capte dans le train&nbsp;?</h1>
-		<p class="lede">
-			Carte communautaire de la couverture mobile le long des lignes SNCF.
-			{#if data.cells > 0}
-				<strong>{data.cells}</strong> zones mesurées.
-			{:else}
-				Soyez le premier à contribuer&nbsp;!
-			{/if}
-		</p>
+	{#if showHint}
+		<HintChip onopen={openOnboarding} ondismiss={dismissHint} />
+	{/if}
 
-		<label class="view-op" for="view-operator">
-			Afficher la couverture de&nbsp;:
-			<select id="view-operator" name="view-operator" bind:value={viewOperator}>
-				<option value="inconnu">Tous les opérateurs</option>
-				<option value="orange">Orange</option>
-				<option value="sfr">SFR</option>
-				<option value="free">Free</option>
-				<option value="bouygues">Bouygues</option>
-			</select>
-		</label>
+	<div
+		class="sheet glass"
+		class:expanded={sheetExpanded}
+		class:dragging
+		bind:this={sheetEl}
+		style={dragging ? `transform: translateY(${dragTranslate}px)` : ''}
+	>
+		<button
+			class="sheet-handle"
+			onpointerdown={onHandleDown}
+			onpointermove={onHandleMove}
+			onpointerup={onHandleUp}
+			onpointercancel={onHandleUp}
+			onclick={onHandleClick}
+			aria-label={sheetExpanded ? 'Réduire le panneau' : 'Ouvrir le panneau'}
+			aria-expanded={sheetExpanded}
+		>
+			<span class="grip" aria-hidden="true"></span>
+		</button>
 
-		<p class="explain">
-			La <strong>voie est colorée</strong> selon ce que vous pourrez y faire (couverture théorique
-			des opérateurs). Les <strong>pastilles cerclées de blanc</strong> sont les mesures réelles des voyageurs&nbsp;:
-			là, c'est du vécu, pas de la théorie.
-		</p>
-
-		<div class="layers">
-			<label>
-				<input type="checkbox" name="show-arcep" bind:checked={showArcep} />
-				Couverture théorique (voie colorée)
-			</label>
-			<label>
-				<input type="checkbox" name="show-community" bind:checked={showCommunity} />
-				Mesures réelles des voyageurs
-			</label>
-		</div>
-
-		<div class="measure">
-			<h2>Mode mesure 📍</h2>
-			<p class="hint">
-				Sur mobile, dans le train&nbsp;: gardez cette page ouverte (l'écran reste allumé) et on
-				mesure votre connexion en continu, de façon <strong>anonyme</strong>.
+		<aside class="panel">
+			<h1>Où ça capte dans le train&nbsp;?</h1>
+			<p class="lede">
+				Carte communautaire de la couverture mobile le long des lignes SNCF.
+				{#if data.cells > 0}
+					<strong>{data.cells}</strong> zones mesurées.
+				{:else}
+					Soyez le premier à contribuer&nbsp;!
+				{/if}
 			</p>
 
-			<label class="field" for="operator">
-				Votre opérateur
-				<select id="operator" name="operator" bind:value={operator} disabled={live?.running}>
-					{#each OPERATORS as op (op.value)}
-						<option value={op.value}>{op.label}</option>
-					{/each}
+			<label class="view-op" for="view-operator">
+				Afficher la couverture de&nbsp;:
+				<select id="view-operator" name="view-operator" bind:value={viewOperator}>
+					<option value="inconnu">Tous les opérateurs</option>
+					<option value="orange">Orange</option>
+					<option value="sfr">SFR</option>
+					<option value="free">Free</option>
+					<option value="bouygues">Bouygues</option>
 				</select>
 			</label>
 
-			<button class="cta" class:running={live?.running} onclick={toggleMeasure}>
-				{live?.running ? 'Arrêter la mesure' : 'Démarrer la mesure'}
-			</button>
+			<p class="explain">
+				La <strong>voie est colorée</strong> selon ce que vous pourrez y faire (couverture théorique
+				des opérateurs). Les <strong>pastilles cerclées de blanc</strong> sont les mesures réelles des
+				voyageurs&nbsp;: là, c'est du vécu, pas de la théorie.
+			</p>
 
-			{#if live?.error}
-				<p class="error">{live.error}</p>
-			{/if}
+			<div class="layers">
+				<label>
+					<input type="checkbox" name="show-arcep" bind:checked={showArcep} />
+					Couverture théorique (voie colorée)
+				</label>
+				<label>
+					<input type="checkbox" name="show-community" bind:checked={showCommunity} />
+					Mesures réelles des voyageurs
+				</label>
+			</div>
 
-			{#if live?.running}
-				<div class="live">
-					<div class="big {live.status}">{statusLabel[live.status] ?? live.status}</div>
-					<dl>
-						<div>
-							<dt>Latence</dt>
-							<dd>{live.rttMs != null ? `${live.rttMs} ms` : '—'}</dd>
-						</div>
-						<div>
-							<dt>Vitesse</dt>
-							<dd>{live.speedKmh != null ? `${Math.round(live.speedKmh)} km/h` : '—'}</dd>
-						</div>
-						<div>
-							<dt>Précision GPS</dt>
-							<dd>{live.accuracy != null ? `${Math.round(live.accuracy)} m` : '—'}</dd>
-						</div>
-						<div>
-							<dt>Type réseau</dt>
-							<dd>{live.netType ?? 'n/a'}</dd>
-						</div>
-						<div>
-							<dt>Mesures envoyées</dt>
-							<dd>{live.sent}</dd>
-						</div>
-						<div>
-							<dt>En attente d'envoi</dt>
-							<dd>{live.queued}</dd>
-						</div>
-						<div>
-							<dt>Coupures</dt>
-							<dd>{live.outages}</dd>
-						</div>
-						<div>
-							<dt>Écran maintenu</dt>
-							<dd>{live.wakeLockActive ? 'oui' : 'non'}</dd>
-						</div>
-					</dl>
-					{#if live.queued > 0}
-						<p class="queued-note">
-							{live.queued} mesure{live.queued > 1 ? 's' : ''} en attente — gardées hors-ligne et envoyées
-							dès le retour du réseau.
-						</p>
-					{/if}
-					{#if live.lastOutage}
-						<p class="queued-note">
-							Dernière coupure : <strong>{formatDuree(live.lastOutage.durationS)}</strong
-							>{#if live.lastOutage.lengthM > 0}
-								· {formatLongueur(live.lastOutage.lengthM)}{/if}.
-						</p>
-					{/if}
-				</div>
-			{/if}
+			<div class="measure">
+				<h2 class="measure-title">Mode mesure <Icon name="map" size={18} /></h2>
+				<p class="hint">
+					Sur mobile, dans le train&nbsp;: gardez cette page ouverte (l'écran reste allumé) et on
+					mesure votre connexion en continu, de façon <strong>anonyme</strong>.
+				</p>
 
-			<label class="consent">
-				<input type="checkbox" name="consent" checked={consent} onchange={toggleConsent} />
-				J'accepte de partager mes mesures anonymisées (position arrondie à ~150&nbsp;m, aucune donnée
-				personnelle). <a href="/confidentialite">En savoir plus</a>
-			</label>
-		</div>
-	</aside>
+				<label class="field" for="operator">
+					Votre opérateur
+					<select id="operator" name="operator" bind:value={operator} disabled={live?.running}>
+						{#each OPERATORS as op (op.value)}
+							<option value={op.value}>{op.label}</option>
+						{/each}
+					</select>
+				</label>
+
+				<button class="cta" class:running={live?.running} onclick={toggleMeasure}>
+					{live?.running ? 'Arrêter la mesure' : 'Démarrer la mesure'}
+				</button>
+
+				{#if live?.error}
+					<p class="error">{live.error}</p>
+				{/if}
+
+				{#if live?.running}
+					<div class="live">
+						<div class="big {live.status}">{statusLabel[live.status] ?? live.status}</div>
+						<dl>
+							<div>
+								<dt>Latence</dt>
+								<dd>{live.rttMs != null ? `${live.rttMs} ms` : '—'}</dd>
+							</div>
+							<div>
+								<dt>Vitesse</dt>
+								<dd>{live.speedKmh != null ? `${Math.round(live.speedKmh)} km/h` : '—'}</dd>
+							</div>
+							<div>
+								<dt>Précision GPS</dt>
+								<dd>{live.accuracy != null ? `${Math.round(live.accuracy)} m` : '—'}</dd>
+							</div>
+							<div>
+								<dt>Type réseau</dt>
+								<dd>{live.netType ?? 'n/a'}</dd>
+							</div>
+							<div>
+								<dt>Mesures envoyées</dt>
+								<dd>{live.sent}</dd>
+							</div>
+							<div>
+								<dt>En attente d'envoi</dt>
+								<dd>{live.queued}</dd>
+							</div>
+							<div>
+								<dt>Coupures</dt>
+								<dd>{live.outages}</dd>
+							</div>
+							<div>
+								<dt>Écran maintenu</dt>
+								<dd>{live.wakeLockActive ? 'oui' : 'non'}</dd>
+							</div>
+						</dl>
+						{#if live.queued > 0}
+							<p class="queued-note">
+								{live.queued} mesure{live.queued > 1 ? 's' : ''} en attente — gardées hors-ligne et envoyées
+								dès le retour du réseau.
+							</p>
+						{/if}
+						{#if live.lastOutage}
+							<p class="queued-note">
+								Dernière coupure : <strong>{formatDuree(live.lastOutage.durationS)}</strong
+								>{#if live.lastOutage.lengthM > 0}
+									· {formatLongueur(live.lastOutage.lengthM)}{/if}.
+							</p>
+						{/if}
+					</div>
+				{/if}
+
+				<label class="consent">
+					<input type="checkbox" name="consent" checked={consent} onchange={toggleConsent} />
+					J'accepte de partager mes mesures anonymisées (position arrondie à ~150&nbsp;m, aucune donnée
+					personnelle). <a href="/confidentialite">En savoir plus</a>
+				</label>
+			</div>
+		</aside>
+	</div>
 </section>
 
 <style>
 	.layout {
-		display: grid;
-		grid-template-columns: 1fr min(380px, 38%);
-		flex: 1;
-		min-height: calc(100vh - 120px);
-	}
-	.map-wrap {
 		position: relative;
-		min-height: 50vh;
+		flex: 1;
+		min-height: 0;
+		overflow: hidden;
+	}
+
+	.map-wrap {
+		position: absolute;
+		inset: 0;
+		z-index: var(--z-map);
+	}
+
+	/* Bouton « Comment ça marche » flottant sur la carte (top-left : les contrôles
+	   MapLibre zoom/géoloc sont en top-right). */
+	.info-fab {
+		position: absolute;
+		top: 10px;
+		left: 10px;
+		z-index: var(--z-legend);
+		width: 38px;
+		height: 38px;
+		display: grid;
+		place-items: center;
+		border-radius: 50%;
+		font-size: 1.05rem;
+		cursor: pointer;
+		padding: 0;
+	}
+
+	/* --- Bottom-sheet (mobile-first) --- */
+	.sheet {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: var(--navbar-h);
+		z-index: var(--z-sheet);
+		height: min(82dvh, 640px);
+		display: flex;
+		flex-direction: column;
+		border-radius: var(--r-xl) var(--r-xl) 0 0;
+		--peek: 188px;
+		transform: translateY(calc(100% - var(--peek)));
+		transition: transform 0.36s cubic-bezier(0.32, 0.72, 0, 1);
+	}
+	.sheet.expanded {
+		transform: translateY(0);
+	}
+	.sheet.dragging {
+		transition: none;
+	}
+	.sheet-handle {
+		flex: none;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		height: 26px;
+		border: none;
+		background: transparent;
+		cursor: pointer;
+		touch-action: none;
+	}
+	.grip {
+		width: 42px;
+		height: 5px;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--text) 28%, transparent);
 	}
 	.panel {
-		padding: 1.25rem;
-		background: var(--panel);
-		border-left: 1px solid var(--border);
+		flex: 1;
+		min-height: 0;
 		overflow-y: auto;
+		padding: 0 1.25rem 1.25rem;
+		-webkit-overflow-scrolling: touch;
 	}
+
 	h1 {
-		font-size: 1.4rem;
-		margin: 0 0 0.5rem;
+		font-size: var(--fs-xl);
+		margin: 0 0 0.4rem;
+		letter-spacing: -0.01em;
 	}
 	h2 {
-		font-size: 1.05rem;
+		font-size: var(--fs-lg);
 		margin: 0 0 0.5rem;
+	}
+	.measure-title {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+	.measure-title :global(svg) {
+		color: var(--accent);
 	}
 	.lede {
 		color: var(--muted);
 		margin-top: 0;
+		font-size: var(--fs-md);
 	}
 	.view-op {
 		display: block;
-		font-size: 0.85rem;
+		font-size: var(--fs-sm);
 		color: var(--text);
 		font-weight: 600;
 		margin-bottom: 0.75rem;
@@ -300,12 +486,13 @@
 		display: block;
 		width: 100%;
 		margin-top: 0.3rem;
-		padding: 0.5rem;
-		background: var(--bg);
+		padding: 0.6rem;
+		background: color-mix(in srgb, var(--panel) 60%, transparent);
 		color: var(--text);
 		border: 1px solid var(--border);
-		border-radius: 8px;
+		border-radius: var(--r-sm);
 		font-weight: 400;
+		font-family: inherit;
 	}
 	.explain {
 		font-size: 0.82rem;
@@ -316,28 +503,29 @@
 	.layers {
 		display: flex;
 		flex-direction: column;
-		gap: 0.3rem;
-		font-size: 0.82rem;
+		gap: 0.4rem;
+		font-size: 0.85rem;
 		color: var(--muted);
 		margin-bottom: 1rem;
 	}
 	.layers label {
 		display: flex;
 		align-items: center;
-		gap: 0.4rem;
+		gap: 0.5rem;
 		cursor: pointer;
+		min-height: 32px;
 	}
 	.measure {
 		border-top: 1px solid var(--border);
 		padding-top: 1rem;
 	}
 	.hint {
-		font-size: 0.85rem;
+		font-size: var(--fs-sm);
 		color: var(--muted);
 	}
 	.field {
 		display: block;
-		font-size: 0.85rem;
+		font-size: var(--fs-sm);
 		color: var(--muted);
 		margin-bottom: 0.75rem;
 	}
@@ -345,30 +533,41 @@
 		display: block;
 		width: 100%;
 		margin-top: 0.25rem;
-		padding: 0.5rem;
-		background: var(--bg);
+		padding: 0.6rem;
+		background: color-mix(in srgb, var(--panel) 60%, transparent);
 		color: var(--text);
 		border: 1px solid var(--border);
-		border-radius: 8px;
+		border-radius: var(--r-sm);
+		font-family: inherit;
 	}
 	.cta {
 		width: 100%;
-		padding: 0.8rem;
+		padding: 0.85rem;
 		font-size: 1rem;
 		font-weight: 700;
 		border: none;
-		border-radius: 10px;
+		border-radius: var(--r-md);
 		background: var(--accent);
 		color: #052e16;
 		cursor: pointer;
+		min-height: 48px;
+		transition:
+			filter 0.15s,
+			transform 0.1s;
+	}
+	.cta:hover {
+		filter: brightness(1.05);
+	}
+	.cta:active {
+		transform: scale(0.99);
 	}
 	.cta.running {
-		background: #ef4444;
+		background: var(--usage-none);
 		color: #fff;
 	}
 	.error {
 		color: #fca5a5;
-		font-size: 0.85rem;
+		font-size: var(--fs-sm);
 	}
 	.queued-note {
 		color: var(--muted);
@@ -383,17 +582,17 @@
 		font-weight: 700;
 		text-align: center;
 		padding: 0.6rem;
-		border-radius: 10px;
-		background: var(--bg);
+		border-radius: var(--r-md);
+		background: color-mix(in srgb, var(--panel) 60%, transparent);
 	}
 	.big.ok {
-		color: #22c55e;
+		color: var(--usage-tbc);
 	}
 	.big.degraded {
-		color: #f59e0b;
+		color: var(--usage-cl);
 	}
 	.big.none {
-		color: #ef4444;
+		color: var(--usage-none);
 	}
 	dl {
 		display: grid;
@@ -402,9 +601,9 @@
 		margin: 0.75rem 0 0;
 	}
 	dl div {
-		background: var(--bg);
-		border-radius: 8px;
-		padding: 0.4rem 0.6rem;
+		background: color-mix(in srgb, var(--panel) 60%, transparent);
+		border-radius: var(--r-sm);
+		padding: 0.45rem 0.6rem;
 	}
 	dt {
 		font-size: 0.7rem;
@@ -421,12 +620,43 @@
 		color: var(--muted);
 		line-height: 1.4;
 	}
-	@media (max-width: 760px) {
+
+	/* --- Desktop : panneau latéral glass (pas de sheet) --- */
+	@media (min-width: 761px) {
 		.layout {
-			grid-template-columns: 1fr;
+			display: grid;
+			grid-template-columns: 1fr min(380px, 38%);
+			overflow: visible;
 		}
 		.map-wrap {
-			min-height: 55vh;
+			position: relative;
+			inset: auto;
+		}
+		.sheet {
+			position: relative;
+			inset: auto;
+			bottom: auto;
+			height: auto;
+			transform: none;
+			border-radius: 0;
+			border: none;
+			border-left: 1px solid var(--glass-border);
+			box-shadow: none;
+		}
+		.sheet-handle {
+			display: none;
+		}
+		.panel {
+			padding: 1.25rem;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.sheet {
+			transition: none;
+		}
+		.cta {
+			transition: none;
 		}
 	}
 </style>
