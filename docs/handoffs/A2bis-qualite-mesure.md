@@ -61,6 +61,7 @@ privée.
 ### Approche recommandée
 
 **Volet 2 — Jitter & perte (`ping.ts`, `controller.ts`)**
+
 - Remplacer le HEAD unique par une **petite rafale** (ex. 3–5 requêtes
   rapprochées vers `/api/ping`). En tirer : `rttMin`, `rttMedian`, `jitter`
   (écart-type ou max-min des RTT), `loss` (échecs / total).
@@ -72,6 +73,7 @@ privée.
   dans `controller.ts`).
 
 **Volet 3 — Débit léger (`controller.ts` + nouvel endpoint)**
+
 - Nouvel endpoint `GET /api/probe?size=<octets>` renvoyant un blob de taille
   connue (incompressible, `cache-control: no-store`), ou réutiliser un asset
   statique de taille connue. Mesurer le temps de téléchargement → **kbps**.
@@ -85,6 +87,7 @@ privée.
   `src/lib/components/Map.svelte`.
 
 **Persistance & schéma**
+
 - Ajouter les nouveaux champs (`jitter`, `loss`, `downlinkKbps`…) au payload, à
   la validation Zod (`src/routes/api/measurements/+server.ts`), au schéma Drizzle
   (`src/lib/server/db/schema.ts`) et à l'agrégation (`src/lib/server/ingest.ts` —

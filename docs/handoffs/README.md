@@ -42,7 +42,7 @@ A1 (snapping ligne) ──┬──► B2 (pages SEO + données)
 2. **A2 — Durée de coupure** (`A2-duree-coupure.md`) — peut démarrer en
    parallèle d'A1. ⚠️ Touche le mode mesure → **dépend de `feat/mesure-robuste`**
    (partir de cette branche, voir le fichier).
-2bis. **A2bis — Mesure riche : jitter, perte & débit** (`A2bis-qualite-mesure.md`)
+   2bis. **A2bis — Mesure riche : jitter, perte & débit** (`A2bis-qualite-mesure.md`)
    — les 2 autres volets d'A2 (au-delà de la durée de coupure). ⚠️ Touche les
    mêmes fichiers du mode mesure que A2 et `feat/mesure-robuste` → partir de la
    branche mode-mesure la plus avancée (voir le fichier) pour éviter les conflits.
