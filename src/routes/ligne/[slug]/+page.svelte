@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { OPERATORS } from '$geo/lines';
 	import PageWrap from '$components/PageWrap.svelte';
+	import RouteProfile from '$components/RouteProfile.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -50,6 +51,16 @@
 		Ligne <strong>{line.service}</strong> entre {line.from} et {line.to}. Découvrez où la 4G/5G
 		passe (ou coupe) grâce aux mesures de la communauté.
 	</p>
+
+	<section class="profil">
+		<h2>Le profil de votre trajet, gare après gare</h2>
+		<p>
+			De {line.from} à {line.to}, voici où vous pourrez regarder une vidéo, naviguer, juste envoyer
+			un message… ou rien du tout. Le fond montre la couverture théorique (ARCEP)&nbsp;; les
+			pastilles cerclées de blanc, ce qui a été mesuré en vrai.
+		</p>
+		<RouteProfile slug={line.slug} />
+	</section>
 
 	<a class="cta" href="/">Voir la carte interactive →</a>
 

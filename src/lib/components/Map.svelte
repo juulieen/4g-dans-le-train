@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
+	import { USAGE_COLORS, usageLabel } from '$lib/usage';
 
 	let {
 		coverage = null,
@@ -35,14 +36,6 @@
 	// chaque bascule de thème si la 1re requête a échoué).
 	let railTried = false;
 	let arcepTried = false;
-
-	// Couleurs par usage (niveau ARCEP → ce qu'on peut faire).
-	const USAGE_COLORS = {
-		TBC: '#22c55e', // vert — streaming vidéo / visio
-		BC: '#84cc16', // vert-clair — web, réseaux sociaux
-		CL: '#f59e0b', // orange — messages, navigation lente
-		none: '#ef4444' // rouge — zone blanche
-	};
 
 	/**
 	 * Fond de carte sobre, gratuit et sans clé API (raster CARTO), accordé au thème :
@@ -285,18 +278,6 @@
 		}
 	}
 
-	function usageLabel(lvl: string | null): string {
-		switch (lvl) {
-			case 'TBC':
-				return '🟢 Streaming vidéo, visio';
-			case 'BC':
-				return '🟡 Web, réseaux sociaux';
-			case 'CL':
-				return '🟠 Messages, navigation lente';
-			default:
-				return '🔴 Zone blanche — pas de réseau';
-		}
-	}
 	function usageFromRate(rate: number): string {
 		if (rate >= 80) return '🟢 ça capte bien';
 		if (rate >= 40) return '🟠 réseau dégradé';

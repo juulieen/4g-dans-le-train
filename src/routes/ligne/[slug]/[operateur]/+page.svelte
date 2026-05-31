@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { OPERATORS } from '$geo/lines';
 	import PageWrap from '$components/PageWrap.svelte';
+	import RouteProfile from '$components/RouteProfile.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -57,6 +58,15 @@
 		{line.from} – {line.to}&nbsp;: où ça capte, où ça coupe. Couverture théorique officielle +
 		mesures réelles des voyageurs.
 	</p>
+
+	<section class="profil">
+		<h2>Le profil {op.name} de votre trajet, gare après gare</h2>
+		<p>
+			De {line.from} à {line.to}, la couverture <strong>{op.name}</strong> le long du parcours (théorique
+			ARCEP en fond, mesures réelles cerclées de blanc par-dessus).
+		</p>
+		<RouteProfile slug={line.slug} operator={op.key} />
+	</section>
 
 	<a class="cta" href="/">Voir la carte interactive →</a>
 

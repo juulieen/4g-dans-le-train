@@ -5,6 +5,23 @@
 
 ## 2026-05-31
 
+- **Profil de trajet — frise de couverture gare→gare (branche `feat/profil-trajet`)** :
+  nouvelle vue signature qui tient enfin la promesse produit (« sur MON trajet,
+  quand pourrai-je regarder une vidéo… ou rien ? »). Composant réutilisable
+  `src/lib/components/RouteProfile.svelte` : une **frise horizontale** de la gare
+  de départ à la gare d'arrivée, colorée par usage, superposant le **théorique
+  (ARCEP)** en fond et le **réel (mesures)** par-dessus (cerclé de blanc, il
+  prime), avec **gares + distances cumulées** et marqueurs de **coupures**
+  (« ✕ ~3 min »). Intégrée sur les pages SEO `/ligne/[slug]` **et** dans l'app
+  carte (sélecteur « Profil d'un trajet »). Accessibilité daltonien : la zone
+  blanche porte des **hachures** en plus du rouge + résumé textuel pour lecteurs
+  d'écran. Données : `scripts/build-line-index.ts` émet désormais aussi, par
+  ligne, `static/data/route-profiles/<slug>.json` (gares ordonnées, segments
+  ARCEP en run-length, polyligne simplifiée pour situer mesures/coupures) — il
+  réutilise le routage GTFS déjà calculé et lit `arcep-coverage.geojson` (d'où le
+  réordonnancement de `data:all`). Couleurs/labels d'usage centralisés dans
+  `src/lib/usage.ts` (partagé carte ↔ frise). `/api/coverage` accepte un filtre
+  `?line=`. _Non encore mergé sur `main`._
 - **Durée des coupures réseau (branche `feat/duree-coupure`)** : on mesure
   désormais les **épisodes de coupure** (`ok → none… → ok`), pas seulement des
   points isolés — la donnée à plus forte valeur produit (« tu perdras le réseau
