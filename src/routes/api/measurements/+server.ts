@@ -20,6 +20,8 @@ const MeasurementInput = z.object({
 	netType: z.string().max(16).nullable().optional(),
 	speedKmh: z.number().nonnegative().nullable().optional(),
 	gpsAccuracy: z.number().nonnegative().nullable().optional(),
+	/** Instant réel de la mesure (époch ms) — sert à dériver les coupures. */
+	measuredAt: z.number().int().nonnegative().nullable().optional(),
 	sessionId: z.string().uuid()
 });
 
@@ -62,6 +64,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		speedKmh: m.speedKmh ?? null,
 		gpsAccuracy: m.gpsAccuracy ?? null,
 		lineSlug,
+		measuredAt: m.measuredAt ?? null,
 		sessionId: m.sessionId
 	});
 

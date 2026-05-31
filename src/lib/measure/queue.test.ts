@@ -22,6 +22,7 @@ function measure(overrides: Partial<QueuedMeasurement> = {}): QueuedMeasurement 
 		netType: '4g',
 		speedKmh: 120,
 		gpsAccuracy: 20,
+		measuredAt: 1_700_000_000_000,
 		sessionId: 'test-session',
 		...overrides
 	};

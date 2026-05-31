@@ -52,7 +52,7 @@ mettant en évidence les **coupures** (durée/longueur si A2 dispo) et les
      le profil. Idéalement les deux partagent un **composant** réutilisable
      `src/lib/components/RouteProfile.svelte`.
 
-2. **Données.** 
+2. **Données.**
    - **ARCEP** : `static/data/arcep-lines.geojson` (segments par niveau) +
      l'index/tracé ligne produit par A1 → échantillonne le long du parcours
      ordonné (départ→arrivée) pour colorer la frise.
@@ -90,7 +90,7 @@ mettant en évidence les **coupures** (durée/longueur si A2 dispo) et les
   réelle + coupures + écarts, lisible sur mobile et accessible.
 - Intégré au moins sur `/ligne/[slug]` (et idéalement un sélecteur dans l'app).
 - `check` + `lint` + `build` verts ; rendu vérifié via sous-agent Chrome (mobile
-  + desktop). `docs/CHANGELOG.md` et `docs/PRODUCT.md` mis à jour.
+  - desktop). `docs/CHANGELOG.md` et `docs/PRODUCT.md` mis à jour.
 - Pas de merge `main`, pas de déploiement. Récap final pour revue.
 
 Pose des questions à Julien sur : où afficher le profil (SEO vs app vs les deux),

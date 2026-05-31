@@ -37,6 +37,13 @@ export const measurements = sqliteTable(
 		lineSlug: text('line_slug'),
 		/** Jeton de session anonyme. */
 		sessionId: text('session_id').notNull(),
+		/**
+		 * Instant réel de la mesure côté client (époch **ms**, ≠ created_at en s).
+		 * Indispensable pour reconstruire la chronologie des coupures : created_at
+		 * est l'instant d'INSERTION, faussé par le rejeu hors-ligne. Nullable : les
+		 * mesures antérieures à cette fonctionnalité n'en ont pas.
+		 */
+		measuredAt: integer('measured_at'),
 		createdAt: integer('created_at')
 			.notNull()
 			.default(sql`(unixepoch())`)
@@ -44,7 +51,9 @@ export const measurements = sqliteTable(
 	(t) => ({
 		cellOperatorIdx: index('measurements_cell_operator_idx').on(t.cellId, t.operator),
 		lineIdx: index('measurements_line_idx').on(t.lineSlug),
-		sessionIdx: index('measurements_session_idx').on(t.sessionId)
+		sessionIdx: index('measurements_session_idx').on(t.sessionId),
+		// Scan ordonné par session pour dériver les épisodes de coupure.
+		sessionTimeIdx: index('measurements_session_time_idx').on(t.sessionId, t.measuredAt)
 	})
 );
 

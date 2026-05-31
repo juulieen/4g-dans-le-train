@@ -82,6 +82,29 @@ recolore les voies ARCEP **et** filtre les mesures communautaires. Il est
   rattachement se fait **sur la cellule, pas sur la position brute** — cohérent
   avec l'anonymisation. Cela débloque les pages de couverture par ligne et la
   future vue « profil de trajet ».
+- **Épisodes de coupure (durée des coupures)** : la donnée à plus forte valeur
+  produit n'est pas le point isolé `none`, mais la **durée** d'une coupure
+  (« tu perdras le réseau ~1 min 40 s après telle gare »). Un épisode est une
+  transition `ok|degraded → none … → ok|degraded`.
+  - **On ne stocke jamais un objet « coupure ».** L'épisode est toujours
+    **dérivé** des mesures `none` consécutives d'une session. Source unique de
+    vérité = les mesures brutes. La seule donnée persistée en plus est l'**instant
+    réel de mesure** (`measurements.measured_at`, époch ms) : `created_at` est
+    l'instant d'_insertion_ serveur, faussé par le rejeu hors-ligne (une mesure de
+    tunnel arrive bien après sa capture), donc inutilisable pour la chronologie.
+  - **Une brique pure, deux contextes** (`src/lib/measure/outage.ts`) : la même
+    logique de détection tourne (1) **côté client** pendant la mesure → retour
+    éphémère « coupure de X » + compteur (rien n'est persisté en plus) ; (2)
+    **côté serveur à la lecture** (`src/lib/server/outages.ts`) sur les mesures
+    brutes groupées par session → **agrégats seulement**. Longueur d'une coupure
+    estimée par la distance GPS parcourue, avec repli `vitesse × durée` quand le
+    GPS est figé (tunnel).
+  - **Vie privée** : `GET /api/outages` ne renvoie **que des agrégats** (durée et
+    longueur médianes par cellule de début × opérateur, ligne dérivée de la
+    cellule) — jamais les points bruts ni les séquences par session.
+  - **Perf** : dérivation à la lecture (scan + reconstruction). Suffisant au
+    volume actuel ; si ça devient lent, matérialiser une table d'agrégats
+    recalculée à l'ingestion (façon `cell_aggregates`).
 
 ## Décisions & conventions produit
 

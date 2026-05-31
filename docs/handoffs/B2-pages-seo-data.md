@@ -31,10 +31,11 @@ contiennent **aucune donnée réelle**. Leurs loaders (`+page.ts`) ne chargent q
 le référentiel statique de `src/lib/geo/lines.ts` (slugs, villes). Ce sont des
 coquilles : ni chiffre ARCEP, ni mesure communautaire, ni le moindre fait unique.
 Double gâchis :
+
 - **SEO** : Google récompense le contenu unique et factuel ; des pages
   quasi-identiques sans données se positionnent mal.
 - **Produit** : l'ADN du projet (révéler les **écarts** entre couverture
-  *annoncée* par les opérateurs et couverture *réelle*) n'apparaît nulle part en
+  _annoncée_ par les opérateurs et couverture _réelle_) n'apparaît nulle part en
   texte indexable.
 
 ### Ta mission
@@ -51,6 +52,7 @@ Injecter dans ces pages des **données réelles calculées au build (prerender)*
    défaut, génère un résumé par ligne dans un script
    `scripts/build-line-stats.ts` produisant un JSON
    `static/data/line-stats.json` du type :
+
    ```
    { "paris-lyon": {
        "arcep": { "orange": {"TBC": 0.78, "BC": 0.15, "CL": 0.04, "none": 0.03}, ... },
@@ -58,6 +60,7 @@ Injecter dans ces pages des **données réelles calculées au build (prerender)*
        "zonesBlanches": 3
    }, ... }
    ```
+
    Les loaders `+page.ts` lisent ce JSON (au build, donc zéro coût runtime).
 
 2. **Côté réel (dépend d'A1).** Si `lineSlug` est renseigné (handoff A1) et qu'il

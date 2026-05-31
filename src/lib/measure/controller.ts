@@ -15,6 +15,7 @@ import { ScreenWakeLock } from './wakeLock';
 import { readNetworkType } from './netinfo';
 import { getSessionId, hasConsent } from './session';
 import { MeasurementQueue, type QueuedMeasurement } from './queue';
+import { OutageDetector } from './outage';
 
 export type Operator = 'orange' | 'sfr' | 'free' | 'bouygues' | 'autre' | 'inconnu';
 
@@ -31,6 +32,10 @@ export interface LiveState {
 	sent: number;
 	/** Mesures en attente d'envoi (hors-ligne / tunnel). */
 	queued: number;
+	/** Nombre de coupures réseau détectées pendant la session (live, éphémère). */
+	outages: number;
+	/** Dernière coupure clôturée, pour le retour « coupure de 1 min 40 s ». */
+	lastOutage: { durationS: number; lengthM: number } | null;
 	wakeLockActive: boolean;
 	error: string | null;
 }
@@ -52,6 +57,8 @@ const initialState: LiveState = {
 	netType: null,
 	sent: 0,
 	queued: 0,
+	outages: 0,
+	lastOutage: null,
 	wakeLockActive: false,
 	error: null
 };
@@ -63,6 +70,9 @@ export class MeasurementController {
 	private geo = new GeoTracker();
 	private wake = new ScreenWakeLock();
 	private queue = new MeasurementQueue();
+	/** Détection live des coupures (éphémère : alimente seulement l'UI, rien n'est
+	 *  persisté ici — la vérité stockée est dérivée côté serveur des mesures brutes). */
+	private detector = new OutageDetector();
 	private state: LiveState = { ...initialState };
 	private opts: ControllerOptions;
 	/** Évite les pings concurrents si le GPS pousse des positions rapprochées. */
@@ -90,6 +100,7 @@ export class MeasurementController {
 			return;
 		}
 		// On conserve la file existante (mesures d'une session précédente non envoyées).
+		this.detector.reset();
 		this.patch({ ...initialState, running: true, queued: this.queue.size });
 
 		const ok = this.geo.start(
@@ -117,6 +128,14 @@ export class MeasurementController {
 		if (this.flushTimer !== null) {
 			clearInterval(this.flushTimer);
 			this.flushTimer = null;
+		}
+		// Clôt proprement une coupure encore en cours (arrêt en zone blanche).
+		const ep = this.detector.finalize();
+		if (ep) {
+			this.patch({
+				outages: this.state.outages + 1,
+				lastOutage: { durationS: ep.durationS, lengthM: ep.lengthM }
+			});
 		}
 		// Ultime tentative d'envoi de ce qui reste avant l'arrêt.
 		await this.flush();
@@ -155,6 +174,23 @@ export class MeasurementController {
 			const { status, rttMs } = await ping(this.opts.endpoint);
 			const netType = readNetworkType();
 			this.patch({ status, rttMs, netType });
+
+			// Détection live des coupures (indépendante du consentement : c'est de
+			// l'affichage éphémère sur SA session, rien n'est envoyé d'ici).
+			const ep = this.detector.observe({
+				measuredAt: sample.timestamp,
+				status,
+				lat: sample.lat,
+				lng: sample.lng,
+				speedKmh: sample.speedKmh
+			});
+			if (ep) {
+				this.patch({
+					outages: this.state.outages + 1,
+					lastOutage: { durationS: ep.durationS, lengthM: ep.lengthM }
+				});
+			}
+
 			if (hasConsent()) {
 				// On ENFILE systématiquement (même « none »), puis on tente de vider.
 				// Ainsi les zones blanches — où l'envoi direct échouerait — sont gardées.
@@ -167,6 +203,7 @@ export class MeasurementController {
 					netType,
 					speedKmh: sample.speedKmh,
 					gpsAccuracy: sample.accuracy,
+					measuredAt: sample.timestamp,
 					sessionId: getSessionId()
 				});
 				this.patch({ queued: this.queue.size });

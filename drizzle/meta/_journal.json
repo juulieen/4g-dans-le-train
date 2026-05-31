@@ -8,6 +8,13 @@
       "when": 1780053466304,
       "tag": "0000_burly_mister_fear",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1780186800040,
+      "tag": "0001_dapper_wong",
+      "breakpoints": true
     }
   ]
 }

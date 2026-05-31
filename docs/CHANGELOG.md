@@ -5,6 +5,20 @@
 
 ## 2026-05-31
 
+- **Durée des coupures réseau (branche `feat/duree-coupure`)** : on mesure
+  désormais les **épisodes de coupure** (`ok → none… → ok`), pas seulement des
+  points isolés — la donnée à plus forte valeur produit (« tu perdras le réseau
+  ~1 min 40 s après telle gare »). Choix d'archi : on ne stocke **aucun** objet
+  « coupure », on persiste l'**instant réel de mesure** (`measured_at`, époch ms,
+  nouvelle colonne nullable + index `(session_id, measured_at)`) et on **dérive**
+  les épisodes via une brique pure (`src/lib/measure/outage.ts`) réutilisée
+  côté client (retour live éphémère « coupure de X » + compteur dans le panneau
+  mesure) **et** côté serveur (`src/lib/server/outages.ts` → `GET /api/outages`,
+  agrégats GeoJSON par cellule de début × opérateur : durée/longueur médianes,
+  ligne dérivée de la cellule). Longueur estimée par distance GPS, repli
+  `vitesse × durée` en tunnel. `GET /api/outages` ne renvoie que des agrégats
+  (jamais les points bruts/séquences par session). Tests Vitest sur la machine à
+  états (9 cas). Migration `0001_dapper_wong.sql`. _Non encore mergé sur `main`._
 - **Mode mesure robuste (branche `feat/mesure-robuste`)** : file d'attente
   persistante (`src/lib/measure/queue.ts`) qui conserve les mesures non envoyées
   au lieu de les jeter. Crucial : les zones blanches (où l'envoi échoue) étaient

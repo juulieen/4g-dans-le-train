@@ -23,6 +23,10 @@ export interface QueuedMeasurement {
 	netType: string | null;
 	speedKmh: number | null;
 	gpsAccuracy: number | null;
+	/** Instant réel de la mesure (époch ms). Indispensable pour reconstruire la
+	 *  chronologie des coupures : `createdAt` côté serveur est l'instant d'INSERTION,
+	 *  faussé par le rejeu hors-ligne (une mesure de tunnel arrive bien après sa capture). */
+	measuredAt: number;
 	sessionId: string;
 }
 
