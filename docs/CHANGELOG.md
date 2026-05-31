@@ -5,6 +5,21 @@
 
 ## 2026-05-31
 
+- **Pages SEO remplies de vraies données (branche `feat/seo-data`)** : les pages
+  `/ligne`, `/operateur` et croisées n'étaient que des coquilles sans chiffre.
+  Elles portent désormais la **couverture ARCEP réelle par ligne** — pourcentages
+  `TBC/BC/CL/none` par opérateur, couverture « au mieux », et **zones blanches
+  nommées automatiquement** (« notamment après Vierzon et Châteauroux »). Calcul
+  au build : nouveau script `scripts/build-line-stats.ts` (`data:line-stats`) qui
+  reprend le **même tracé routé** que `data:line-index` (logique extraite dans
+  `scripts/lib/rail-routing.ts`, partagée), superpose les niveaux ARCEP (cellule
+  H3 res 7) et agrège, pondéré par la longueur → `src/lib/geo/line-stats.json`
+  (committé, lu par `src/lib/geo/line-stats.ts`, figé dans le HTML prerendu).
+  `<meta description>` et FAQ JSON-LD enrichis d'un chiffre saillant. La couche
+  **réelle** (mesures communautaires, mouvante) reste hydratée **côté client** via
+  un nouveau bloc `CommunityComparison.svelte` (→ `GET /api/coverage?line=…`, qui
+  accepte désormais le filtre `?line=`). Sitemap et maillage interne inchangés.
+  _Non encore mergé sur `main`._
 - **Durée des coupures réseau (branche `feat/duree-coupure`)** : on mesure
   désormais les **épisodes de coupure** (`ok → none… → ok`), pas seulement des
   points isolés — la donnée à plus forte valeur produit (« tu perdras le réseau

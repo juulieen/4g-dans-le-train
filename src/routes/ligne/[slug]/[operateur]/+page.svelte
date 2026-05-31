@@ -1,20 +1,40 @@
 <script lang="ts">
 	import { OPERATORS } from '$geo/lines';
+	import {
+		describeOperator,
+		describeWhiteZones,
+		crossMetaDescription,
+		pct
+	} from '$geo/coverage-copy';
 	import PageWrap from '$components/PageWrap.svelte';
+	import CommunityComparison from '$components/CommunityComparison.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	const line = $derived(data.line);
 	const op = $derived(data.operator);
+	const stats = $derived(data.stats);
+	/** Répartition ARCEP de cet opérateur sur la ligne (null si pas de tracé). */
+	const dist = $derived(stats ? stats.arcep[op.key] : null);
 
 	const title = $derived(`Couverture ${op.name} sur ${line.name} — réseau mobile dans le train`);
 	const description = $derived(
-		`Est-ce que ${op.name} capte sur la ligne ${line.name} (${line.service}) ? Carte de la couverture 4G/5G ${op.name} entre ${line.from} et ${line.to}, mesures réelles des voyageurs incluses.`
+		crossMetaDescription(op.name, line.name, line.from, line.to, dist ?? undefined)
 	);
 	const url = $derived(`https://4g-dans-le-train.juulieen.fr/ligne/${line.slug}/${op.slug}`);
 
 	// Autres opérateurs sur la même ligne (maillage interne).
 	const others = $derived(OPERATORS.filter((o) => o.slug !== op.slug));
+
+	const faqAnswer = $derived(
+		dist
+			? `${describeOperator(op.name, dist)} ${
+					stats && describeWhiteZones(stats)
+						? describeWhiteZones(stats)
+						: 'Peu de zones blanches sont connues sur ce trajet.'
+				} Ces chiffres sont la couverture théorique annoncée par l'ARCEP ; la carte montre aussi les mesures réelles des voyageurs.`
+			: `La couverture ${op.name} sur la ligne ${line.name} varie selon les sections traversées. Consultez la carte interactive pour voir où le réseau ${op.name} passe en 4G/5G et où il coupe entre ${line.from} et ${line.to}.`
+	);
 
 	const jsonLd = $derived(
 		'<script type="application/ld+json">' +
@@ -25,10 +45,7 @@
 					{
 						'@type': 'Question',
 						name: `Est-ce que ${op.name} capte entre ${line.from} et ${line.to} ?`,
-						acceptedAnswer: {
-							'@type': 'Answer',
-							text: `La couverture ${op.name} sur la ligne ${line.name} varie selon les sections traversées. Consultez la carte interactive pour voir où le réseau ${op.name} passe en 4G/5G et où il coupe entre ${line.from} et ${line.to}.`
-						}
+						acceptedAnswer: { '@type': 'Answer', text: faqAnswer }
 					}
 				]
 			}) +
@@ -62,12 +79,33 @@
 
 	<section>
 		<h2>{op.name} entre {line.from} et {line.to}</h2>
-		<p>
-			La qualité du réseau {op.name} dépend des zones traversées par la ligne {line.name}&nbsp;:
-			tunnels, zones rurales et passages à grande vitesse provoquent des coupures même là où la
-			couverture théorique est bonne. La carte communautaire vous montre les sections réellement
-			problématiques.
-		</p>
+		{#if dist && stats}
+			<p>
+				{describeOperator(op.name, dist)}
+				{#if describeWhiteZones(stats)}
+					{describeWhiteZones(stats)}
+				{/if}
+				Ces niveaux sont ceux <em>annoncés</em> par l'ARCEP&nbsp;; sur le terrain, tunnels, zones rurales
+				et passages à grande vitesse provoquent des coupures même là où la couverture théorique est bonne.
+			</p>
+			<p class="muted">
+				Répartition annoncée&nbsp;: {pct(dist.TBC)} en très bonne couverture, {pct(dist.BC)} en bonne,
+				{pct(dist.CL)} limitée, {pct(dist.none)} sans réseau.
+			</p>
+
+			<CommunityComparison
+				lineSlug={line.slug}
+				operatorKey={op.key}
+				arcepUsable={dist.TBC + dist.BC}
+				subject={`${op.name} est annoncé en couverture`}
+			/>
+		{:else}
+			<p>
+				La qualité du réseau {op.name} dépend des zones traversées par la ligne {line.name}&nbsp;:
+				tunnels, zones rurales et passages à grande vitesse provoquent des coupures. La carte
+				communautaire vous montre les sections réellement problématiques.
+			</p>
+		{/if}
 
 		<h2>Comparer les opérateurs sur {line.name}</h2>
 		<ul class="pills">

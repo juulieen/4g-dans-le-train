@@ -111,6 +111,32 @@ servis au navigateur.
 > Si le fichier de sortie est absent, la carte fonctionne sans la couche ARCEP
 > (mesures communautaires uniquement).
 
+## Stats de couverture par ligne (`data:line-stats`)
+
+- **Jeu** : dérivé, aucune source externe nouvelle.
+- **Entrées** : `static/data/arcep-coverage.geojson` (niveaux ARCEP par cellule
+  H3 res 7), `static/data/rail-lines.geojson` (RFN) et le GTFS SNCF (gares).
+- **Commande** : `bun run data:line-stats`.
+- **Sortie** : `src/lib/geo/line-stats.json` (**committé**, lu par
+  `src/lib/geo/line-stats.ts`).
+- **Pipeline** (`scripts/build-line-stats.ts`) : pour chaque ligne commerciale,
+  on reconstitue son tracé réel via le module partagé `scripts/lib/rail-routing.ts`
+  (gares GTFS ordonnées → plus court chemin sur le RFN → échantillonnage tous les
+  ~0,12 km) — **exactement le même tracé que `data:line-index`**. En chaque point
+  on lit le niveau ARCEP (cellule H3 res 7) des 4 opérateurs, puis on agrège :
+  répartition `TBC/BC/CL/none` par opérateur **pondérée par la longueur** du
+  parcours, répartition du « meilleur des 4 », et **zones blanches** (tronçons
+  contigus sans aucune couverture ≥ 3 km, étiquetés par la gare amont — « après
+  Mâcon »).
+
+Ces stats alimentent les **pages SEO prerendues** (`/ligne`, `/operateur`,
+croisées) en chiffres réels figés au build — zéro coût runtime. La couche
+**réelle** (mesures communautaires, mouvante) n'est PAS figée ici : elle est
+chargée côté client (`CommunityComparison.svelte` → `/api/coverage?line=…`).
+
+> Dépend de `line-index` (référentiel des lignes) **et** d'`arcep-coverage` : à
+> lancer après eux (c'est l'ordre de `data:all`).
+
 ## Mise à jour — une seule commande
 
 ```bash
@@ -119,7 +145,8 @@ bun run data:all
 
 `scripts/data-all.ts` enchaîne, dans le bon ordre de dépendances :
 `data:sncf` → `data:lines` → `data:line-index` → `data:arcep` → `data:arcep-lines`
-(arrêt au premier échec). On peut aussi rejouer chaque étape isolément.
+→ `data:line-stats` (arrêt au premier échec). On peut aussi rejouer chaque étape
+isolément.
 
 **Cadence :**
 
@@ -128,9 +155,9 @@ bun run data:all
 - **SNCF (tracés + lignes commerciales)** : peu fréquent ; rejouer lors d'un
   changement de réseau ou d'offre commerciale.
 
-Après régénération, **commiter `src/lib/geo/commercial-lines.json` et
-`src/lib/geo/line-index.json`** (les GeoJSON de `static/data/` restent gitignorés et
-sont régénérés au déploiement si besoin).
+Après régénération, **commiter `src/lib/geo/commercial-lines.json`,
+`src/lib/geo/line-index.json` et `src/lib/geo/line-stats.json`** (les GeoJSON de
+`static/data/` restent gitignorés et sont régénérés au déploiement si besoin).
 
 ## Licences
 

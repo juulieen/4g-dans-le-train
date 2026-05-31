@@ -125,6 +125,16 @@ recolore les voies ARCEP **et** filtre les mesures communautaires. Il est
   avec le réseau ferroviaire). Le SEO repose sur des **pages programmatiques** :
   `/ligne/[slug]`, `/operateur/[slug]`, croisées `/ligne/[slug]/[operateur]`,
   - FAQ, sitemap, JSON-LD. Référentiel curaté dans `src/lib/geo/lines.ts`.
+- **Contenu des pages SEO — théorique figé, réel hydraté** : ces pages portent de
+  **vraies données ARCEP** par ligne (chiffres + zones blanches nommées),
+  pré-calculées au build dans `src/lib/geo/line-stats.json` (script
+  `data:line-stats`, cf. `docs/DATA.md`) et **figées dans le HTML prerendu** —
+  indexables, zéro coût runtime. La couche **réelle** (mesures communautaires)
+  étant **mouvante** et souvent clairsemée, on ne la fige PAS : le bloc « Et en
+  vrai ? » (`CommunityComparison.svelte`) la charge **côté client** après
+  hydratation (`/api/coverage?line=…[&operator=…]`) et dégrade proprement quand
+  il n'y a pas encore de mesures. C'est l'incarnation textuelle de l'ADN du
+  projet : l'**écart** entre couverture annoncée et constatée.
 - **Périmètre** : France (réseau SNCF) d'abord ; architecture extensible.
 - **Snapping ligne — décisions** : (1) une mesure hors de toute ligne connue est
   **acceptée sans `lineSlug`**, jamais rejetée (on ne perd aucune donnée ; le filtre
