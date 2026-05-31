@@ -6,23 +6,40 @@
 ## 2026-05-31
 
 - **Pages SEO remplies de vraies données (branche `feat/seo-data`)** : les pages
-  `/ligne`, `/operateur` et croisées n'étaient que des coquilles sans chiffre.
-  Elles portent désormais la **couverture ARCEP réelle par ligne** — pourcentages
-  `TBC/BC/CL/none` par opérateur, couverture « au mieux », et **zones blanches
-  nommées automatiquement** (« notamment après Vierzon et Châteauroux »). Calcul
-  au build : nouveau script `scripts/build-line-stats.ts` (`data:line-stats`) qui
-  reprend le **même tracé routé** que `data:line-index` (logique extraite dans
-  `scripts/lib/rail-routing.ts`, partagée), superpose les niveaux ARCEP (cellule
-  H3 res 7) et agrège, pondéré par la longueur → `src/lib/geo/line-stats.json`
-  (committé, lu par `src/lib/geo/line-stats.ts`, figé dans le HTML prerendu).
-  `<meta description>` et FAQ JSON-LD enrichis d'un chiffre saillant. La couche
-  **réelle** (mesures communautaires, mouvante) reste hydratée **côté client** via
-  un nouveau bloc `CommunityComparison.svelte` (→ `GET /api/coverage?line=…`, qui
-  accepte désormais le filtre `?line=`). Sitemap et maillage interne inchangés.
-  Garde-fou de fiabilité : `import-arcep` n'écrivant que les cellules couvertes,
-  une ligne dont le tracé routé s'écarte du corridor ARCEP (> 20 % « sans
-  données ») est exclue plutôt que d'afficher de faux chiffres (40/44 lignes
-  retenues). _Non encore mergé sur `main`._
+  `/ligne`, `/operateur` et croisées n'avaient aucun chiffre. Elles portent
+  désormais la **couverture ARCEP réelle par ligne** — pourcentages `TBC/BC/CL/none`
+  par opérateur, couverture « au mieux », et **zones blanches nommées
+  automatiquement** (« notamment après Vierzon et Châteauroux »). Calcul au build :
+  nouveau script `scripts/build-line-stats.ts` (`data:line-stats`) qui **agrège les
+  profils de trajet** déjà produits par `data:line-index`
+  (`static/data/route-profiles/*.json`, handoff B1) — aucun re-routage, pondéré par
+  la longueur → `src/lib/geo/line-stats.json` (committé, lu par
+  `src/lib/geo/line-stats.ts`, figé dans le HTML prerendu). `<meta description>` et
+  FAQ JSON-LD enrichis d'un chiffre saillant. Les pages `/ligne` et croisées
+  montrent la **frise RouteProfile** (B1) pour le réel ; la page `/operateur`
+  (sans frise) garde un bloc `CommunityComparison.svelte` hydraté côté client
+  (`/api/coverage`, qui expose désormais `lastSeen`). Sitemap et maillage interne
+  inchangés. Garde-fou de fiabilité : `import-arcep` n'écrivant que les cellules
+  couvertes, une ligne dont le tracé s'écarte du corridor ARCEP (> 20 % « sans
+  données ») est exclue plutôt que d'afficher de faux chiffres. _Non encore mergé
+  sur `main`._
+- **Profil de trajet — frise de couverture gare→gare (branche `feat/profil-trajet`)** :
+  nouvelle vue signature qui tient enfin la promesse produit (« sur MON trajet,
+  quand pourrai-je regarder une vidéo… ou rien ? »). Composant réutilisable
+  `src/lib/components/RouteProfile.svelte` : une **frise horizontale** de la gare
+  de départ à la gare d'arrivée, colorée par usage, superposant le **théorique
+  (ARCEP)** en fond et le **réel (mesures)** par-dessus (cerclé de blanc, il
+  prime), avec **gares + distances cumulées** et marqueurs de **coupures**
+  (« ✕ ~3 min »). Intégrée sur les pages SEO `/ligne/[slug]` **et** dans l'app
+  carte (sélecteur « Profil d'un trajet »). Accessibilité daltonien : la zone
+  blanche porte des **hachures** en plus du rouge + résumé textuel pour lecteurs
+  d'écran. Données : `scripts/build-line-index.ts` émet désormais aussi, par
+  ligne, `static/data/route-profiles/<slug>.json` (gares ordonnées, segments
+  ARCEP en run-length, polyligne simplifiée pour situer mesures/coupures) — il
+  réutilise le routage GTFS déjà calculé et lit `arcep-coverage.geojson` (d'où le
+  réordonnancement de `data:all`). Couleurs/labels d'usage centralisés dans
+  `src/lib/usage.ts` (partagé carte ↔ frise). `/api/coverage` accepte un filtre
+  `?line=`. _Non encore mergé sur `main`._
 - **Durée des coupures réseau (branche `feat/duree-coupure`)** : on mesure
   désormais les **épisodes de coupure** (`ok → none… → ok`), pas seulement des
   points isolés — la donnée à plus forte valeur produit (« tu perdras le réseau

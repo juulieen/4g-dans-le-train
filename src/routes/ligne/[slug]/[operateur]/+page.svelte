@@ -7,14 +7,14 @@
 		pct
 	} from '$geo/coverage-copy';
 	import PageWrap from '$components/PageWrap.svelte';
-	import CommunityComparison from '$components/CommunityComparison.svelte';
+	import RouteProfile from '$components/RouteProfile.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	const line = $derived(data.line);
 	const op = $derived(data.operator);
 	const stats = $derived(data.stats);
-	/** Répartition ARCEP de cet opérateur sur la ligne (null si pas de tracé). */
+	/** Répartition ARCEP de cet opérateur sur la ligne (null si pas de tracé fiable). */
 	const dist = $derived(stats ? stats.arcep[op.key] : null);
 
 	const title = $derived(`Couverture ${op.name} sur ${line.name} — réseau mobile dans le train`);
@@ -75,6 +75,15 @@
 		mesures réelles des voyageurs.
 	</p>
 
+	<section class="profil">
+		<h2>Le profil {op.name} de votre trajet, gare après gare</h2>
+		<p>
+			De {line.from} à {line.to}, la couverture <strong>{op.name}</strong> le long du parcours (théorique
+			ARCEP en fond, mesures réelles cerclées de blanc par-dessus).
+		</p>
+		<RouteProfile slug={line.slug} operator={op.key} />
+	</section>
+
 	<a class="cta" href="/">Voir la carte interactive →</a>
 
 	<section>
@@ -92,13 +101,6 @@
 				Répartition annoncée&nbsp;: {pct(dist.TBC)} en très bonne couverture, {pct(dist.BC)} en bonne,
 				{pct(dist.CL)} limitée, {pct(dist.none)} sans réseau.
 			</p>
-
-			<CommunityComparison
-				lineSlug={line.slug}
-				operatorKey={op.key}
-				arcepUsable={dist.TBC + dist.BC}
-				subject={`${op.name} est annoncé en couverture`}
-			/>
 		{:else}
 			<p>
 				La qualité du réseau {op.name} dépend des zones traversées par la ligne {line.name}&nbsp;:

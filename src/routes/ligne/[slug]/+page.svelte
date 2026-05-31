@@ -7,7 +7,7 @@
 		lineMetaDescription
 	} from '$geo/coverage-copy';
 	import PageWrap from '$components/PageWrap.svelte';
-	import CommunityComparison from '$components/CommunityComparison.svelte';
+	import RouteProfile from '$components/RouteProfile.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -69,6 +69,16 @@
 		passe (ou coupe) grâce aux mesures de la communauté.
 	</p>
 
+	<section class="profil">
+		<h2>Le profil de votre trajet, gare après gare</h2>
+		<p>
+			De {line.from} à {line.to}, voici où vous pourrez regarder une vidéo, naviguer, juste envoyer
+			un message… ou rien du tout. Le fond montre la couverture théorique (ARCEP)&nbsp;; les
+			pastilles cerclées de blanc, ce qui a été mesuré en vrai.
+		</p>
+		<RouteProfile slug={line.slug} />
+	</section>
+
 	<a class="cta" href="/">Voir la carte interactive →</a>
 
 	<section>
@@ -84,12 +94,6 @@
 					Aucune zone blanche majeure n'est connue le long du trajet.
 				{/if}
 			</p>
-
-			<CommunityComparison
-				lineSlug={line.slug}
-				arcepUsable={stats.best.TBC + stats.best.BC}
-				subject="Au mieux, la couverture est annoncée bonne"
-			/>
 
 			<h2>Le détail par opérateur sur {line.name}</h2>
 			<ul class="ops">

@@ -42,13 +42,16 @@ Le fichier est committé pour que le build/prerender tourne sans rejouer l'impor
 à **régénérer + commiter** périodiquement. Pour ajouter une source (ex. TER), ajouter une
 entrée dans `GTFS_SOURCES` (URL du GTFS + libellé de service).
 
-## 3. Index ligne — rattachement des mesures (snapping)
+## 3. Index ligne + profils de trajet — snapping & frise
 
-- **Source** : les **mêmes GTFS** que § 2 + le réseau RFN de § 1. Aucune nouvelle
-  donnée externe.
+- **Source** : les **mêmes GTFS** que § 2 + le réseau RFN de § 1 + la couverture
+  ARCEP de § 4 (`arcep-coverage.geojson`, pour le fond théorique des profils).
 - **Import** : `bun run data:line-index`
-- **Sortie** : `src/lib/geo/line-index.json` (**committé**, exclu de Prettier dans
-  `.prettierignore` ; format compact `{ slugs, cells }`, ~1 Mo)
+- **Sorties** :
+  - `src/lib/geo/line-index.json` (**committé**, exclu de Prettier dans
+    `.prettierignore` ; format compact `{ slugs, cells }`, ~1 Mo) — le snapping ;
+  - `static/data/route-profiles/<slug>.json` (un par ligne, ~1,2 Mo au total ;
+    `static/data/` est déjà gitignoré de Prettier) — les **profils de trajet**.
 
 `scripts/build-line-index.ts` construit l'index spatial **cellule H3 (résolution 9) →
 ligne(s) commerciale(s)** qui permet de renseigner `lineSlug` à l'ingestion en O(1)
@@ -76,6 +79,24 @@ Couverture actuelle : 42/44 lignes routées, ~36 100 cellules. Lignes sans trac�
 TGV/Intercités). Limite : seules les cellules **sur une voie** reçoivent un slug ;
 une mesure dont la cellule n'est sur aucune voie connue est **acceptée sans
 `lineSlug`** (jamais rejetée).
+
+### Profils de trajet (frise « profil de trajet », `route-profiles/<slug>.json`)
+
+Le même routage ordonné (étapes 1–2 ci-dessus) alimente, **sans second calcul**,
+un profil par ligne pour la frise gare→gare (`src/lib/components/RouteProfile.svelte`).
+Pour chaque ligne, on échantillonne le tracé routé et on produit :
+
+- `stations` : gares **ordonnées** + distance cumulée depuis le départ (gares à
+  plus de 3 km du tracé écartées). Le sens est aligné sur `from → to` du
+  référentiel (on inverse l'itinéraire GTFS au besoin) ;
+- `arcep` : niveau de couverture par opérateur le long du parcours, en **run-length**
+  (fusion des points consécutifs de mêmes niveaux), via la cellule H3 **res 7** de
+  `arcep-coverage.geojson` — d'où la dépendance à § 4, et le placement de `data:arcep`
+  **avant** `data:line-index` dans `data:all` ;
+- `path` : polyligne simplifiée `[lng, lat, distKm]` (~1 pt/km) qui permet au
+  composant de situer les **mesures réelles** (`/api/coverage?line=`) et les
+  **coupures** (`/api/outages?line=`) sur l'axe distance, sans embarquer de map de
+  cellules.
 
 ## 4. Couverture officielle — ARCEP « Mon Réseau Mobile »
 
@@ -114,37 +135,34 @@ servis au navigateur.
 ## Stats de couverture par ligne (`data:line-stats`)
 
 - **Jeu** : dérivé, aucune source externe nouvelle.
-- **Entrées** : `static/data/arcep-coverage.geojson` (niveaux ARCEP par cellule
-  H3 res 7), `static/data/rail-lines.geojson` (RFN) et le GTFS SNCF (gares).
+- **Entrées** : les **profils de trajet** `static/data/route-profiles/*.json`
+  produits par `data:line-index` (§ 3) — chacun porte le tracé routé découpé en
+  segments ARCEP run-length `{ fromKm, toKm, orange, sfr, free, bouygues, best }`
+  et les gares ordonnées `{ name, distKm }`.
 - **Commande** : `bun run data:line-stats`.
 - **Sortie** : `src/lib/geo/line-stats.json` (**committé**, lu par
   `src/lib/geo/line-stats.ts`).
-- **Pipeline** (`scripts/build-line-stats.ts`) : pour chaque ligne commerciale,
-  on reconstitue son tracé réel via le module partagé `scripts/lib/rail-routing.ts`
-  (gares GTFS ordonnées → plus court chemin sur le RFN → échantillonnage tous les
-  ~0,12 km) — **exactement le même tracé que `data:line-index`**. En chaque point
-  on lit le niveau ARCEP (cellule H3 res 7) des 4 opérateurs, puis on agrège :
-  répartition `TBC/BC/CL/none` par opérateur **pondérée par la longueur** du
-  parcours, répartition du « meilleur des 4 », et **zones blanches** (tronçons
-  contigus sans aucune couverture ≥ 3 km, étiquetés par la gare amont — « après
-  Mâcon »).
-- **Fiabilité** : `import-arcep` n'écrit que les cellules _couvertes_, donc une
-  cellule absente = « vraie zone blanche » **ou** « hors du corridor qu'ARCEP a
-  échantillonné ». Tant que le tracé routé suit la voie indexée, l'absence ≈ zone
-  blanche réelle ; mais quand une ligne a trop peu de gares GTFS, le routage
-  s'écarte et gonfle le « sans réseau ». Garde-fou : si la part « sans données »
-  d'une ligne dépasse **20 %**, son overlay est jugé non fiable et la ligne est
-  **exclue** de `line-stats.json` (sa page retombe sur le contenu générique).
-  Aujourd'hui 40/44 lignes ont des stats (2 sans tracé GTFS, 2 écartées). Les
-  trous fragmentés par la grille res 7 sont fusionnés (< 3 km de couvert entre deux).
+- **Pipeline** (`scripts/build-line-stats.ts`) : **aucun re-routage** — on lit les
+  segments ARCEP de chaque profil et on agrège, **pondéré par la longueur** :
+  répartition `TBC/BC/CL/none` par opérateur et « au mieux » (`best`), et **zones
+  blanches** (segments `best === 'none'` contigus, fusionnés si séparés par < 3 km
+  de couvert, ≥ 3 km, nommés par la gare amont — « après Mâcon »). Types d'usage
+  partagés via `src/lib/usage.ts`.
+- **Fiabilité** : `import-arcep` n'écrit que les cellules _couvertes_, donc un
+  segment `none` vaut « vraie zone blanche » **ou** « hors du corridor qu'ARCEP a
+  échantillonné ». Tant que le tracé suit la voie indexée, l'absence ≈ zone
+  blanche réelle ; mais quand une ligne a trop peu de gares GTFS, le tracé s'écarte
+  et gonfle le « sans réseau ». Garde-fou : si la part « sans données » d'une ligne
+  dépasse **20 %**, son overlay est jugé non fiable et la ligne est **exclue** de
+  `line-stats.json` (sa page retombe sur le contenu générique).
 
-Ces stats alimentent les **pages SEO prerendues** (`/ligne`, `/operateur`,
-croisées) en chiffres réels figés au build — zéro coût runtime. La couche
-**réelle** (mesures communautaires, mouvante) n'est PAS figée ici : elle est
-chargée côté client (`CommunityComparison.svelte` → `/api/coverage?line=…`).
+Ces stats alimentent les **pages SEO prerendues** en chiffres réels figés au
+build — zéro coût runtime. Le **réel** (mesures communautaires, mouvant) n'est PAS
+figé ici : les pages `/ligne` et croisées affichent la frise `RouteProfile` (§ 3),
+la page `/operateur` un bloc `CommunityComparison.svelte` (→ `/api/coverage`).
 
-> Dépend de `line-index` (référentiel des lignes) **et** d'`arcep-coverage` : à
-> lancer après eux (c'est l'ordre de `data:all`).
+> Dépend des **profils de trajet** : à lancer après `data:line-index` (c'est la
+> fin de l'ordre de `data:all`).
 
 ## Mise à jour — une seule commande
 
@@ -153,9 +171,11 @@ bun run data:all
 ```
 
 `scripts/data-all.ts` enchaîne, dans le bon ordre de dépendances :
-`data:sncf` → `data:lines` → `data:line-index` → `data:arcep` → `data:arcep-lines`
+`data:sncf` → `data:lines` → `data:arcep` → `data:line-index` → `data:arcep-lines`
 → `data:line-stats` (arrêt au premier échec). On peut aussi rejouer chaque étape
-isolément.
+isolément. Note : `data:arcep` passe **avant** `data:line-index` car ce dernier lit
+`arcep-coverage.geojson` pour générer les profils de trajet (§ 3) ; `data:line-stats`
+clôt la chaîne car il agrège ces profils.
 
 **Cadence :**
 

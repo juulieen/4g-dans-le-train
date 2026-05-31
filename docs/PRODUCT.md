@@ -44,6 +44,27 @@ Un **filtre d'affichage** par opérateur (Tous / Orange / SFR / Free / Bouygues)
 recolore les voies ARCEP **et** filtre les mesures communautaires. Il est
 **distinct** du sélecteur « Votre opérateur » du mode mesure.
 
+## Le profil de trajet (frise gare→gare)
+
+La carte répond à « **où** ça capte ? » ; le profil de trajet répond à « **quand,
+sur MON trajet** ? » — c'est la lecture **linéaire** qui tient la promesse
+d'origine. Pour une ligne donnée (ex. Paris–Lyon), une **frise horizontale** va de
+la gare de départ à la gare d'arrivée, colorée par usage le long du parcours :
+
+- **fond théorique (ARCEP)** : bande colorée par segment, un peu pâle ;
+- **réel (mesures)** par-dessus, cerclé de blanc — le réel **prime visuellement** ;
+- **gares** repérées avec leur **distance cumulée** (« après [gare], sur ~12 km ») ;
+- **coupures** marquées (« ✕ ~3 min ») quand des épisodes sont mesurés sur la ligne.
+
+Mêmes couleurs/usages que la carte (source unique `src/lib/usage.ts`). La frise est
+**mobile-first** (scrollable au pouce). **Accessibilité** : la palette reposant sur
+rouge↔vert, la zone blanche porte aussi des **hachures**, et un résumé textuel
+décrit le profil pour les lecteurs d'écran. Le composant
+`src/lib/components/RouteProfile.svelte` est partagé entre les pages SEO
+`/ligne/[slug]` et l'app carte (sélecteur de ligne). Données : un profil par ligne
+généré au build dans `static/data/route-profiles/<slug>.json` (cf. `docs/DATA.md` § 3) ;
+réel et coupures chargés à la volée via `/api/coverage?line=` et `/api/outages?line=`.
+
 ## Comment sont calculées les données ARCEP (théorique)
 
 - **Source** : Open Data ARCEP, « Cartes de couverture théorique » (jeu « Mon
@@ -80,8 +101,8 @@ recolore les voies ARCEP **et** filtre les mesures communautaires. Il est
   mesure est rattachée à sa **ligne commerciale** via un index pré-calculé
   (`src/lib/geo/line-snap.ts` → `line-index.json`, cf. `docs/DATA.md` § 3). Le
   rattachement se fait **sur la cellule, pas sur la position brute** — cohérent
-  avec l'anonymisation. Cela débloque les pages de couverture par ligne et la
-  future vue « profil de trajet ».
+  avec l'anonymisation. C'est ce qui alimente les pages de couverture par ligne et
+  la **vue « profil de trajet »** (cf. § Le profil de trajet).
 - **Épisodes de coupure (durée des coupures)** : la donnée à plus forte valeur
   produit n'est pas le point isolé `none`, mais la **durée** d'une coupure
   (« tu perdras le réseau ~1 min 40 s après telle gare »). Un épisode est une
@@ -127,14 +148,15 @@ recolore les voies ARCEP **et** filtre les mesures communautaires. Il est
   - FAQ, sitemap, JSON-LD. Référentiel curaté dans `src/lib/geo/lines.ts`.
 - **Contenu des pages SEO — théorique figé, réel hydraté** : ces pages portent de
   **vraies données ARCEP** par ligne (chiffres + zones blanches nommées),
-  pré-calculées au build dans `src/lib/geo/line-stats.json` (script
-  `data:line-stats`, cf. `docs/DATA.md`) et **figées dans le HTML prerendu** —
-  indexables, zéro coût runtime. La couche **réelle** (mesures communautaires)
-  étant **mouvante** et souvent clairsemée, on ne la fige PAS : le bloc « Et en
-  vrai ? » (`CommunityComparison.svelte`) la charge **côté client** après
-  hydratation (`/api/coverage?line=…[&operator=…]`) et dégrade proprement quand
-  il n'y a pas encore de mesures. C'est l'incarnation textuelle de l'ADN du
-  projet : l'**écart** entre couverture annoncée et constatée.
+  agrégées au build depuis les profils de trajet dans `src/lib/geo/line-stats.json`
+  (script `data:line-stats`, cf. `docs/DATA.md`) et **figées dans le HTML prerendu**
+  — indexables, zéro coût runtime. La couche **réelle** (mesures communautaires)
+  étant **mouvante** et souvent clairsemée, on ne la fige PAS : les pages `/ligne`
+  et croisées affichent la **frise `RouteProfile`** (réel par-dessus le théorique),
+  et la page `/operateur` (sans frise) un bloc « Et en vrai ? »
+  (`CommunityComparison.svelte`) chargé **côté client** (`/api/coverage`), qui
+  dégrade proprement sans mesures. C'est l'incarnation de l'ADN du projet :
+  l'**écart** entre couverture annoncée et constatée.
 - **Périmètre** : France (réseau SNCF) d'abord ; architecture extensible.
 - **Snapping ligne — décisions** : (1) une mesure hors de toute ligne connue est
   **acceptée sans `lineSlug`**, jamais rejetée (on ne perd aucune donnée ; le filtre

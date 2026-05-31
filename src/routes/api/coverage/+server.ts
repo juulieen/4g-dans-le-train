@@ -6,21 +6,26 @@ import type { RequestHandler } from './$types';
 
 /**
  * Renvoie les agrégats de couverture au format GeoJSON (FeatureCollection de
- * points), prêt à être affiché par MapLibre. Filtrable par opérateur (`?operator=`)
- * et/ou par ligne commerciale (`?line=<slug>`). Le filtre `?line=` alimente le
- * bloc « mesures réelles » des pages SEO (CommunityComparison.svelte), qui charge
- * la couche communautaire (mouvante) côté client par-dessus l'ARCEP prerendu.
+ * points), prêt à être affiché par MapLibre. Filtrable par opérateur via ?operator=
+ * et par ligne via ?line= (slug commercial, ex. paris-lyon) — ce dernier alimente
+ * la couche « réel » de la frise « profil de trajet » et le bloc de comparaison
+ * des pages SEO opérateur (CommunityComparison.svelte).
  */
 export const GET: RequestHandler = async ({ url, setHeaders }) => {
 	const operator = url.searchParams.get('operator');
 	const line = url.searchParams.get('line');
 
-	const conds = [];
-	if (operator) conds.push(eq(cellAggregates.operator, operator));
-	if (line) conds.push(eq(cellAggregates.lineSlug, line));
+	const filters = [
+		operator ? eq(cellAggregates.operator, operator) : undefined,
+		line ? eq(cellAggregates.lineSlug, line) : undefined
+	].filter((f) => f !== undefined);
 
-	const base = db.select().from(cellAggregates);
-	const rows = await (conds.length ? base.where(and(...conds)) : base);
+	const rows = filters.length
+		? await db
+				.select()
+				.from(cellAggregates)
+				.where(filters.length === 1 ? filters[0] : and(...filters))
+		: await db.select().from(cellAggregates);
 
 	const features = rows.map((r) => ({
 		type: 'Feature' as const,

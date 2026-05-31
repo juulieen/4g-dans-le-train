@@ -12,9 +12,10 @@
  * Le JSON est généré : ne pas l'éditer à la main (exclu de Prettier).
  */
 import raw from './line-stats.json';
+import type { UsageOp } from '../usage';
 
-/** Clé interne d'un opérateur (alignée sur MobileOperator.key de lines.ts). */
-export type OperatorKey = 'orange' | 'sfr' | 'free' | 'bouygues';
+/** Clé interne d'un opérateur (source unique : src/lib/usage.ts). */
+export type OperatorKey = UsageOp;
 
 /**
  * Répartition d'un opérateur (ou du meilleur des 4) le long du parcours, en
@@ -41,8 +42,6 @@ export interface WhiteZone {
 export interface LineStats {
 	/** Longueur du tracé routé (km). */
 	lengthKm: number;
-	/** Nombre de points d'échantillonnage (≈ longueur / pas). */
-	samples: number;
 	/** Répartition ARCEP par opérateur. */
 	arcep: Record<OperatorKey, LevelDist>;
 	/** Répartition du meilleur opérateur en chaque point (couverture « au mieux »). */
