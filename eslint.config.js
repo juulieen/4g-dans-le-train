@@ -28,6 +28,16 @@ export default [
 		}
 	},
 	{
-		ignores: ['.svelte-kit/', 'build/', 'node_modules/', 'static/data/', 'data/', 'drizzle/']
+		// `.claude/` peut contenir des worktrees imbriqués (autres branches) avec
+		// leur propre build généré : on ne les lint pas.
+		ignores: [
+			'.svelte-kit/',
+			'build/',
+			'node_modules/',
+			'static/data/',
+			'data/',
+			'drizzle/',
+			'.claude/'
+		]
 	}
 ];

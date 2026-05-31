@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm';
+import { lineSlugForCell } from '$geo/line-snap';
 import { db } from './db/client';
 import { cellAggregates, measurements, type NewMeasurement } from './db/schema';
 
@@ -22,8 +23,7 @@ async function recomputeCell(cellId: string, operator: Operator): Promise<void> 
 			status: measurements.status,
 			rttMs: measurements.rttMs,
 			lat: measurements.lat,
-			lng: measurements.lng,
-			lineSlug: measurements.lineSlug
+			lng: measurements.lng
 		})
 		.from(measurements)
 		.where(and(eq(measurements.cellId, cellId), eq(measurements.operator, operator)));
@@ -38,7 +38,11 @@ async function recomputeCell(cellId: string, operator: Operator): Promise<void> 
 		.filter((v): v is number => v != null)
 		.sort((a, b) => a - b);
 	const medianRtt = rtts.length ? rtts[Math.floor(rtts.length / 2)] : null;
-	const { lat, lng, lineSlug } = rows[0];
+	const { lat, lng } = rows[0];
+	// `lineSlug` est une fonction déterministe de la cellule : on le dérive de
+	// l'index plutôt que de `rows[0]` (dont l'ordre n'est pas garanti). Reste
+	// cohérent même pour les mesures historiques insérées sans lineSlug.
+	const lineSlug = lineSlugForCell(cellId);
 
 	const existing = await db
 		.select({ cellId: cellAggregates.cellId })

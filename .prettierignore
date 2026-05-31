@@ -5,3 +5,4 @@ static/data
 data
 bun.lock
 drizzle/meta
+src/lib/geo/line-index.json

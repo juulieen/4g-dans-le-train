@@ -76,6 +76,47 @@ recolore les voies ARCEP **et** filtre les mesures communautaires. Il est
 - **Agrégation** (`src/lib/server/ingest.ts`) : par cellule H3 × opérateur →
   taux de réussite, latence médiane, nombre de mesures. Servi par
   `GET /api/coverage`.
+- **Rattachement à une ligne (snapping)** : à l'ingestion, la cellule H3 de la
+  mesure est rattachée à sa **ligne commerciale** via un index pré-calculé
+  (`src/lib/geo/line-snap.ts` → `line-index.json`, cf. `docs/DATA.md` § 3). Le
+  rattachement se fait **sur la cellule, pas sur la position brute** — cohérent
+  avec l'anonymisation. Cela débloque les pages de couverture par ligne et la
+  future vue « profil de trajet ».
+- **Épisodes de coupure (durée des coupures)** : la donnée à plus forte valeur
+  produit n'est pas le point isolé `none`, mais la **durée** d'une coupure
+  (« tu perdras le réseau ~1 min 40 s après telle gare »). Un épisode est une
+  transition `ok|degraded → none … → ok|degraded`.
+  - **On ne stocke jamais un objet « coupure ».** L'épisode est toujours
+    **dérivé** des mesures `none` consécutives d'une session. Source unique de
+    vérité = les mesures brutes. La seule donnée persistée en plus est l'**instant
+    réel de mesure** (`measurements.measured_at`, époch ms) : `created_at` est
+    l'instant d'_insertion_ serveur, faussé par le rejeu hors-ligne (une mesure de
+    tunnel arrive bien après sa capture), donc inutilisable pour la chronologie.
+  - **Une brique pure, deux contextes** (`src/lib/measure/outage.ts`) : la même
+    logique de détection tourne (1) **côté client** pendant la mesure → retour
+    éphémère « coupure de X » + compteur (rien n'est persisté en plus) ; (2)
+    **côté serveur à la lecture** (`src/lib/server/outages.ts`) sur les mesures
+    brutes groupées par session → **agrégats seulement**.
+  - **Longueur d'une coupure** : distance GPS parcourue, avec repli
+    `vitesse × durée` (vitesse pendant la coupure, sinon la dernière connue juste
+    avant — le GPS d'un tunnel ne donne souvent plus de vitesse). ⚠️ Côté serveur, les
+    positions stockées sont des **centres de cellule H3** (anonymisées), donc le
+    chemin y est quantifié au pas de cellule : la longueur serveur **repose
+    surtout sur le repli vitesse×durée**. La distance GPS fine n'est exacte qu'en
+    live (où le client a la position brute).
+  - **Trou de mesure / app quittée** : une même `session_id` survit entre trajets.
+    Au-delà de **5 min** sans échantillon, l'épisode en cours est clos comme **non
+    terminé** (on ne sait pas quand le réseau est revenu). Les épisodes non
+    terminés (trou, ou arrêt en zone blanche) sont **exclus des agrégats serveur**
+    pour ne pas biaiser la durée médiane.
+  - **Vie privée** : `GET /api/outages` ne renvoie **que des agrégats** (durée et
+    longueur médianes par cellule de début × opérateur, ligne dérivée de la
+    cellule) — jamais les points bruts ni les séquences par session. On affiche
+    une cellule même avec une seule coupure observée : la session n'identifie
+    personne (jeton anonyme jetable), pas de risque de ré-identification.
+  - **Perf** : dérivation à la lecture (scan + reconstruction). Suffisant au
+    volume actuel ; si ça devient lent, matérialiser une table d'agrégats
+    recalculée à l'ingestion (façon `cell_aggregates`).
 
 ## Décisions & conventions produit
 
@@ -85,6 +126,13 @@ recolore les voies ARCEP **et** filtre les mesures communautaires. Il est
   `/ligne/[slug]`, `/operateur/[slug]`, croisées `/ligne/[slug]/[operateur]`,
   - FAQ, sitemap, JSON-LD. Référentiel curaté dans `src/lib/geo/lines.ts`.
 - **Périmètre** : France (réseau SNCF) d'abord ; architecture extensible.
+- **Snapping ligne — décisions** : (1) une mesure hors de toute ligne connue est
+  **acceptée sans `lineSlug`**, jamais rejetée (on ne perd aucune donnée ; le filtre
+  anti-aberrant est reporté). (2) Une cellule de **tronc commun** appartient à
+  plusieurs lignes ; `measurements.lineSlug` ne stocke que la **ligne primaire** (la
+  plus locale), la liste complète restant dans l'index pour la couverture par ligne.
+  (3) La géométrie des lignes vient du **GTFS (gares ordonnées) + routage sur le RFN**,
+  pas d'une saisie manuelle ni d'une corde droite (cf. `docs/DATA.md` § 3).
 - **H3 résolutions** : mesures communautaires en **res 9** (~200 m, précis) ;
   couche ARCEP en **res 7** (~1,4 km, suffisant pour un fond théorique et léger).
 - **Données versionnées** : `rail-lines.geojson` et `arcep-lines.geojson` sont

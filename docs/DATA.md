@@ -21,7 +21,7 @@ SEO `/ligne/[slug]`.
 ## 2. Lignes commerciales — GTFS SNCF
 
 - **Jeux** : « Horaires GTFS » SNCF Open Data (OpenDataSoft), agrégés via le tableau
-  `SOURCES` du script :
+  `GTFS_SOURCES` (`scripts/lib/gtfs.ts`, mutualisé avec l'index ligne) :
   - TGV INOUI : https://eu.ftp.opendatasoft.com/sncf/gtfs/export_gtfs_voyages.zip
   - Intercités : https://eu.ftp.opendatasoft.com/sncf/gtfs/export-intercites-gtfs-last.zip
 - **Import** : `bun run data:lines`
@@ -34,11 +34,50 @@ curaté `CURATED_LINES` (`src/lib/geo/lines-base.ts`) qui prime pour la qualité
 alimente `RAIL_LINES`, donc les pages `/ligne/[slug]`, `/lignes`, le `sitemap.xml` et
 `/operateur/[slug]`.
 
+Le téléchargement, le parsing CSV et **surtout la dérivation du slug d'une route**
+(`parseCommercialRoute`) sont mutualisés dans `scripts/lib/gtfs.ts` : c'est ce qui garantit
+que l'index ligne (§ 3) pointe vers exactement les mêmes slugs que ce référentiel.
+
 Le fichier est committé pour que le build/prerender tourne sans rejouer l'import ; il est
 à **régénérer + commiter** périodiquement. Pour ajouter une source (ex. TER), ajouter une
-entrée dans le tableau `SOURCES` du script (URL du GTFS + libellé de service).
+entrée dans `GTFS_SOURCES` (URL du GTFS + libellé de service).
 
-## 3. Couverture officielle — ARCEP « Mon Réseau Mobile »
+## 3. Index ligne — rattachement des mesures (snapping)
+
+- **Source** : les **mêmes GTFS** que § 2 + le réseau RFN de § 1. Aucune nouvelle
+  donnée externe.
+- **Import** : `bun run data:line-index`
+- **Sortie** : `src/lib/geo/line-index.json` (**committé**, exclu de Prettier dans
+  `.prettierignore` ; format compact `{ slugs, cells }`, ~1 Mo)
+
+`scripts/build-line-index.ts` construit l'index spatial **cellule H3 (résolution 9) →
+ligne(s) commerciale(s)** qui permet de renseigner `lineSlug` à l'ingestion en O(1)
+(`Map.get(cellId)`), sans calcul géométrique par requête. Chaîne :
+
+1. **Géométrie de chaque ligne, depuis le GTFS** : `routes.txt` (relation → slug) →
+   `trips.txt` (courses) → `stop_times.txt` (arrêts ordonnés) → `stops.txt`
+   (coordonnées des gares). On obtient, par ligne, la suite **ordonnée de ses gares**
+   (l'itinéraire le plus riche parmi ses courses). C'est la source de données qui relie
+   une ligne commerciale à une géométrie — le GTFS ne fournit pas de `shapes.txt`.
+2. **Routage sur la voie réelle** : entre deux gares consécutives, on calcule le **plus
+   court chemin** sur le réseau RFN « Exploitée » (`rail-lines.geojson`). Le jeu RFN
+   n'étant pas nœudé (les jonctions ne partagent pas leurs sommets), on reconstitue la
+   connectivité en reliant les sommets distants de moins de `CONNECT_KM` (0,35 km). On
+   échantillonne ensuite le tracé routé en cellules H3 res 9. Un corridor « corde droite
+   gares-à-gares » a été écarté : il rate les courbes des LGV et attribue des cellules à
+   la mauvaise ligne.
+3. **Troncs communs** : une cellule routée par plusieurs lignes (ex. sortie de Paris)
+   garde **toutes** ses lignes, triées de la plus locale (primaire, stockée dans
+   `measurements.lineSlug`) à la plus générale. La liste complète sert aux pages de
+   couverture par ligne (à venir).
+
+Couverture actuelle : 42/44 lignes routées, ~36 100 cellules. Lignes sans tracé :
+`paris-rennes` et `lyon-marseille` (relations sans course directe dans les feeds
+TGV/Intercités). Limite : seules les cellules **sur une voie** reçoivent un slug ;
+une mesure dont la cellule n'est sur aucune voie connue est **acceptée sans
+`lineSlug`** (jamais rejetée).
+
+## 4. Couverture officielle — ARCEP « Mon Réseau Mobile »
 
 - **Portail** : https://data.arcep.fr/mobile/couvertures_theoriques/ et https://www.data.gouv.fr/datasets/mon-reseau-mobile
 - **Contenu** : couverture _théorique_ 2G/3G/4G/5G par opérateur (Orange, SFR, Free, Bouygues),
@@ -79,8 +118,8 @@ bun run data:all
 ```
 
 `scripts/data-all.ts` enchaîne, dans le bon ordre de dépendances :
-`data:sncf` → `data:lines` → `data:arcep` → `data:arcep-lines` (arrêt au premier
-échec). On peut aussi rejouer chaque étape isolément.
+`data:sncf` → `data:lines` → `data:line-index` → `data:arcep` → `data:arcep-lines`
+(arrêt au premier échec). On peut aussi rejouer chaque étape isolément.
 
 **Cadence :**
 
@@ -89,8 +128,9 @@ bun run data:all
 - **SNCF (tracés + lignes commerciales)** : peu fréquent ; rejouer lors d'un
   changement de réseau ou d'offre commerciale.
 
-Après régénération, **commiter `src/lib/geo/commercial-lines.json`** (les GeoJSON de
-`static/data/` restent gitignorés et sont régénérés au déploiement si besoin).
+Après régénération, **commiter `src/lib/geo/commercial-lines.json` et
+`src/lib/geo/line-index.json`** (les GeoJSON de `static/data/` restent gitignorés et
+sont régénérés au déploiement si besoin).
 
 ## Licences
 

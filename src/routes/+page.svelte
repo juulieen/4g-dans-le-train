@@ -108,6 +108,20 @@
 		none: 'Pas de réseau ❌'
 	};
 
+	/** Durée lisible : « 25 s », « 1 min 40 s », « 3 min ». */
+	function formatDuree(s: number): string {
+		const sec = Math.round(s);
+		if (sec < 60) return `${sec} s`;
+		const min = Math.floor(sec / 60);
+		const reste = sec % 60;
+		return reste ? `${min} min ${reste} s` : `${min} min`;
+	}
+
+	/** Longueur lisible : « 300 m », « 1,2 km ». */
+	function formatLongueur(m: number): string {
+		return m >= 1000 ? `${(m / 1000).toFixed(1).replace('.', ',')} km` : `${Math.round(m)} m`;
+	}
+
 	// --- Présentation : bottom-sheet + onboarding (aucune logique métier) ---
 	const ui = getContext<{ openOnboarding: () => void }>('ui');
 
@@ -324,10 +338,31 @@
 								<dd>{live.sent}</dd>
 							</div>
 							<div>
+								<dt>En attente d'envoi</dt>
+								<dd>{live.queued}</dd>
+							</div>
+							<div>
+								<dt>Coupures</dt>
+								<dd>{live.outages}</dd>
+							</div>
+							<div>
 								<dt>Écran maintenu</dt>
 								<dd>{live.wakeLockActive ? 'oui' : 'non'}</dd>
 							</div>
 						</dl>
+						{#if live.queued > 0}
+							<p class="queued-note">
+								{live.queued} mesure{live.queued > 1 ? 's' : ''} en attente — gardées hors-ligne et envoyées
+								dès le retour du réseau.
+							</p>
+						{/if}
+						{#if live.lastOutage}
+							<p class="queued-note">
+								Dernière coupure : <strong>{formatDuree(live.lastOutage.durationS)}</strong
+								>{#if live.lastOutage.lengthM > 0}
+									· {formatLongueur(live.lastOutage.lengthM)}{/if}.
+							</p>
+						{/if}
 					</div>
 				{/if}
 
@@ -533,6 +568,11 @@
 	.error {
 		color: #fca5a5;
 		font-size: var(--fs-sm);
+	}
+	.queued-note {
+		color: var(--muted);
+		font-size: 0.78rem;
+		margin: 0.5rem 0 0;
 	}
 	.live {
 		margin-top: 1rem;
