@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import { z } from 'zod';
 import { snapToCell } from '$geo/h3';
+import { lineSlugForCell } from '$geo/line-snap';
 import { ingestMeasurement } from '$lib/server/ingest';
 import type { RequestHandler } from './$types';
 
@@ -44,6 +45,12 @@ export const POST: RequestHandler = async ({ request }) => {
 	// Anonymisation : arrondi à la cellule H3 avant tout stockage.
 	const snapped = snapToCell(m.lat, m.lng);
 
+	// Rattachement à la ligne ferroviaire : O(1) via l'index pré-calculé. La
+	// cellule peut n'appartenir à aucune ligne connue (lineSlug = null) ; on
+	// accepte la mesure dans tous les cas (pas de rejet — décision documentée
+	// dans docs/PRODUCT.md), seul le rattachement est optionnel.
+	const lineSlug = lineSlugForCell(snapped.cellId);
+
 	await ingestMeasurement({
 		cellId: snapped.cellId,
 		lat: snapped.lat,
@@ -54,8 +61,9 @@ export const POST: RequestHandler = async ({ request }) => {
 		netType: m.netType ?? null,
 		speedKmh: m.speedKmh ?? null,
 		gpsAccuracy: m.gpsAccuracy ?? null,
+		lineSlug,
 		sessionId: m.sessionId
 	});
 
-	return json({ ok: true, cellId: snapped.cellId }, { status: 201 });
+	return json({ ok: true, cellId: snapped.cellId, lineSlug }, { status: 201 });
 };

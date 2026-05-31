@@ -18,6 +18,7 @@
 		"db:migrate": "bun run scripts/migrate.ts",
 		"data:sncf": "bun run scripts/import-sncf-lines.ts",
 		"data:lines": "bun run scripts/import-commercial-lines.ts",
+		"data:line-index": "bun run scripts/build-line-index.ts",
 		"data:arcep": "bun run scripts/import-arcep.ts",
 		"data:arcep-lines": "bun run scripts/build-arcep-lines.ts",
 		"data:all": "bun run scripts/data-all.ts"
