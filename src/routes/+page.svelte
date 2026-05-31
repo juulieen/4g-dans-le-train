@@ -2,7 +2,9 @@
 	import { onDestroy, getContext } from 'svelte';
 	import Map from '$components/Map.svelte';
 	import Icon from '$components/Icon.svelte';
+	import RouteProfile from '$components/RouteProfile.svelte';
 	import HintChip from '$components/Onboarding/HintChip.svelte';
+	import { RAIL_LINES } from '$geo/lines';
 	import { MeasurementController, type LiveState, type Operator } from '$measure/controller';
 	import {
 		hasConsent,
@@ -30,6 +32,9 @@
 	let showCommunity = $state(true);
 	// Filtre d'AFFICHAGE de la carte (distinct de l'opérateur du mode mesure).
 	let viewOperator = $state<string>('inconnu');
+	// Ligne sélectionnée pour afficher son « profil de trajet » (frise). Vide = aucune.
+	let selectedLine = $state<string>('');
+	const sortedLines = [...RAIL_LINES].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
 	let live = $state<LiveState | null>(null);
 	// État local initialisé une fois avec la couverture SSR, puis rafraîchi
 	// localement après chaque mesure (refreshCoverage) — lecture initiale voulue.
@@ -288,6 +293,19 @@
 					Mesures réelles des voyageurs
 				</label>
 			</div>
+
+			<label class="view-op" for="profile-line">
+				Profil d'un trajet&nbsp;:
+				<select id="profile-line" name="profile-line" bind:value={selectedLine}>
+					<option value="">Choisir une ligne…</option>
+					{#each sortedLines as l (l.slug)}
+						<option value={l.slug}>{l.name}</option>
+					{/each}
+				</select>
+			</label>
+			{#if selectedLine}
+				<RouteProfile slug={selectedLine} operator={viewOperator} />
+			{/if}
 
 			<div class="measure">
 				<h2 class="measure-title">Mode mesure <Icon name="map" size={18} /></h2>

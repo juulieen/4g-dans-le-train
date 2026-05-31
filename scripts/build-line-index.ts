@@ -39,13 +39,13 @@
  *
  * Licence source : Licence Ouverte / Open Licence (Etalab).
  */
-import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { FeatureCollection, LineString, MultiLineString } from 'geojson';
 import { distance } from '@turf/turf';
 import { latLngToCell } from 'h3-js';
 import { H3_RESOLUTION } from '../src/lib/geo/h3';
-import { RAIL_LINES } from '../src/lib/geo/lines';
+import { RAIL_LINES, slugifyLine } from '../src/lib/geo/lines';
 import { GTFS_SOURCES, download, unzipTo, readCsv, parseCommercialRoute } from './lib/gtfs';
 
 // --- Paramètres -------------------------------------------------------------
@@ -53,6 +53,15 @@ import { GTFS_SOURCES, download, unzipTo, readCsv, parseCommercialRoute } from '
 const TMP = '/tmp/sncf-gtfs-import';
 const RAIL_FILE = 'static/data/rail-lines.geojson';
 const OUT_FILE = 'src/lib/geo/line-index.json';
+
+/** Couverture ARCEP par cellule H3 res 7 (source du fond théorique de la frise). */
+const ARCEP_FILE = 'static/data/arcep-coverage.geojson';
+const ARCEP_RES = 7;
+/** Dossier des profils de trajet par ligne (frise « profil de trajet », handoff B1). */
+const PROFILES_DIR = 'static/data/route-profiles';
+/** Pas de la polyligne simplifiée embarquée dans chaque profil (km) — sert à situer
+ *  mesures réelles et coupures sur l'axe distance sans embarquer de map de cellules. */
+const PATH_STEP_KM = 1;
 
 /** Seul le réseau en service nous intéresse (≠ Neutralisée / Fermée / Déclassée…). */
 const RAIL_STATUS = 'Exploitée';
@@ -68,15 +77,35 @@ const DETOUR_SLACK_KM = 15;
 
 type Coord = [number, number]; // [lng, lat]
 
+/** Une gare de l'itinéraire : sa position et son nom (libellé GTFS). */
+interface Station {
+	coord: Coord;
+	name: string;
+}
+
+/** Niveau de couverture ARCEP par usage (ordre décroissant), `none` = zone blanche. */
+type Level = 'TBC' | 'BC' | 'CL' | 'none';
+const OPS = ['orange', 'sfr', 'free', 'bouygues'] as const;
+type Op = (typeof OPS)[number];
+type OpLevels = Record<Op, Level>;
+const LEVEL_RANK: Record<Level, number> = { TBC: 3, BC: 2, CL: 1, none: 0 };
+
 const km = (a: Coord, b: Coord) => distance(a, b, { units: 'kilometers' });
+
+/** Niveau le plus élevé parmi les opérateurs (équivalent du champ `best` ARCEP). */
+function bestLevel(l: OpLevels): Level {
+	let best: Level = 'none';
+	for (const op of OPS) if (LEVEL_RANK[l[op]] > LEVEL_RANK[best]) best = l[op];
+	return best;
+}
 
 // --- 1) GTFS : suite ordonnée des gares par slug ----------------------------
 
 /** Renvoie, par slug de ligne du référentiel, l'itinéraire de gares le plus riche. */
-async function stationsBySlug(): Promise<Map<string, Coord[]>> {
+async function stationsBySlug(): Promise<Map<string, Station[]>> {
 	const known = new Set(RAIL_LINES.map((l) => l.slug));
 	await mkdir(TMP, { recursive: true });
-	const best = new Map<string, Coord[]>();
+	const best = new Map<string, Station[]>();
 
 	for (const src of GTFS_SOURCES) {
 		const name = src.url.split('/').pop() ?? 'gtfs.zip';
@@ -92,12 +121,16 @@ async function stationsBySlug(): Promise<Map<string, Coord[]>> {
 			continue;
 		}
 
-		// stops.txt : stop_id → [lng, lat]
+		// stops.txt : stop_id → [lng, lat] + nom de la gare
 		const coordOf = new Map<string, Coord>();
+		const nameOf = new Map<string, string>();
 		for (const s of await readCsv(join(dir, 'stops.txt'))) {
 			const lat = Number(s.stop_lat);
 			const lng = Number(s.stop_lon);
-			if (Number.isFinite(lat) && Number.isFinite(lng)) coordOf.set(s.stop_id, [lng, lat]);
+			if (Number.isFinite(lat) && Number.isFinite(lng)) {
+				coordOf.set(s.stop_id, [lng, lat]);
+				if (s.stop_name) nameOf.set(s.stop_id, s.stop_name.trim());
+			}
 		}
 
 		// routes.txt : route_id → slug (uniquement les routes du référentiel)
@@ -125,21 +158,21 @@ async function stationsBySlug(): Promise<Map<string, Coord[]>> {
 			arr.push({ seq, stopId: st.stop_id });
 		}
 
-		// Par course : coords ordonnées ; on garde par slug l'itinéraire le plus long.
+		// Par course : gares ordonnées ; on garde par slug l'itinéraire le plus long.
 		for (const [tripId, stopsOfTrip] of seqByTrip) {
 			const slug = slugOfTrip.get(tripId)!;
-			const coords: Coord[] = [];
+			const stops: Station[] = [];
 			let prev: Coord | null = null;
 			for (const { stopId } of stopsOfTrip.sort((a, b) => a.seq - b.seq)) {
 				const c = coordOf.get(stopId);
 				if (!c) continue;
 				if (prev && prev[0] === c[0] && prev[1] === c[1]) continue;
-				coords.push(c);
+				stops.push({ coord: c, name: nameOf.get(stopId) ?? '' });
 				prev = c;
 			}
-			if (coords.length < 2) continue;
+			if (stops.length < 2) continue;
 			const cur = best.get(slug);
-			if (!cur || coords.length > cur.length) best.set(slug, coords);
+			if (!cur || stops.length > cur.length) best.set(slug, stops);
 		}
 	}
 	return best;
@@ -384,6 +417,173 @@ function routeLine(
 	return { coords: out, lengthKm, fallbacks };
 }
 
+// --- 4) Profils de trajet par ligne (frise B1) ------------------------------
+
+/** Point échantillonné le long du tracé, avec sa distance cumulée depuis l'origine. */
+type DistPoint = { lng: number; lat: number; distKm: number };
+
+/** Échantillonne une polyligne tous les `stepKm` en gardant la distance cumulée. */
+function sampleWithDist(coords: Coord[], stepKm: number): DistPoint[] {
+	const pts: DistPoint[] = [];
+	if (coords.length === 0) return pts;
+	pts.push({ lng: coords[0][0], lat: coords[0][1], distKm: 0 });
+	let acc = 0; // distance cumulée jusqu'au sommet `i-1`
+	let carry = 0;
+	for (let i = 1; i < coords.length; i++) {
+		const a = coords[i - 1];
+		const b = coords[i];
+		const segLen = km(a, b);
+		if (segLen === 0) continue;
+		let d = stepKm - carry;
+		while (d < segLen) {
+			const f = d / segLen;
+			pts.push({ lng: a[0] + (b[0] - a[0]) * f, lat: a[1] + (b[1] - a[1]) * f, distKm: acc + d });
+			d += stepKm;
+		}
+		carry = segLen - (d - stepKm);
+		acc += segLen;
+	}
+	pts.push({ lng: coords[coords.length - 1][0], lat: coords[coords.length - 1][1], distKm: acc });
+	return pts;
+}
+
+/** Charge la couverture ARCEP (points H3 res 7) dans une map cellule → niveaux. */
+async function loadArcep(): Promise<Map<string, OpLevels>> {
+	const fc = JSON.parse(await readFile(ARCEP_FILE, 'utf8')) as FeatureCollection;
+	const map = new Map<string, OpLevels>();
+	const lvl = (v: unknown): Level => (v === 'TBC' || v === 'BC' || v === 'CL' ? v : 'none');
+	for (const f of fc.features) {
+		const p = f.properties ?? {};
+		const cell = p.cellId as string | undefined;
+		if (!cell) continue;
+		map.set(cell, {
+			orange: lvl(p.orange),
+			sfr: lvl(p.sfr),
+			free: lvl(p.free),
+			bouygues: lvl(p.bouygues)
+		});
+	}
+	return map;
+}
+
+/** Distance équirectangulaire approchée (km) — suffisante pour un plus-proche-point. */
+function approxKm(aLng: number, aLat: number, bLng: number, bLat: number): number {
+	const mLat = ((aLat + bLat) / 2) * (Math.PI / 180);
+	const x = (aLng - bLng) * Math.cos(mLat);
+	const y = aLat - bLat;
+	return Math.sqrt(x * x + y * y) * 111.32;
+}
+
+/** Projette une gare sur l'échantillonnage et renvoie sa distance cumulée (ou null si trop loin). */
+function projectStation(s: Station, samples: DistPoint[]): number | null {
+	let best = Infinity;
+	let dist = 0;
+	for (const pt of samples) {
+		const d = approxKm(s.coord[0], s.coord[1], pt.lng, pt.lat);
+		if (d < best) {
+			best = d;
+			dist = pt.distKm;
+		}
+	}
+	// Une gare à plus de 3 km du tracé routé est probablement hors ligne (écartée).
+	return best <= 3 ? dist : null;
+}
+
+const round = (n: number, d = 3) => Number(n.toFixed(d));
+
+/**
+ * Écrit un profil de trajet par ligne dans static/data/route-profiles/<slug>.json :
+ * gares ordonnées + distance, segments ARCEP (run-length par niveaux d'opérateur),
+ * et une polyligne simplifiée pour situer mesures réelles / coupures sur l'axe.
+ */
+async function writeRouteProfiles(
+	routed: Map<string, { coords: Coord[]; lengthKm: number; stations: Station[] }>,
+	arcep: Map<string, OpLevels>
+): Promise<number> {
+	const NONE: OpLevels = { orange: 'none', sfr: 'none', free: 'none', bouygues: 'none' };
+	const meta = new Map(RAIL_LINES.map((l) => [l.slug, l]));
+	await rm(PROFILES_DIR, { recursive: true, force: true });
+	await mkdir(PROFILES_DIR, { recursive: true });
+	let written = 0;
+
+	for (const [slug, entry] of routed) {
+		let { coords, stations } = entry;
+		const { lengthKm } = entry;
+		if (coords.length < 2) continue;
+
+		// Oriente la frise de `from` → `to` (le libellé de ligne). L'ordre GTFS peut
+		// être inverse (ex. itinéraire Lyon→Paris pour la ligne « Paris – Lyon ») :
+		// on compare le slug des gares terminales aux villes from/to et on inverse
+		// le tracé au besoin, pour que la distance croisse depuis la gare de départ.
+		const m0 = meta.get(slug);
+		if (m0 && stations.length >= 2) {
+			const first = slugifyLine(stations[0].name);
+			const fromC = slugifyLine(m0.from);
+			const toC = slugifyLine(m0.to);
+			const startIsTo = toC.length > 0 && first.includes(toC);
+			const startIsFrom = fromC.length > 0 && first.includes(fromC);
+			if (startIsTo && !startIsFrom) {
+				coords = [...coords].reverse();
+				stations = [...stations].reverse();
+			}
+		}
+
+		const fine = sampleWithDist(coords, STEP_KM);
+
+		// Segments ARCEP : fusion des points consécutifs de mêmes niveaux d'opérateur.
+		type Seg = { fromKm: number } & OpLevels & { best: Level };
+		const segs: Seg[] = [];
+		const key = (l: OpLevels) => `${l.orange}|${l.sfr}|${l.free}|${l.bouygues}`;
+		let prevKey = '';
+		for (const pt of fine) {
+			const lv = arcep.get(latLngToCell(pt.lat, pt.lng, ARCEP_RES)) ?? NONE;
+			const k = key(lv);
+			if (k !== prevKey) {
+				segs.push({ fromKm: round(pt.distKm), ...lv, best: bestLevel(lv) });
+				prevKey = k;
+			}
+		}
+		// Borne `toKm` de chaque segment = début du suivant (dernier = longueur totale).
+		const arcepSegs = segs.map((s, i) => ({
+			fromKm: s.fromKm,
+			toKm: round(i + 1 < segs.length ? segs[i + 1].fromKm : lengthKm),
+			orange: s.orange,
+			sfr: s.sfr,
+			free: s.free,
+			bouygues: s.bouygues,
+			best: s.best
+		}));
+
+		// Gares ordonnées + distance cumulée (gares hors tracé écartées).
+		const stationsOut: { name: string; distKm: number }[] = [];
+		for (const s of stations) {
+			const d = projectStation(s, fine);
+			if (d !== null && s.name) stationsOut.push({ name: s.name, distKm: round(d, 2) });
+		}
+		stationsOut.sort((a, b) => a.distKm - b.distKm);
+
+		// Polyligne simplifiée [lng, lat, distKm] pour situer mesures/coupures.
+		const path = sampleWithDist(coords, PATH_STEP_KM).map(
+			(p) => [round(p.lng, 5), round(p.lat, 5), round(p.distKm, 2)] as [number, number, number]
+		);
+
+		const m = meta.get(slug);
+		const profile = {
+			slug,
+			name: m?.name ?? slug,
+			from: m?.from ?? stationsOut[0]?.name ?? '',
+			to: m?.to ?? stationsOut[stationsOut.length - 1]?.name ?? '',
+			lengthKm: round(lengthKm, 1),
+			stations: stationsOut,
+			arcep: arcepSegs,
+			path
+		};
+		await writeFile(join(PROFILES_DIR, `${slug}.json`), JSON.stringify(profile) + '\n');
+		written++;
+	}
+	return written;
+}
+
 // --- main -------------------------------------------------------------------
 
 async function main() {
@@ -401,18 +601,25 @@ async function main() {
 	// revendiquée par plusieurs lignes ; on conserve toutes les revendications.
 	const claims = new Map<string, Map<string, number>>();
 	const perSlug = new Map<string, number>();
+	// Tracés routés conservés pour générer les profils de trajet (frise B1) sans
+	// rejouer le routage (Dijkstra) une seconde fois.
+	const routed = new Map<string, { coords: Coord[]; lengthKm: number; stations: Station[] }>();
 	let totalFallbacks = 0;
 	const debug = process.env.DEBUG_LINE_INDEX === '1';
 	const diag: { slug: string; stops: number; len: number; cells: number; fb: number }[] = [];
 
 	for (const [slug, sts] of [...stations].sort((a, b) => a[0].localeCompare(b[0]))) {
-		const { coords, lengthKm, fallbacks } = routeLine(graph, sts);
+		const { coords, lengthKm, fallbacks } = routeLine(
+			graph,
+			sts.map((s) => s.coord)
+		);
 		totalFallbacks += fallbacks;
 		if (coords.length < 2) {
 			perSlug.set(slug, 0);
 			if (debug) diag.push({ slug, stops: sts.length, len: 0, cells: 0, fb: fallbacks });
 			continue;
 		}
+		routed.set(slug, { coords, lengthKm, stations: sts });
 		const cells = new Set<string>();
 		for (const [lng, lat] of sampleLine(coords, STEP_KM))
 			cells.add(latLngToCell(lat, lng, H3_RESOLUTION));
@@ -463,6 +670,12 @@ async function main() {
 	);
 	if (missing.length) console.log(`[line-index]   sans itinéraire GTFS : ${missing.join(', ')}`);
 	if (zero.length) console.log(`[line-index]   sans cellule : ${zero.join(', ')}`);
+
+	// Profils de trajet par ligne (frise « profil de trajet », handoff B1).
+	console.log('[line-index] 4/4 — profils de trajet (frise) + fond ARCEP…');
+	const arcep = await loadArcep();
+	const profiles = await writeRouteProfiles(routed, arcep);
+	console.log(`[line-index] écrit ${profiles} profils dans ${PROFILES_DIR}/`);
 	console.log('[line-index] ✅');
 }
 
