@@ -17,11 +17,20 @@ export async function ingestMeasurement(m: NewMeasurement): Promise<void> {
 	await recomputeCell(m.cellId, m.operator ?? 'inconnu');
 }
 
+/** Médiane (haute) des valeurs non nulles d'une colonne ; null si aucune. */
+function median(values: Array<number | null>): number | null {
+	const nums = values.filter((v): v is number => v != null).sort((a, b) => a - b);
+	return nums.length ? nums[Math.floor(nums.length / 2)] : null;
+}
+
 async function recomputeCell(cellId: string, operator: Operator): Promise<void> {
 	const rows = await db
 		.select({
 			status: measurements.status,
 			rttMs: measurements.rttMs,
+			jitterMs: measurements.jitterMs,
+			loss: measurements.loss,
+			downlinkKbps: measurements.downlinkKbps,
 			lat: measurements.lat,
 			lng: measurements.lng
 		})
@@ -33,11 +42,10 @@ async function recomputeCell(cellId: string, operator: Operator): Promise<void> 
 	const samples = rows.length;
 	const okCount = rows.filter((r) => r.status === 'ok').length;
 	const successRate = okCount / samples;
-	const rtts = rows
-		.map((r) => r.rttMs)
-		.filter((v): v is number => v != null)
-		.sort((a, b) => a - b);
-	const medianRtt = rtts.length ? rtts[Math.floor(rtts.length / 2)] : null;
+	const medianRtt = median(rows.map((r) => r.rttMs));
+	const medianJitter = median(rows.map((r) => r.jitterMs));
+	const medianLoss = median(rows.map((r) => r.loss));
+	const medianDownlink = median(rows.map((r) => r.downlinkKbps));
 	const { lat, lng } = rows[0];
 	// `lineSlug` est une fonction déterministe de la cellule : on le dérive de
 	// l'index plutôt que de `rows[0]` (dont l'ordre n'est pas garanti). Reste
@@ -50,7 +58,19 @@ async function recomputeCell(cellId: string, operator: Operator): Promise<void> 
 		.where(and(eq(cellAggregates.cellId, cellId), eq(cellAggregates.operator, operator)))
 		.limit(1);
 
-	const values = { cellId, operator, lat, lng, samples, successRate, medianRtt, lineSlug };
+	const values = {
+		cellId,
+		operator,
+		lat,
+		lng,
+		samples,
+		successRate,
+		medianRtt,
+		medianJitter,
+		medianLoss,
+		medianDownlink,
+		lineSlug
+	};
 
 	if (existing.length) {
 		await db

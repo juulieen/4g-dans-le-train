@@ -9,7 +9,8 @@
  *
  * Conçu pour être piloté par l'UI Svelte via des callbacks d'état réactifs.
  */
-import { ping, type PingStatus } from './ping';
+import { pingBurst, type PingStatus } from './ping';
+import { measureDownlink } from './throughput';
 import { GeoTracker, type GeoSample } from './geolocation';
 import { ScreenWakeLock } from './wakeLock';
 import { readNetworkType } from './netinfo';
@@ -23,6 +24,12 @@ export interface LiveState {
 	running: boolean;
 	status: PingStatus | 'idle';
 	rttMs: number | null;
+	/** Gigue (ms) de la dernière rafale. null si <2 succès. */
+	jitterMs: number | null;
+	/** Taux de perte de la dernière rafale, 0..1. */
+	loss: number | null;
+	/** Débit descendant (kbps) de la dernière mesure de débit. null si non mesuré. */
+	downlinkKbps: number | null;
 	lat: number | null;
 	lng: number | null;
 	speedKmh: number | null;
@@ -44,12 +51,17 @@ export interface ControllerOptions {
 	operator: Operator;
 	onState: (s: LiveState) => void;
 	endpoint?: string;
+	/** Active la mesure de débit (opt-in : consomme la data mobile). Défaut false. */
+	measureThroughput?: boolean;
 }
 
 const initialState: LiveState = {
 	running: false,
 	status: 'idle',
 	rttMs: null,
+	jitterMs: null,
+	loss: null,
+	downlinkKbps: null,
 	lat: null,
 	lng: null,
 	speedKmh: null,
@@ -65,6 +77,10 @@ const initialState: LiveState = {
 
 /** Intervalle de tentative de vidage de la file (ms) tant que le mode tourne. */
 const FLUSH_INTERVAL_MS = 15_000;
+/** Mesure de débit 1 position sur N (parcimonie data). */
+const THROUGHPUT_EVERY_N = 5;
+/** Taille du blob de débit téléchargé (octets). */
+const PROBE_SIZE_BYTES = 128 * 1024;
 
 export class MeasurementController {
 	private geo = new GeoTracker();
@@ -80,6 +96,8 @@ export class MeasurementController {
 	/** Évite les vidages de file concurrents. */
 	private flushing = false;
 	private flushTimer: ReturnType<typeof setInterval> | null = null;
+	/** Compteur de positions échantillonnées, pour cadencer la mesure de débit. */
+	private sampleCount = 0;
 
 	constructor(opts: ControllerOptions) {
 		this.opts = opts;
@@ -93,6 +111,11 @@ export class MeasurementController {
 		this.opts.operator = operator;
 	}
 
+	/** Active/désactive la mesure de débit (opt-in). Modifiable même mode arrêté. */
+	setMeasureThroughput(on: boolean) {
+		this.opts.measureThroughput = on;
+	}
+
 	async start(): Promise<void> {
 		if (this.state.running) return;
 		if (!this.geo.isSupported) {
@@ -101,6 +124,7 @@ export class MeasurementController {
 		}
 		// On conserve la file existante (mesures d'une session précédente non envoyées).
 		this.detector.reset();
+		this.sampleCount = 0;
 		this.patch({ ...initialState, running: true, queued: this.queue.size });
 
 		const ok = this.geo.start(
@@ -177,10 +201,27 @@ export class MeasurementController {
 		});
 		if (this.busy) return;
 		this.busy = true;
+		this.sampleCount++;
 		try {
-			const { status, rttMs } = await ping(this.opts.endpoint);
+			// Rafale de pings → RTT médian + gigue + perte, puis verdict consolidé
+			// (robuste au bruit, vs un ping unique malchanceux).
+			const burst = await pingBurst(this.opts.endpoint);
+			const { status, jitterMs, loss } = burst;
+			const rttMs = burst.rttMedian;
 			const netType = readNetworkType();
-			this.patch({ status, rttMs, netType });
+			this.patch({ status, rttMs, jitterMs, loss, netType });
+
+			// Mesure de débit : opt-in + cadencée (1 position sur N). Séquentielle,
+			// dans le même verrou `busy` et APRÈS la rafale → pas de ping concurrent,
+			// ne bloque pas la rafale. Sinon downlinkKbps reste null.
+			let downlinkKbps: number | null = null;
+			if (this.opts.measureThroughput && this.sampleCount % THROUGHPUT_EVERY_N === 0) {
+				const t = await measureDownlink('/api/probe', PROBE_SIZE_BYTES);
+				downlinkKbps = t.downlinkKbps;
+				this.patch({ downlinkKbps });
+			} else {
+				this.patch({ downlinkKbps: null });
+			}
 
 			// Détection live des coupures (indépendante du consentement : c'est de
 			// l'affichage éphémère sur SA session, rien n'est envoyé d'ici).
@@ -206,6 +247,9 @@ export class MeasurementController {
 					lng: sample.lng,
 					status,
 					rttMs,
+					jitterMs,
+					loss,
+					downlinkKbps,
 					operator: this.opts.operator,
 					netType,
 					speedKmh: sample.speedKmh,

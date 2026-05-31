@@ -64,18 +64,38 @@ recolore les voies ARCEP **et** filtre les mesures communautaires. Il est
 
 - L'utilisateur active le **mode mesure** sur son téléphone (page ouverte,
   écran maintenu via Wake Lock).
-- À chaque position GPS, l'app fait un **ping actif** (petite requête réseau) →
-  succès/échec + latence (RTT). Méthode cross-navigateur (iOS inclus), contrairement
-  à `navigator.connection` non fiable. Le type de réseau (4g/5g) est un bonus
-  lu quand le navigateur l'expose.
-- État dérivé : `ok` (ça capte) / `degraded` (lent) / `none` (ça coupe).
+- À chaque position GPS, l'app fait une **petite rafale de pings** (4 requêtes HEAD
+  rapprochées vers `/api/ping`) plutôt qu'un ping unique : à 300 km/h un échantillon
+  isolé est trop bruité (un ping malchanceux fait basculer le verdict). De la rafale
+  on tire le **RTT médian**, la **gigue** (variabilité de la latence) et le **taux de
+  perte** (paquets sans réponse) — les vrais marqueurs d'une connexion instable en
+  train. Méthode cross-navigateur (iOS inclus, uniquement `fetch` + `performance.now()`),
+  contrairement à `navigator.connection` non fiable. Le type de réseau (4g/5g) est un
+  bonus lu quand le navigateur l'expose. Logique de calcul + verdict isolés dans un
+  module pur testable (`src/lib/measure/stats.ts`).
+- État dérivé : `ok` (ça capte) / `degraded` (lent) / `none` (ça coupe). Le verdict
+  est consolidé à partir de la rafale et **ancré sur le ressenti** : `degraded` si
+  RTT médian au-delà de 1500 ms, **ou** gigue au-delà de 200 ms (visio/streaming
+  saccadent), **ou** perte au-delà de 25 % (pages qui timeout) ; `none` si perte
+  totale. Seuils centralisés et configurables (`DEFAULT_BURST_THRESHOLDS`).
+- **Débit léger (opt-in)** : « ça répond au ping » ≠ « ça streame ». Si l'utilisateur
+  coche **« Mesurer aussi le débit »** (OFF par défaut — ça consomme sa data mobile),
+  l'app télécharge **1 position sur 5** un petit blob incompressible (~128 Ko) via
+  `GET /api/probe?size=…` (données aléatoires `crypto.getRandomValues`, `no-store`,
+  taille bornée 64–512 Ko serveur) et en déduit un **débit (kbps)**. Le débit est
+  traduit en **usage concret** (`src/lib/usage.ts`, source unique partagée avec la
+  carte) : streaming ≥ 2000 kbps, web ≥ 500, messages ≥ 100, sinon rien. L'endpoint
+  ne reçoit aucune donnée client (juste `size`) et ne logge rien → pas de
+  fingerprinting.
 - **Vie privée (non négociable)** : la position est **arrondie au centre de sa
   cellule H3 (~150 m)** AVANT envoi ; aucune donnée personnelle ; session =
   jeton anonyme jetable ; pas de trace continue ré-identifiable. Consentement
   explicite requis avant tout envoi.
 - **Agrégation** (`src/lib/server/ingest.ts`) : par cellule H3 × opérateur →
-  taux de réussite, latence médiane, nombre de mesures. Servi par
-  `GET /api/coverage`.
+  taux de réussite, latence médiane, **gigue médiane**, **perte médiane**, **débit
+  médian**, nombre de mesures. Servi par `GET /api/coverage`. Les médianes
+  qualité/débit sont **nullables** : les cellules historiques (ou sans mesure de
+  débit) restent valides, la médiane ignore les valeurs absentes.
 - **Rattachement à une ligne (snapping)** : à l'ingestion, la cellule H3 de la
   mesure est rattachée à sa **ligne commerciale** via un index pré-calculé
   (`src/lib/geo/line-snap.ts` → `line-index.json`, cf. `docs/DATA.md` § 3). Le

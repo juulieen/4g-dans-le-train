@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
+	import { USAGE_COLORS } from '$lib/usage';
 
 	let {
 		coverage = null,
@@ -36,13 +37,8 @@
 	let railTried = false;
 	let arcepTried = false;
 
-	// Couleurs par usage (niveau ARCEP → ce qu'on peut faire).
-	const USAGE_COLORS = {
-		TBC: '#22c55e', // vert — streaming vidéo / visio
-		BC: '#84cc16', // vert-clair — web, réseaux sociaux
-		CL: '#f59e0b', // orange — messages, navigation lente
-		none: '#ef4444' // rouge — zone blanche
-	};
+	// Couleurs par usage (niveau ARCEP → ce qu'on peut faire) — source unique
+	// partagée dans $lib/usage (réutilisée par le mode mesure).
 
 	/**
 	 * Fond de carte sobre, gratuit et sans clé API (raster CARTO), accordé au thème :

@@ -19,8 +19,14 @@ export const measurements = sqliteTable(
 		lng: real('lng').notNull(),
 		/** État de connectivité dérivé du ping actif. */
 		status: text('status', { enum: ['ok', 'degraded', 'none'] }).notNull(),
-		/** Latence aller-retour du ping en ms (null si timeout). */
+		/** Latence aller-retour du ping en ms (RTT médian de la rafale ; null si échec). */
 		rttMs: integer('rtt_ms'),
+		/** Gigue : variabilité de la latence sur la rafale, en ms (null si <2 succès). */
+		jitterMs: real('jitter_ms'),
+		/** Taux de perte de paquets de la rafale, 0..1 (null si non mesuré). */
+		loss: real('loss'),
+		/** Débit descendant estimé en kbps (null si non mesuré — débit opt-in/cadencé). */
+		downlinkKbps: integer('downlink_kbps'),
 		/** Opérateur déclaré par l'utilisateur. */
 		operator: text('operator', {
 			enum: ['orange', 'sfr', 'free', 'bouygues', 'autre', 'inconnu']
@@ -72,6 +78,12 @@ export const cellAggregates = sqliteTable(
 		/** Part de mesures avec status = 'ok' (0..1). */
 		successRate: real('success_rate').notNull().default(0),
 		medianRtt: integer('median_rtt'),
+		/** Gigue médiane de la cellule en ms (null si aucune mesure n'en porte). */
+		medianJitter: real('median_jitter'),
+		/** Perte médiane de la cellule, 0..1 (null si aucune mesure n'en porte). */
+		medianLoss: real('median_loss'),
+		/** Débit descendant médian en kbps (null si aucune mesure de débit). */
+		medianDownlink: integer('median_downlink'),
 		lineSlug: text('line_slug'),
 		lastSeen: integer('last_seen')
 			.notNull()
