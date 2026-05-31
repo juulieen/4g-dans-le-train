@@ -157,7 +157,6 @@ const REGION_TOKENS = new Set(
 	[
 		'LR',
 		'PACA',
-		'Paca',
 		'IS',
 		'IDF',
 		'Atlantique',

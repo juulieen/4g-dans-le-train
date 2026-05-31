@@ -178,13 +178,20 @@ class RailGraph {
 		this.adj[b].push({ to: a, w });
 	}
 
-	/** Sommets dans les buckets voisins d'une position. */
+	/**
+	 * Sommets candidats dans les buckets voisins d'une position. Fenêtre de ±2
+	 * buckets (et non ±1) car `cellDeg` est dimensionné en degrés de LATITUDE :
+	 * un degré de longitude vaut moins de km (~74 km à 48°N vs 111 km), donc
+	 * CONNECT_KM peut s'étendre sur ~1,5 bucket en est-ouest. ±2 garantit qu'aucune
+	 * paire à moins de CONNECT_KM n'est manquée (les fausses paires sont écartées
+	 * ensuite par le filtre `km()` réel dans fromRfn).
+	 */
 	private near(lng: number, lat: number): number[] {
 		const cx = Math.floor(lng / this.cellDeg);
 		const cy = Math.floor(lat / this.cellDeg);
 		const out: number[] = [];
-		for (let dx = -1; dx <= 1; dx++)
-			for (let dy = -1; dy <= 1; dy++) out.push(...(this.grid.get(`${cx + dx},${cy + dy}`) ?? []));
+		for (let dx = -2; dx <= 2; dx++)
+			for (let dy = -2; dy <= 2; dy++) out.push(...(this.grid.get(`${cx + dx},${cy + dy}`) ?? []));
 		return out;
 	}
 
