@@ -113,6 +113,29 @@
 		none: 'Pas de réseau ❌'
 	};
 
+	// Total « points enregistrés » : envoyés + en file (hors-ligne) + bufferisés (trou
+	// GPS). Ne décroît jamais → compteur rassurant qui monte en continu, même hors
+	// réseau et sous un tunnel. Évite aussi le clignotement de l'ancien « 1 en attente ».
+	const captured = $derived((live?.sent ?? 0) + (live?.queued ?? 0) + (live?.buffered ?? 0));
+
+	// Ligne d'état de synchro, toujours rendue (hauteur réservée → pas de saut d'UI).
+	// Le texte change selon l'état ; le but est de rassurer : rien n'est perdu.
+	const syncInfo = $derived.by(() => {
+		if (!live?.running) return { cls: 'idle', text: '' };
+		const b = live.buffered ?? 0;
+		if (b > 0)
+			return {
+				cls: 'buffering',
+				text: `📍 ${b} point${b > 1 ? 's' : ''} capturé${b > 1 ? 's' : ''} sans GPS — position recalée au retour du signal`
+			};
+		if (live.queued > 0)
+			return {
+				cls: 'pending',
+				text: `⏳ ${live.queued} point${live.queued > 1 ? 's' : ''} gardé${live.queued > 1 ? 's' : ''} hors-ligne — envoi au retour du réseau`
+			};
+		return { cls: 'synced', text: '✓ Tout est synchronisé' };
+	});
+
 	/** Durée lisible : « 25 s », « 1 min 40 s », « 3 min ». */
 	function formatDuree(s: number): string {
 		const sec = Math.round(s);
@@ -333,7 +356,20 @@
 
 				{#if live?.running}
 					<div class="live">
-						<div class="big {live.status}">{statusLabel[live.status] ?? live.status}</div>
+						<div class="big {live.status}">
+							<span class="rec" aria-hidden="true"></span>
+							{statusLabel[live.status] ?? live.status}
+						</div>
+
+						<div class="captured" aria-live="polite">
+							<span class="count">{captured}</span>
+							<span class="unit"
+								>point{captured > 1 ? 's' : ''} enregistré{captured > 1 ? 's' : ''}</span
+							>
+						</div>
+						<!-- Toujours rendue (hauteur réservée) → pas de saut de mise en page. -->
+						<p class="sync {syncInfo.cls}">{syncInfo.text}</p>
+
 						<dl>
 							<div>
 								<dt>Latence</dt>
@@ -352,14 +388,6 @@
 								<dd>{live.netType ?? 'n/a'}</dd>
 							</div>
 							<div>
-								<dt>Mesures envoyées</dt>
-								<dd>{live.sent}</dd>
-							</div>
-							<div>
-								<dt>En attente d'envoi</dt>
-								<dd>{live.queued}</dd>
-							</div>
-							<div>
 								<dt>Coupures</dt>
 								<dd>{live.outages}</dd>
 							</div>
@@ -368,12 +396,6 @@
 								<dd>{live.wakeLockActive ? 'oui' : 'non'}</dd>
 							</div>
 						</dl>
-						{#if live.queued > 0}
-							<p class="queued-note">
-								{live.queued} mesure{live.queued > 1 ? 's' : ''} en attente — gardées hors-ligne et envoyées
-								dès le retour du réseau.
-							</p>
-						{/if}
 						{#if live.lastOutage}
 							<p class="queued-note">
 								Dernière coupure : <strong>{formatDuree(live.lastOutage.durationS)}</strong
@@ -611,6 +633,70 @@
 	}
 	.big.none {
 		color: var(--usage-none);
+	}
+	.big {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+	}
+	/* Pastille « enregistrement en cours » qui pulse — repère visuel d'activité. */
+	.rec {
+		width: 0.6rem;
+		height: 0.6rem;
+		border-radius: 50%;
+		background: currentColor;
+		animation: rec-pulse 1.4s ease-in-out infinite;
+	}
+	@keyframes rec-pulse {
+		0%,
+		100% {
+			opacity: 1;
+			transform: scale(1);
+		}
+		50% {
+			opacity: 0.35;
+			transform: scale(0.7);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.rec {
+			animation: none;
+		}
+	}
+	/* Compteur héro : « N points enregistrés ». Ne décroît jamais → rassurant. */
+	.captured {
+		display: flex;
+		align-items: baseline;
+		justify-content: center;
+		gap: 0.4rem;
+		margin-top: 0.6rem;
+	}
+	.captured .count {
+		font-size: 2rem;
+		font-weight: 800;
+		line-height: 1;
+		font-variant-numeric: tabular-nums;
+		color: var(--text);
+	}
+	.captured .unit {
+		font-size: var(--fs-sm);
+		color: var(--muted);
+	}
+	/* Ligne d'état de synchro : hauteur réservée pour éviter tout saut de mise en page. */
+	.sync {
+		min-height: 1.4em;
+		margin: 0.35rem 0 0;
+		text-align: center;
+		font-size: 0.78rem;
+		color: var(--muted);
+		transition: color 0.2s;
+	}
+	.sync.synced {
+		color: var(--usage-tbc);
+	}
+	.sync.buffering {
+		color: var(--usage-cl);
 	}
 	dl {
 		display: grid;

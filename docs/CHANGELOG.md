@@ -5,6 +5,15 @@
 
 ## 2026-06-01
 
+- **Mesure — capture découplée de la synchro + retour visuel (suite)** : la capture
+  d'un point ne dépend plus de l'envoi réseau. Le verrou `busy` ne couvre que le ping
+  (plus le `flush`, désormais en tâche de fond), et une position arrivée pendant un ping
+  n'est plus perdue (coalescing du dernier échantillon). Côté UI (panneau mesure) :
+  un **compteur « N points enregistrés »** qui ne décroît jamais (envoyés + en file +
+  bufferisés trou GPS), une **ligne d'état de synchro à hauteur fixe** (fini le « 1 en
+  attente » qui clignote et fait sauter l'UI), une **pastille d'activité** qui pulse, et
+  un message rassurant hors-ligne (« gardés, envoi au retour du réseau »). Nouveau champ
+  `LiveState.buffered`. _Non encore mergé sur `main`._
 - **Mesure même sans GPS — interpolation « depuis les rails » (branche
   `worktree-mesure-sans-gps`)** : le mode mesure était piloté par les positions GPS,
   donc **aveugle dès que le GPS décrochait** — tunnels (donnée pourtant la plus utile)

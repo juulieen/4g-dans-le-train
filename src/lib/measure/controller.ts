@@ -33,6 +33,8 @@ export interface LiveState {
 	sent: number;
 	/** Mesures en attente d'envoi (hors-ligne / tunnel). */
 	queued: number;
+	/** Pings capturés sans position (trou GPS), en attente de recalage sur le tracé. */
+	buffered: number;
 	/** Nombre de coupures réseau détectées pendant la session (live, éphémère). */
 	outages: number;
 	/** Dernière coupure clôturée, pour le retour « coupure de 1 min 40 s ». */
@@ -58,6 +60,7 @@ const initialState: LiveState = {
 	netType: null,
 	sent: 0,
 	queued: 0,
+	buffered: 0,
 	outages: 0,
 	lastOutage: null,
 	wakeLockActive: false,
@@ -115,6 +118,8 @@ export class MeasurementController {
 	private lastGpsAt = 0;
 	/** Dernier point GPS avant le trou en cours (point d'entrée à interpoler). */
 	private gapEntry: GeoSample | null = null;
+	/** Dernière position arrivée pendant un cycle de mesure (coalescée, jamais perdue). */
+	private pendingSample: GeoSample | null = null;
 	/** Pings capturés pendant le trou, en attente d'une position reconstruite. */
 	private gapBuffer: GapPing[] = [];
 	/** Slug de la ligne courante (renvoyé par l'API) et son tracé, pour interpoler. */
@@ -205,7 +210,7 @@ export class MeasurementController {
 		}
 		// Ultime tentative d'envoi de ce qui reste avant l'arrêt.
 		await this.flush();
-		this.patch({ running: false, status: 'idle', wakeLockActive: false });
+		this.patch({ running: false, status: 'idle', wakeLockActive: false, buffered: 0 });
 	}
 
 	private onOnline = () => void this.flush();
@@ -244,53 +249,72 @@ export class MeasurementController {
 		if (this.gapBuffer.length > 0 && this.gapEntry) {
 			this.commitGap(this.gapEntry, sample);
 			this.gapBuffer = [];
+			this.patch({ buffered: 0 });
 		}
 		this.gapEntry = sample;
 		this.lastGpsAt = sample.timestamp;
 
+		// Capture DÉCOUPLÉE de la synchro. On retient toujours la dernière position :
+		// si un cycle de mesure (ping) est déjà en cours, l'échantillon n'est PAS perdu
+		// — il sera traité juste après (coalescing : on garde le plus récent). Ainsi un
+		// ping lent ou un envoi qui traîne ne bloque jamais l'enregistrement des points.
+		this.pendingSample = sample;
 		if (this.busy) return;
 		this.busy = true;
 		try {
-			const { status, rttMs } = await ping(this.opts.endpoint);
-			const netType = readNetworkType();
-			this.patch({ status, rttMs, netType });
-
-			// Détection live des coupures (indépendante du consentement : c'est de
-			// l'affichage éphémère sur SA session, rien n'est envoyé d'ici).
-			const ep = this.detector.observe({
-				measuredAt: sample.timestamp,
-				status,
-				lat: sample.lat,
-				lng: sample.lng,
-				speedKmh: sample.speedKmh
-			});
-			if (ep) {
-				this.patch({
-					outages: this.state.outages + 1,
-					lastOutage: { durationS: ep.durationS, lengthM: ep.lengthM }
-				});
-			}
-
-			if (hasConsent()) {
-				// On ENFILE systématiquement (même « none »), puis on tente de vider.
-				// Ainsi les zones blanches — où l'envoi direct échouerait — sont gardées.
-				this.queue.enqueue({
-					lat: sample.lat,
-					lng: sample.lng,
-					status,
-					rttMs,
-					operator: this.opts.operator,
-					netType,
-					speedKmh: sample.speedKmh,
-					gpsAccuracy: sample.accuracy,
-					measuredAt: sample.timestamp,
-					sessionId: getSessionId()
-				});
-				this.patch({ queued: this.queue.size });
-				await this.flush();
+			while (this.pendingSample) {
+				const s = this.pendingSample;
+				this.pendingSample = null;
+				await this.measureOnce(s);
+				// Envoi en tâche de fond : ne bloque pas la capture du point suivant.
+				void this.flush();
 			}
 		} finally {
 			this.busy = false;
+		}
+	}
+
+	/**
+	 * Un cycle de mesure pour une position GPS : ping de connectivité, détection live
+	 * des coupures, et mise en file de la mesure (consentement requis). N'ENVOIE PAS —
+	 * la synchro (`flush`) est déclenchée séparément pour ne jamais bloquer la capture.
+	 */
+	private async measureOnce(sample: GeoSample): Promise<void> {
+		const { status, rttMs } = await ping(this.opts.endpoint);
+		const netType = readNetworkType();
+		this.patch({ status, rttMs, netType });
+
+		// Détection live des coupures (indépendante du consentement : affichage éphémère).
+		const ep = this.detector.observe({
+			measuredAt: sample.timestamp,
+			status,
+			lat: sample.lat,
+			lng: sample.lng,
+			speedKmh: sample.speedKmh
+		});
+		if (ep) {
+			this.patch({
+				outages: this.state.outages + 1,
+				lastOutage: { durationS: ep.durationS, lengthM: ep.lengthM }
+			});
+		}
+
+		if (hasConsent()) {
+			// On ENFILE systématiquement (même « none ») : les zones blanches, où l'envoi
+			// direct échouerait, sont ainsi gardées et rejouées plus tard.
+			this.queue.enqueue({
+				lat: sample.lat,
+				lng: sample.lng,
+				status,
+				rttMs,
+				operator: this.opts.operator,
+				netType,
+				speedKmh: sample.speedKmh,
+				gpsAccuracy: sample.accuracy,
+				measuredAt: sample.timestamp,
+				sessionId: getSessionId()
+			});
+			this.patch({ queued: this.queue.size });
 		}
 	}
 
@@ -331,6 +355,7 @@ export class MeasurementController {
 			// Bufferise pour rejeu ultérieur (consentement requis, comme le mode normal).
 			if (hasConsent() && this.gapBuffer.length < MAX_GAP_PINGS) {
 				this.gapBuffer.push({ measuredAt: now, status, rttMs, netType });
+				this.patch({ buffered: this.gapBuffer.length });
 			}
 		} finally {
 			this.busy = false;
