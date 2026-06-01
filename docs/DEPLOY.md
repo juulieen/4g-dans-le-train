@@ -3,6 +3,31 @@
 Auto-hébergement sur un serveur perso, sur le modèle des autres apps `*.juulieen.fr` :
 **Docker Compose** pour l'app + **Caddy** (reverse proxy + HTTPS Let's Encrypt) côté hôte.
 
+## Déploiement continu (automatique) — le cas normal
+
+**Tout push sur `main` déploie automatiquement en prod.** Le workflow
+`.github/workflows/deploy.yml` tourne sur un **runner self-hosted** (le serveur) et
+exécute, à chaque push sur `main` :
+
+```yaml
+- uses: actions/checkout@v4
+  with: { clean: false } # CRITIQUE : préserve ./data (base libSQL gitignorée)
+- run: docker compose up -d --build # build + (re)démarrage du conteneur
+- run: docker compose exec -T 4g-dans-le-train bun run scripts/migrate.ts # migrations APRÈS le build
+```
+
+Donc : **merger une PR dans `main` suffit** — le build, le redémarrage **et les
+migrations** (additives) sont appliqués sans intervention. Pas besoin de SSH pour une
+mise à jour. Suivre l'avancement : `gh run watch` ou l'onglet Actions du dépôt.
+
+> Toute migration doit rester **additive** (colonnes nullables, pas de `DROP`) : elle
+> s'applique automatiquement sur la base de prod en place, sans backup préalable.
+
+L'**installation initiale** ci-dessous (Caddy, DNS, runner, premier import de données)
+reste manuelle ; les mises à jour suivantes sont automatiques.
+
+## Installation initiale (une fois)
+
 ## Prérequis
 
 - Docker + Docker Compose sur le serveur.
@@ -63,9 +88,16 @@ Pour la couche ARCEP, voir [`DATA.md`](DATA.md).
 
 ## Mise à jour
 
+**Automatique** : un push (ou un merge de PR) sur `main` déclenche le workflow Deploy
+(build + migrations), cf. « Déploiement continu » en tête de document. Rien à lancer
+à la main.
+
+En **secours** (runner indisponible), le déploiement manuel équivalent reste :
+
 ```bash
 git pull
 docker compose up -d --build
+docker compose exec 4g-dans-le-train bun run scripts/migrate.ts
 ```
 
 La base reste intacte (bind-mount `./data`).
