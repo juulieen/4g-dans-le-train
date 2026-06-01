@@ -39,7 +39,7 @@
  *
  * Licence source : Licence Ouverte / Open Licence (Etalab).
  */
-import { mkdir, readFile, writeFile, readdir, rm } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { FeatureCollection, LineString, MultiLineString } from 'geojson';
 import { distance } from '@turf/turf';
@@ -47,13 +47,20 @@ import { latLngToCell } from 'h3-js';
 import { H3_RESOLUTION } from '../src/lib/geo/h3';
 import { RAIL_LINES, slugifyLine } from '../src/lib/geo/lines';
 import { bestLevel, toLevel, type Level, type UsageOp } from '../src/lib/usage';
-import { GTFS_SOURCES, download, unzipTo, readCsv, parseCommercialRoute } from './lib/gtfs';
+import { itinerariesBySlug, cityMatches, type Station } from './lib/gtfs';
+import { makeCityResolver } from './lib/troncons';
 
 // --- Paramètres -------------------------------------------------------------
 
-const TMP = '/tmp/sncf-gtfs-import';
 const RAIL_FILE = 'static/data/rail-lines.geojson';
 const OUT_FILE = 'src/lib/geo/line-index.json';
+/**
+ * Rattachement des tronçons à leur ligne parente : `{ <slug>: { parent, cells } }`.
+ * Sert aux API mesures à afficher, sur une page tronçon, les mesures de la portion
+ * correspondante de la parente (le tronçon n'est PAS dans line-index.json, pour ne
+ * pas détourner l'attribution primaire des mesures de la parente).
+ */
+const TRONCON_CELLS_FILE = 'src/lib/geo/troncon-cells.json';
 
 /** Couverture ARCEP par cellule H3 res 7 (source du fond théorique de la frise). */
 const ARCEP_FILE = 'static/data/arcep-coverage.geojson';
@@ -78,12 +85,6 @@ const DETOUR_SLACK_KM = 15;
 
 type Coord = [number, number]; // [lng, lat]
 
-/** Une gare de l'itinéraire : sa position et son nom (libellé GTFS). */
-interface Station {
-	coord: Coord;
-	name: string;
-}
-
 /**
  * Niveaux de couverture ARCEP par opérateur d'une cellule (`none` = zone blanche).
  * Les types et helpers d'usage (`Level`, `bestLevel`, `toLevel`) sont partagés avec
@@ -96,126 +97,63 @@ const km = (a: Coord, b: Coord) => distance(a, b, { units: 'kilometers' });
 // --- 1) GTFS : suite ordonnée des gares par slug ----------------------------
 
 /**
- * Vrai si le slug d'une gare correspond à une ville (slug du référentiel), par
- * **segment** et non sous-chaîne brute : « latour-de-carol-enveitg » matche
- * « latour-de-carol », mais « tourcoing » ne matche PAS « tours ». Évite les faux
- * positifs silencieux de scoring/orientation.
+ * Découpe un itinéraire entre les gares résolues vers les villes `fromSlug` /
+ * `toSlug`, orienté de from → to. Renvoie null si l'une des deux est absente.
+ * `cityOf` est le résolveur gare→ville PARTAGÉ avec la découverte des tronçons :
+ * un tronçon issu d'une course de sa parente est donc toujours redécoupable ici.
  */
-function cityMatches(stationSlug: string, citySlug: string): boolean {
-	if (!citySlug) return false;
-	return (
-		stationSlug === citySlug ||
-		stationSlug.startsWith(citySlug + '-') ||
-		stationSlug.endsWith('-' + citySlug) ||
-		stationSlug.includes('-' + citySlug + '-')
-	);
+function sliceItinerary(
+	stops: Station[],
+	fromSlug: string,
+	toSlug: string,
+	cityOf: (name: string) => { slug: string } | null
+): Station[] | null {
+	const iFrom = stops.findIndex((s) => cityOf(s.name)?.slug === fromSlug);
+	const iTo = stops.findIndex((s) => cityOf(s.name)?.slug === toSlug);
+	if (iFrom < 0 || iTo < 0 || iFrom === iTo) return null;
+	const [lo, hi] = iFrom < iTo ? [iFrom, iTo] : [iTo, iFrom];
+	let seg = stops.slice(lo, hi + 1);
+	if (iFrom > iTo) seg = seg.slice().reverse(); // oriente from → to
+	return seg.length >= 2 ? seg : null;
 }
 
 /**
- * Combien des deux terminus du référentiel (`from`/`to`) sont couverts par les
- * gares extrêmes d'un itinéraire (0, 1 ou 2). Sert à préférer un trajet qui va
- * VRAIMENT de la gare de départ à la gare d'arrivée, plutôt que le plus riche en
- * arrêts (qui peut dépasser le terminus ou bifurquer — ex. Paris–Saint-Brieuc
- * prolongé jusqu'à Saint-Malo).
+ * Itinéraires de gares par slug :
+ *  - `parents` : une entrée par ligne GTFS « réelle » (via `itinerariesBySlug`) —
+ *    alimente l'index spatial ET les profils ;
+ *  - `segments` : une entrée par tronçon (`segmentOf`), découpée depuis
+ *    l'itinéraire de sa ligne parente — alimente UNIQUEMENT les profils (jamais
+ *    l'index spatial des mesures, cf. CommercialLine.segmentOf). Le découpage
+ *    utilise le MÊME résolveur de ville que la découverte des tronçons.
  */
-function endpointScore(stops: Station[], from: string, to: string): number {
-	if (stops.length < 2) return 0;
-	const a = slugifyLine(stops[0].name);
-	const b = slugifyLine(stops[stops.length - 1].name);
-	const f = slugifyLine(from);
-	const t = slugifyLine(to);
-	const coversFrom = cityMatches(a, f) || cityMatches(b, f);
-	const coversTo = cityMatches(a, t) || cityMatches(b, t);
-	return (coversFrom ? 1 : 0) + (coversTo ? 1 : 0);
-}
+async function stationsBySlug(): Promise<{
+	parents: Map<string, Station[]>;
+	segments: Map<string, Station[]>;
+}> {
+	const parentLines = RAIL_LINES.filter((l) => !l.segmentOf);
+	const parents = await itinerariesBySlug(parentLines);
 
-/** Renvoie, par slug de ligne du référentiel, l'itinéraire de gares le plus pertinent. */
-async function stationsBySlug(): Promise<Map<string, Station[]>> {
-	const known = new Set(RAIL_LINES.map((l) => l.slug));
-	const meta = new Map(RAIL_LINES.map((l) => [l.slug, l]));
-	await mkdir(TMP, { recursive: true });
-	const best = new Map<string, Station[]>();
-
-	for (const src of GTFS_SOURCES) {
-		const name = src.url.split('/').pop() ?? 'gtfs.zip';
-		const archive = join(TMP, name);
-		console.log(`[line-index] GTFS ${src.url}`);
-		await download(src.url, archive);
-		const dir = await unzipTo(archive, join(TMP, name.replace(/\.zip$/, '')));
-		const files = await readdir(dir);
-		if (
-			!['routes.txt', 'trips.txt', 'stop_times.txt', 'stops.txt'].every((f) => files.includes(f))
-		) {
-			console.warn(`[line-index]   ⚠ fichiers GTFS manquants dans ${name}, source ignorée`);
+	const cityOf = makeCityResolver(parentLines);
+	const segments = new Map<string, Station[]>();
+	for (const l of RAIL_LINES) {
+		if (!l.segmentOf) continue;
+		const parent = parents.get(l.segmentOf);
+		if (!parent) {
+			console.warn(
+				`[line-index]   ⚠ tronçon ${l.slug} : parente « ${l.segmentOf} » sans itinéraire GTFS, ignoré`
+			);
 			continue;
 		}
-
-		// stops.txt : stop_id → [lng, lat] + nom de la gare
-		const coordOf = new Map<string, Coord>();
-		const nameOf = new Map<string, string>();
-		for (const s of await readCsv(join(dir, 'stops.txt'))) {
-			const lat = Number(s.stop_lat);
-			const lng = Number(s.stop_lon);
-			if (Number.isFinite(lat) && Number.isFinite(lng)) {
-				coordOf.set(s.stop_id, [lng, lat]);
-				if (s.stop_name) nameOf.set(s.stop_id, s.stop_name.trim());
-			}
+		const seg = sliceItinerary(parent, slugifyLine(l.from), slugifyLine(l.to), cityOf);
+		if (!seg) {
+			console.warn(
+				`[line-index]   ⚠ tronçon ${l.slug} : gares « ${l.from} »/« ${l.to} » introuvables dans « ${l.segmentOf} », ignoré`
+			);
+			continue;
 		}
-
-		// routes.txt : route_id → slug (uniquement les routes du référentiel)
-		const slugOfRoute = new Map<string, string>();
-		for (const r of await readCsv(join(dir, 'routes.txt'))) {
-			const rel = parseCommercialRoute((r.route_long_name ?? '').trim());
-			if (rel && known.has(rel.slug)) slugOfRoute.set(r.route_id, rel.slug);
-		}
-
-		// trips.txt : trip_id → slug
-		const slugOfTrip = new Map<string, string>();
-		for (const t of await readCsv(join(dir, 'trips.txt'))) {
-			const slug = slugOfRoute.get(t.route_id);
-			if (slug) slugOfTrip.set(t.trip_id, slug);
-		}
-
-		// stop_times.txt : course → arrêts ordonnés (uniquement les courses retenues)
-		const seqByTrip = new Map<string, { seq: number; stopId: string }[]>();
-		for (const st of await readCsv(join(dir, 'stop_times.txt'))) {
-			if (!slugOfTrip.has(st.trip_id)) continue;
-			const seq = Number(st.stop_sequence);
-			if (!Number.isFinite(seq)) continue;
-			let arr = seqByTrip.get(st.trip_id);
-			if (!arr) seqByTrip.set(st.trip_id, (arr = []));
-			arr.push({ seq, stopId: st.stop_id });
-		}
-
-		// Par course : gares ordonnées. On garde par slug le meilleur itinéraire :
-		// d'abord celui dont les terminus correspondent le mieux à `from`/`to` du
-		// référentiel, puis — à correspondance égale — le plus riche en arrêts.
-		for (const [tripId, stopsOfTrip] of seqByTrip) {
-			const slug = slugOfTrip.get(tripId)!;
-			const stops: Station[] = [];
-			let prev: Coord | null = null;
-			for (const { stopId } of stopsOfTrip.sort((a, b) => a.seq - b.seq)) {
-				const c = coordOf.get(stopId);
-				if (!c) continue;
-				if (prev && prev[0] === c[0] && prev[1] === c[1]) continue;
-				stops.push({ coord: c, name: nameOf.get(stopId) ?? '' });
-				prev = c;
-			}
-			if (stops.length < 2) continue;
-			const m = meta.get(slug);
-			const cur = best.get(slug);
-			if (!cur) {
-				best.set(slug, stops);
-			} else if (m) {
-				const sc = endpointScore(stops, m.from, m.to);
-				const scCur = endpointScore(cur, m.from, m.to);
-				if (sc > scCur || (sc === scCur && stops.length > cur.length)) best.set(slug, stops);
-			} else if (stops.length > cur.length) {
-				best.set(slug, stops);
-			}
-		}
+		segments.set(l.slug, seg);
 	}
-	return best;
+	return { parents, segments };
 }
 
 // --- 2) Graphe routable du réseau RFN « Exploitée » -------------------------
@@ -554,8 +492,12 @@ async function writeRouteProfiles(
 		// être inverse (ex. itinéraire Lyon→Paris pour la ligne « Paris – Lyon ») :
 		// on compare le slug des gares terminales aux villes from/to et on inverse
 		// le tracé au besoin, pour que la distance croisse depuis la gare de départ.
+		// Les tronçons sont DÉJÀ orientés from→to par `sliceItinerary` (via le
+		// résolveur de ville, robuste aux alias) : on saute cette ré-orientation, qui
+		// compare le nom BRUT de gare et produirait un warning bruyant sur les villes
+		// aliasées (« Saint-Pierre-des-Corps » ≠ Tours) sans rien corriger.
 		const m0 = meta.get(slug);
-		if (m0 && stations.length >= 2) {
+		if (m0 && !m0.segmentOf && stations.length >= 2) {
 			const first = slugifyLine(stations[0].name);
 			const last = slugifyLine(stations[stations.length - 1].name);
 			const fromC = slugifyLine(m0.from);
@@ -636,8 +578,11 @@ async function writeRouteProfiles(
 
 async function main() {
 	console.log('[line-index] 1/3 — itinéraires de gares (GTFS)…');
-	const stations = await stationsBySlug();
-	console.log(`[line-index]   ${stations.size}/${RAIL_LINES.length} lignes avec itinéraire`);
+	const { parents: stations, segments } = await stationsBySlug();
+	const parentCount = RAIL_LINES.filter((l) => !l.segmentOf).length;
+	console.log(
+		`[line-index]   ${stations.size}/${parentCount} lignes avec itinéraire ; ${segments.size} tronçons découpés`
+	);
 
 	console.log('[line-index] 2/3 — graphe routable du réseau RFN…');
 	const graph = await RailGraph.fromRfn();
@@ -680,6 +625,32 @@ async function main() {
 		if (debug)
 			diag.push({ slug, stops: sts.length, len: lengthKm, cells: cells.size, fb: fallbacks });
 	}
+
+	// Tronçons : routés à part, UNIQUEMENT pour leur profil + leur rattachement à
+	// la parente. Ils n'entrent PAS dans `claims` (index des mesures) → la parente
+	// reste le slug primaire des cellules partagées (cf. CommercialLine.segmentOf).
+	const segmentParent = new Map(
+		RAIL_LINES.filter((l) => l.segmentOf).map((l) => [l.slug, l.segmentOf!])
+	);
+	const tronconCells: Record<string, { parent: string; cells: string[] }> = {};
+	for (const [slug, sts] of [...segments].sort((a, b) => a[0].localeCompare(b[0]))) {
+		const { coords, lengthKm, fallbacks } = routeLine(
+			graph,
+			sts.map((s) => s.coord)
+		);
+		totalFallbacks += fallbacks;
+		if (coords.length < 2) {
+			console.warn(`[line-index]   ⚠ tronçon ${slug} non routable, profil ignoré`);
+			continue;
+		}
+		routed.set(slug, { coords, lengthKm, stations: sts });
+		const cells = new Set<string>();
+		for (const [lng, lat] of sampleLine(coords, STEP_KM))
+			cells.add(latLngToCell(lat, lng, H3_RESOLUTION));
+		const parent = segmentParent.get(slug);
+		if (parent) tronconCells[slug] = { parent, cells: [...cells].sort() };
+	}
+
 	if (debug) {
 		console.log('[line-index] DIAG (slug | gares | longueur km | cellules routées | replis)');
 		for (const d of diag.sort((a, b) => a.len - b.len))
@@ -705,15 +676,21 @@ async function main() {
 		if (ordered.length > 1) multi++;
 	}
 	await writeFile(OUT_FILE, JSON.stringify({ slugs: slugList, cells }) + '\n');
+	await writeFile(TRONCON_CELLS_FILE, JSON.stringify(tronconCells) + '\n');
 
 	const total = Object.keys(cells).length;
 	console.log(
 		`[line-index] écrit ${OUT_FILE} : ${total} cellules rattachées (${multi} sur tronc commun)`
 	);
-	const missing = RAIL_LINES.filter((l) => !stations.has(l.slug)).map((l) => l.slug);
+	console.log(
+		`[line-index] écrit ${TRONCON_CELLS_FILE} : ${Object.keys(tronconCells).length} tronçons rattachés à leur parente`
+	);
+	const missing = RAIL_LINES.filter((l) => !l.segmentOf && !stations.has(l.slug)).map(
+		(l) => l.slug
+	);
 	const zero = [...stations.keys()].filter((s) => !(perSlug.get(s) ?? 0));
 	console.log(
-		`[line-index] ${stations.size}/${RAIL_LINES.length} lignes routées ; ` +
+		`[line-index] ${stations.size}/${parentCount} lignes routées ; ` +
 			`${missing.length} sans itinéraire GTFS ; ${zero.length} sans cellule ; ${totalFallbacks} segments en repli corde`
 	);
 	if (missing.length) console.log(`[line-index]   sans itinéraire GTFS : ${missing.join(', ')}`);

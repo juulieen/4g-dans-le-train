@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import { cellAggregates } from '$lib/server/db/schema';
+import { resolveLineFilter } from '$geo/troncon-snap';
 import type { RequestHandler } from './$types';
 
 /**
@@ -10,22 +11,33 @@ import type { RequestHandler } from './$types';
  * et par ligne via ?line= (slug commercial, ex. paris-lyon) — ce dernier alimente
  * la couche « réel » de la frise « profil de trajet » et le bloc de comparaison
  * des pages SEO opérateur (CommunityComparison.svelte).
+ *
+ * Pour un slug de TRONÇON, on sert les mesures de sa ligne PARENTE restreintes aux
+ * cellules du tronçon (cf. resolveLineFilter) : la page tronçon montre ainsi les
+ * mesures de la portion correspondante.
  */
 export const GET: RequestHandler = async ({ url, setHeaders }) => {
 	const operator = url.searchParams.get('operator');
 	const line = url.searchParams.get('line');
+	const lineFilter = resolveLineFilter(line);
 
 	const filters = [
 		operator ? eq(cellAggregates.operator, operator) : undefined,
-		line ? eq(cellAggregates.lineSlug, line) : undefined
+		// Ligne normale : filtre SQL par `lineSlug`. Tronçon : on NE filtre PAS par
+		// `lineSlug` — le slug stocké est le PRIMAIRE de la cellule (ligne la plus
+		// locale du tronc commun), pas la parente du tronçon ; on filtre par les
+		// CELLULES de la portion (en mémoire ci-dessous), qui l'identifient exactement.
+		lineFilter && !lineFilter.cells ? eq(cellAggregates.lineSlug, lineFilter.lineSlug) : undefined
 	].filter((f) => f !== undefined);
 
-	const rows = filters.length
+	const allRows = filters.length
 		? await db
 				.select()
 				.from(cellAggregates)
 				.where(filters.length === 1 ? filters[0] : and(...filters))
 		: await db.select().from(cellAggregates);
+	// Tronçon : on ne garde que les cellules de la portion correspondante.
+	const rows = lineFilter?.cells ? allRows.filter((r) => lineFilter.cells!.has(r.cellId)) : allRows;
 
 	const features = rows.map((r) => ({
 		type: 'Feature' as const,

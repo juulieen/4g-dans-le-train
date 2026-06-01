@@ -3,6 +3,27 @@
 > Ajoute ici une entrée (date + résumé) pour toute évolution fonctionnelle ou de
 > contenu notable. Le plus récent en haut. Voir `../CLAUDE.md`.
 
+## 2026-06-01
+
+- **Trajets-tronçons générés depuis les données (branche `feat/trajets-troncons`)** :
+  des relations très cherchées comme **Bordeaux↔Toulouse** ou **Poitiers↔Bordeaux**
+  n'existaient pas, car le référentiel ne contient que les relations terminus→terminus
+  nommées dans le GTFS. On **découvre désormais automatiquement** des « tronçons »
+  (sous-relations ville↔ville) : `scripts/lib/troncons.ts` mesure la **hub-ness** de
+  chaque gare (nb de relations qui la desservent) et émet, pour chaque ligne, un
+  tronçon par paire de gares majeures (seuil `TRONCON_MIN_HUB`, défaut 3 ; ~54
+  tronçons). Garde-fous de nommage légers (alias gare→ville `saint-pierre-des-corps
+→ Tours`…, liste noire de nœuds TGV). Chaque tronçon est **bidirectionnel** (une
+  seule page « A ↔ B »), obtient une **frise ARCEP + stats** comme toute ligne, mais
+  **partage l'attribution des mesures de sa ligne parente** : `data:line-index` écrit
+  `src/lib/geo/troncon-cells.json` (`{ slug: { parent, cells } }`) et les API
+  `coverage`/`outages` servent, pour un tronçon, les mesures de la **portion**
+  correspondante de la parente (cf. `src/lib/geo/troncon-snap.ts`). Le tronçon **n'entre
+  pas** dans `line-index.json` (la parente reste le slug primaire des mesures). SEO :
+  stratégie « large + monitoring » — les tronçons **riches** (stats ARCEP fiables) sont
+  indexés, les **minces** (sans stats) et toutes les sous-pages opérateur × tronçon
+  sont en `noindex,follow` et exclus du `sitemap.xml`. Régénération : `bun run data:all`.
+
 ## 2026-05-31
 
 - **Pages SEO remplies de vraies données (branche `feat/seo-data`)** : les pages

@@ -15,6 +15,7 @@ import { db } from './db/client';
 import { measurements, type Measurement } from './db/schema';
 import { cellCenter } from '$geo/h3';
 import { lineSlugForCell } from '$geo/line-snap';
+import { resolveLineFilter } from '$geo/troncon-snap';
 import { detectOutages, type OutageSample } from '$lib/measure/outage';
 
 /** Opérateurs valides (doit suivre l'enum du schéma). */
@@ -57,6 +58,8 @@ export interface OutageMeasurementRow {
 interface AggregateOptions {
 	operator?: string | null;
 	lineSlug?: string | null;
+	/** Restreint aux cellules d'un tronçon (filtre de portion, cf. troncon-snap). */
+	cells?: Set<string>;
 }
 
 /** Médiane « haute » (élément central supérieur), cohérente avec recomputeCell. */
@@ -120,6 +123,7 @@ export function buildOutageAggregates(
 	for (const b of buckets.values()) {
 		const lineSlug = lineSlugForCell(b.cellStart);
 		if (opts.lineSlug && lineSlug !== opts.lineSlug) continue; // filtre ligne
+		if (opts.cells && !opts.cells.has(b.cellStart)) continue; // filtre portion (tronçon)
 		const { lat, lng } = cellCenter(b.cellStart);
 		result.push({
 			cellStart: b.cellStart,
@@ -171,5 +175,12 @@ export async function aggregateOutages(
 		...r,
 		measuredAt: r.measuredAt as number
 	}));
-	return buildOutageAggregates(typed, { lineSlug: opts.lineSlug });
+	// Tronçon : on filtre par les CELLULES de la portion (et NON par `lineSlug`, qui
+	// est le slug primaire de la cellule — pas la parente du tronçon sur un tronc
+	// commun). Ligne normale : filtre classique par `lineSlug`.
+	const lineFilter = resolveLineFilter(opts.lineSlug ?? null);
+	return buildOutageAggregates(
+		typed,
+		lineFilter?.cells ? { cells: lineFilter.cells } : { lineSlug: lineFilter?.lineSlug ?? null }
+	);
 }

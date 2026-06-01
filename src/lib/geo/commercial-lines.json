@@ -306,5 +306,437 @@
 		"service": "Intercités",
 		"from": "Toulouse",
 		"to": "Hendaye"
+	},
+	{
+		"slug": "aix-en-provence-lyon",
+		"name": "Aix-en-Provence – Lyon",
+		"service": "TGV INOUI",
+		"from": "Aix-en-Provence",
+		"to": "Lyon",
+		"segmentOf": "paris-marseille"
+	},
+	{
+		"slug": "aix-en-provence-paris",
+		"name": "Aix-en-Provence – Paris",
+		"service": "TGV INOUI",
+		"from": "Aix-en-Provence",
+		"to": "Paris",
+		"segmentOf": "paris-toulon"
+	},
+	{
+		"slug": "angers-lyon",
+		"name": "Angers – Lyon",
+		"service": "Intercités",
+		"from": "Angers",
+		"to": "Lyon",
+		"segmentOf": "nantes-lyon"
+	},
+	{
+		"slug": "angers-nantes",
+		"name": "Angers – Nantes",
+		"service": "TGV INOUI",
+		"from": "Angers",
+		"to": "Nantes",
+		"segmentOf": "paris-nantes"
+	},
+	{
+		"slug": "angers-paris",
+		"name": "Angers – Paris",
+		"service": "TGV INOUI",
+		"from": "Angers",
+		"to": "Paris",
+		"segmentOf": "paris-nantes"
+	},
+	{
+		"slug": "angers-tours",
+		"name": "Angers – Tours",
+		"service": "TGV INOUI",
+		"from": "Angers",
+		"to": "Tours",
+		"segmentOf": "paris-nantes"
+	},
+	{
+		"slug": "angers-vierzon",
+		"name": "Angers – Vierzon",
+		"service": "Intercités",
+		"from": "Angers",
+		"to": "Vierzon",
+		"segmentOf": "nantes-lyon"
+	},
+	{
+		"slug": "angouleme-bordeaux",
+		"name": "Angoulême – Bordeaux",
+		"service": "TGV INOUI",
+		"from": "Angoulême",
+		"to": "Bordeaux",
+		"segmentOf": "paris-arcachon"
+	},
+	{
+		"slug": "angouleme-lille",
+		"name": "Angoulême – Lille",
+		"service": "TGV INOUI",
+		"from": "Angoulême",
+		"to": "Lille",
+		"segmentOf": "bordeaux-lille"
+	},
+	{
+		"slug": "angouleme-paris",
+		"name": "Angoulême – Paris",
+		"service": "TGV INOUI",
+		"from": "Angoulême",
+		"to": "Paris",
+		"segmentOf": "paris-arcachon"
+	},
+	{
+		"slug": "angouleme-poitiers",
+		"name": "Angoulême – Poitiers",
+		"service": "TGV INOUI",
+		"from": "Angoulême",
+		"to": "Poitiers",
+		"segmentOf": "paris-bordeaux"
+	},
+	{
+		"slug": "angouleme-tours",
+		"name": "Angoulême – Tours",
+		"service": "TGV INOUI",
+		"from": "Angoulême",
+		"to": "Tours",
+		"segmentOf": "paris-bordeaux"
+	},
+	{
+		"slug": "argenton-sur-creuse-brive",
+		"name": "Argenton-sur-Creuse – Brive",
+		"service": "TGV INOUI / Intercités",
+		"from": "Argenton-sur-Creuse",
+		"to": "Brive",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "argenton-sur-creuse-chateauroux",
+		"name": "Argenton-sur-Creuse – Châteauroux",
+		"service": "TGV INOUI / Intercités",
+		"from": "Argenton-sur-Creuse",
+		"to": "Châteauroux",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "argenton-sur-creuse-la-souterraine",
+		"name": "Argenton-sur-Creuse – La Souterraine",
+		"service": "TGV INOUI / Intercités",
+		"from": "Argenton-sur-Creuse",
+		"to": "La Souterraine",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "argenton-sur-creuse-limoges",
+		"name": "Argenton-sur-Creuse – Limoges",
+		"service": "TGV INOUI / Intercités",
+		"from": "Argenton-sur-Creuse",
+		"to": "Limoges",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "argenton-sur-creuse-paris",
+		"name": "Argenton-sur-Creuse – Paris",
+		"service": "TGV INOUI / Intercités",
+		"from": "Argenton-sur-Creuse",
+		"to": "Paris",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "argenton-sur-creuse-toulouse",
+		"name": "Argenton-sur-Creuse – Toulouse",
+		"service": "TGV INOUI / Intercités",
+		"from": "Argenton-sur-Creuse",
+		"to": "Toulouse",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "argenton-sur-creuse-vierzon",
+		"name": "Argenton-sur-Creuse – Vierzon",
+		"service": "TGV INOUI / Intercités",
+		"from": "Argenton-sur-Creuse",
+		"to": "Vierzon",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "arras-lille",
+		"name": "Arras – Lille",
+		"service": "TGV INOUI",
+		"from": "Arras",
+		"to": "Lille",
+		"segmentOf": "paris-tourcoing"
+	},
+	{
+		"slug": "arras-paris",
+		"name": "Arras – Paris",
+		"service": "TGV INOUI",
+		"from": "Arras",
+		"to": "Paris",
+		"segmentOf": "paris-valenciennes"
+	},
+	{
+		"slug": "bordeaux-poitiers",
+		"name": "Bordeaux – Poitiers",
+		"service": "TGV INOUI",
+		"from": "Bordeaux",
+		"to": "Poitiers",
+		"segmentOf": "paris-bordeaux"
+	},
+	{
+		"slug": "bordeaux-toulouse",
+		"name": "Bordeaux – Toulouse",
+		"service": "Intercités",
+		"from": "Bordeaux",
+		"to": "Toulouse",
+		"segmentOf": "bordeaux-marseille"
+	},
+	{
+		"slug": "bordeaux-tours",
+		"name": "Bordeaux – Tours",
+		"service": "TGV INOUI",
+		"from": "Bordeaux",
+		"to": "Tours",
+		"segmentOf": "paris-bordeaux"
+	},
+	{
+		"slug": "brive-chateauroux",
+		"name": "Brive – Châteauroux",
+		"service": "TGV INOUI / Intercités",
+		"from": "Brive",
+		"to": "Châteauroux",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "brive-la-souterraine",
+		"name": "Brive – La Souterraine",
+		"service": "TGV INOUI / Intercités",
+		"from": "Brive",
+		"to": "La Souterraine",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "brive-limoges",
+		"name": "Brive – Limoges",
+		"service": "TGV INOUI / Intercités",
+		"from": "Brive",
+		"to": "Limoges",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "brive-toulouse",
+		"name": "Brive – Toulouse",
+		"service": "TGV INOUI / Intercités",
+		"from": "Brive",
+		"to": "Toulouse",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "brive-vierzon",
+		"name": "Brive – Vierzon",
+		"service": "TGV INOUI / Intercités",
+		"from": "Brive",
+		"to": "Vierzon",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "chateauroux-la-souterraine",
+		"name": "Châteauroux – La Souterraine",
+		"service": "TGV INOUI / Intercités",
+		"from": "Châteauroux",
+		"to": "La Souterraine",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "chateauroux-limoges",
+		"name": "Châteauroux – Limoges",
+		"service": "TGV INOUI / Intercités",
+		"from": "Châteauroux",
+		"to": "Limoges",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "chateauroux-paris",
+		"name": "Châteauroux – Paris",
+		"service": "TGV INOUI / Intercités",
+		"from": "Châteauroux",
+		"to": "Paris",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "chateauroux-toulouse",
+		"name": "Châteauroux – Toulouse",
+		"service": "TGV INOUI / Intercités",
+		"from": "Châteauroux",
+		"to": "Toulouse",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "chateauroux-vierzon",
+		"name": "Châteauroux – Vierzon",
+		"service": "TGV INOUI / Intercités",
+		"from": "Châteauroux",
+		"to": "Vierzon",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "la-souterraine-limoges",
+		"name": "La Souterraine – Limoges",
+		"service": "TGV INOUI / Intercités",
+		"from": "La Souterraine",
+		"to": "Limoges",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "la-souterraine-paris",
+		"name": "La Souterraine – Paris",
+		"service": "TGV INOUI / Intercités",
+		"from": "La Souterraine",
+		"to": "Paris",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "la-souterraine-toulouse",
+		"name": "La Souterraine – Toulouse",
+		"service": "TGV INOUI / Intercités",
+		"from": "La Souterraine",
+		"to": "Toulouse",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "la-souterraine-vierzon",
+		"name": "La Souterraine – Vierzon",
+		"service": "TGV INOUI / Intercités",
+		"from": "La Souterraine",
+		"to": "Vierzon",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "laval-paris",
+		"name": "Laval – Paris",
+		"service": "TGV INOUI",
+		"from": "Laval",
+		"to": "Paris",
+		"segmentOf": "paris-quimper"
+	},
+	{
+		"slug": "laval-rennes",
+		"name": "Laval – Rennes",
+		"service": "TGV INOUI",
+		"from": "Laval",
+		"to": "Rennes",
+		"segmentOf": "paris-quimper"
+	},
+	{
+		"slug": "lille-poitiers",
+		"name": "Lille – Poitiers",
+		"service": "TGV INOUI",
+		"from": "Lille",
+		"to": "Poitiers",
+		"segmentOf": "bordeaux-lille"
+	},
+	{
+		"slug": "lille-tours",
+		"name": "Lille – Tours",
+		"service": "TGV INOUI",
+		"from": "Lille",
+		"to": "Tours",
+		"segmentOf": "bordeaux-lille"
+	},
+	{
+		"slug": "limoges-paris",
+		"name": "Limoges – Paris",
+		"service": "TGV INOUI / Intercités",
+		"from": "Limoges",
+		"to": "Paris",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "limoges-toulouse",
+		"name": "Limoges – Toulouse",
+		"service": "TGV INOUI / Intercités",
+		"from": "Limoges",
+		"to": "Toulouse",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "limoges-vierzon",
+		"name": "Limoges – Vierzon",
+		"service": "TGV INOUI / Intercités",
+		"from": "Limoges",
+		"to": "Vierzon",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "lyon-tours",
+		"name": "Lyon – Tours",
+		"service": "Intercités",
+		"from": "Lyon",
+		"to": "Tours",
+		"segmentOf": "nantes-lyon"
+	},
+	{
+		"slug": "lyon-vierzon",
+		"name": "Lyon – Vierzon",
+		"service": "Intercités",
+		"from": "Lyon",
+		"to": "Vierzon",
+		"segmentOf": "nantes-lyon"
+	},
+	{
+		"slug": "nantes-tours",
+		"name": "Nantes – Tours",
+		"service": "TGV INOUI",
+		"from": "Nantes",
+		"to": "Tours",
+		"segmentOf": "paris-nantes"
+	},
+	{
+		"slug": "nantes-vierzon",
+		"name": "Nantes – Vierzon",
+		"service": "Intercités",
+		"from": "Nantes",
+		"to": "Vierzon",
+		"segmentOf": "nantes-lyon"
+	},
+	{
+		"slug": "paris-poitiers",
+		"name": "Paris – Poitiers",
+		"service": "TGV INOUI",
+		"from": "Paris",
+		"to": "Poitiers",
+		"segmentOf": "paris-la-rochelle"
+	},
+	{
+		"slug": "paris-vierzon",
+		"name": "Paris – Vierzon",
+		"service": "TGV INOUI / Intercités",
+		"from": "Paris",
+		"to": "Vierzon",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "poitiers-tours",
+		"name": "Poitiers – Tours",
+		"service": "TGV INOUI",
+		"from": "Poitiers",
+		"to": "Tours",
+		"segmentOf": "paris-la-rochelle"
+	},
+	{
+		"slug": "toulouse-vierzon",
+		"name": "Toulouse – Vierzon",
+		"service": "TGV INOUI / Intercités",
+		"from": "Toulouse",
+		"to": "Vierzon",
+		"segmentOf": "paris-toulouse"
+	},
+	{
+		"slug": "tours-vierzon",
+		"name": "Tours – Vierzon",
+		"service": "Intercités",
+		"from": "Tours",
+		"to": "Vierzon",
+		"segmentOf": "nantes-lyon"
 	}
 ]

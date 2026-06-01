@@ -7,3 +7,4 @@ bun.lock
 drizzle/meta
 src/lib/geo/line-index.json
 src/lib/geo/line-stats.json
+src/lib/geo/troncon-cells.json
