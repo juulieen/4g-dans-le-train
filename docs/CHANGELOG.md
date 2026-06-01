@@ -5,6 +5,13 @@
 
 ## 2026-06-01
 
+- **Mesure — débit : maîtrise de la consommation data** : la cadence du test de débit
+  passe d'« 1 mesure sur 5 » (≈ une probe de 128 Ko toutes les 5 s, ~90 Mo/h 😬) à un
+  **intervalle en temps de 60 s** (~7,5 Mo/h, ÷12). Ajout d'un **plafond dur
+  ~20 Mo/session** : au-delà, le débit se met **en pause** (les pings continuent), et
+  l'UI affiche les **Mo consommés** par le test en direct. Le statut réseau reste à 1/s
+  et indépendant du débit. _Non encore mergé sur `main`._
+
 - **Mesure — débit léger opt-in + cadence stable 1/s (branche `feat/debit-mesure`)** :
   refonte de la boucle de mesure autour d'un **tick maître à 1 s** qui pilote tout
   (un ping/s quoi qu'il arrive) ; `watchPosition` ne sert plus qu'à rafraîchir la

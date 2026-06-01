@@ -31,6 +31,10 @@ export interface LiveState {
 	rttMs: number | null;
 	/** Débit descendant (kbps) de la dernière mesure de débit. null si non mesuré. */
 	downlinkKbps: number | null;
+	/** Données consommées par les mesures de débit cette session (octets). */
+	dataUsedBytes: number;
+	/** Débit en pause car le plafond de données/session est atteint (pings continuent). */
+	throughputCapped: boolean;
 	lat: number | null;
 	lng: number | null;
 	speedKmh: number | null;
@@ -63,6 +67,8 @@ const initialState: LiveState = {
 	status: 'idle',
 	rttMs: null,
 	downlinkKbps: null,
+	dataUsedBytes: 0,
+	throughputCapped: false,
 	lat: null,
 	lng: null,
 	speedKmh: null,
@@ -81,10 +87,18 @@ const initialState: LiveState = {
 const FLUSH_INTERVAL_MS = 15_000;
 /** Cadence maître de la mesure (ms) — un ping par tick, quoi qu'il arrive. */
 const TICK_MS = 1_000;
-/** Mesure de débit 1 position sur N (parcimonie data). */
-const THROUGHPUT_EVERY_N = 5;
+/**
+ * Mesure de débit : parcimonie data (l'utilisateur paie sa data dans le train).
+ * Une mesure toutes les 60 s, blob de 128 Ko → ~7,5 Mo/h. 128 Ko (vs moins) garde
+ * une mesure fiable malgré le slow-start TCP ; 60 s suffit pour un indicateur de
+ * ZONE (le statut réseau, lui, reste à 1/s). Plafond dur par session : au-delà, le
+ * débit se met en pause (les pings continuent).
+ */
+const THROUGHPUT_INTERVAL_MS = 60_000;
 /** Taille du blob de débit téléchargé (octets). */
 const PROBE_SIZE_BYTES = 128 * 1024;
+/** Plafond de données/session pour le débit (octets) — ~20 Mo, soit ~2,5 h à 7,5 Mo/h. */
+const THROUGHPUT_CAP_BYTES = 20 * 1024 * 1024;
 
 /**
  * Interpolation « depuis les rails » pendant un trou GPS (tunnel, tranchée).
@@ -124,8 +138,10 @@ export class MeasurementController {
 	private flushTimer: ReturnType<typeof setInterval> | null = null;
 	/** Tick maître de la mesure (cadence stable). */
 	private tickTimer: ReturnType<typeof setInterval> | null = null;
-	/** Compteur de mesures GPS, pour cadencer la mesure de débit. */
-	private sampleCount = 0;
+	/** Époch ms de la dernière mesure de débit lancée (pour l'espacer dans le temps). */
+	private lastThroughputAt = 0;
+	/** Octets consommés par les mesures de débit cette session (pour le plafond). */
+	private throughputBytesUsed = 0;
 	/** Une mesure de débit est en cours (évite les chevauchements). */
 	private throughputInFlight = false;
 	/** Dernier débit mesuré, en attente d'être rattaché à un envoi (consume-once). */
@@ -181,7 +197,8 @@ export class MeasurementController {
 		this.lastGpsAt = 0;
 		this.currentSample = null;
 		// Réinitialise le suivi de débit (et invalide une mesure de débit en vol).
-		this.sampleCount = 0;
+		this.lastThroughputAt = 0;
+		this.throughputBytesUsed = 0;
 		this.pendingDownlinkKbps = null;
 		this.throughputInFlight = false;
 		this.generation++;
@@ -312,17 +329,19 @@ export class MeasurementController {
 
 			if (fresh && sample) {
 				// --- Mode normal : mesure positionnée ---
-				this.sampleCount++;
 
-				// Mesure de débit : opt-in + cadencée (1 mesure GPS sur N), UNIQUEMENT sur
-				// le chemin GPS (jamais en tunnel : pas de réseau, data gaspillée). Lancée
-				// HORS du tick (fire-and-forget) pour ne jamais retarder la cadence ; son
-				// résultat est affiché dès réception et rattaché au prochain envoi.
+				// Mesure de débit : opt-in, espacée dans le TEMPS (1/min), UNIQUEMENT sur le
+				// chemin GPS (jamais en tunnel : pas de réseau, data gaspillée) et tant que le
+				// plafond de données/session n'est pas atteint. Lancée HORS du tick
+				// (fire-and-forget) pour ne jamais retarder la cadence ; son résultat est
+				// affiché dès réception et rattaché au prochain envoi.
 				if (
 					this.opts.measureThroughput &&
 					!this.throughputInFlight &&
-					this.sampleCount % THROUGHPUT_EVERY_N === 0
+					this.throughputBytesUsed < THROUGHPUT_CAP_BYTES &&
+					now - this.lastThroughputAt >= THROUGHPUT_INTERVAL_MS
 				) {
+					this.lastThroughputAt = now;
 					this.measureThroughputDetached();
 				}
 
@@ -482,6 +501,13 @@ export class MeasurementController {
 		void measureDownlink('/api/probe', PROBE_SIZE_BYTES)
 			.then((t) => {
 				if (gen !== this.generation || !this.state.running) return;
+				// Comptabilise les octets réellement reçus (même si la mesure a échoué et
+				// que downlinkKbps est null, des octets ont pu transiter) → compteur honnête.
+				this.throughputBytesUsed += t.bytes;
+				this.patch({
+					dataUsedBytes: this.throughputBytesUsed,
+					throughputCapped: this.throughputBytesUsed >= THROUGHPUT_CAP_BYTES
+				});
 				if (t.downlinkKbps != null) {
 					this.pendingDownlinkKbps = t.downlinkKbps;
 					this.patch({ downlinkKbps: t.downlinkKbps });
