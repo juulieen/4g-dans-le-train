@@ -368,8 +368,17 @@
 						onchange={toggleThroughput}
 						disabled={live?.running}
 					/>
-					Mesurer aussi le débit <span class="data-warn">(consomme un peu de données)</span>
+					Mesurer aussi le débit
+					<span class="data-warn">(~7,5 Mo/h, plafonné à 20 Mo)</span>
 				</label>
+				{#if measureThroughput && live?.running}
+					<p class="data-used">
+						Données du test de débit : <strong
+							>{((live.dataUsedBytes ?? 0) / 1024 / 1024).toFixed(1)} Mo</strong
+						>{#if live.throughputCapped}
+							· plafond atteint, débit en pause{/if}
+					</p>
+				{/if}
 
 				<button class="cta" class:running={live?.running} onclick={toggleMeasure}>
 					{live?.running ? 'Arrêter la mesure' : 'Démarrer la mesure'}
@@ -779,6 +788,11 @@
 	.data-warn {
 		font-size: 0.72rem;
 		opacity: 0.8;
+	}
+	.data-used {
+		font-size: 0.72rem;
+		color: var(--muted);
+		margin: -0.4rem 0 0.75rem;
 	}
 	.usage-tag {
 		font-size: 0.7rem;

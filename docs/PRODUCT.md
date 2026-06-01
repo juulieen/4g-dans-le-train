@@ -139,7 +139,7 @@ Conventions produit :
 - État dérivé : `ok` (ça capte) / `degraded` (lent) / `none` (ça coupe).
 - **Débit léger (opt-in)** : « ça répond au ping » ≠ « ça streame ». Si l'utilisateur
   coche **« Mesurer aussi le débit »** (OFF par défaut — ça consomme sa data mobile),
-  l'app télécharge **1 mesure GPS sur 5** un petit blob incompressible (~128 Ko) via
+  l'app télécharge **toutes les 60 s** un petit blob incompressible (~128 Ko) via
   `GET /api/probe?size=…` (aléatoire pré-généré, `no-store`, taille bornée 64–512 Ko,
   pas de CORS, aucune donnée client) et en déduit un **débit (kbps)**. Le débit est
   **classé sur la même échelle ARCEP** que la couverture théorique (`src/lib/usage.ts`,
@@ -147,6 +147,11 @@ Conventions produit :
   mesuré et le théorique se lisent **au même code couleur** → l'écart se voit d'un
   coup d'œil. La mesure tourne **en tâche de fond** (jamais bloquante) et **jamais en
   tunnel/interpolation** (pas de réseau, data gaspillée).
+  - **Maîtrise de la data (l'utilisateur paie son forfait)** : cadence en **temps**
+    (1/min, pas « 1 tick sur N ») → **~7,5 Mo/h** ; **plafond dur ~20 Mo/session**
+    au-delà duquel le débit se met **en pause** (les pings, eux, continuent). L'UI
+    affiche les **Mo consommés** par le test en direct. Le statut réseau (ok/dégradé/
+    coupure) reste à 1/s et ne dépend pas du débit.
 - **Vie privée (non négociable)** : la position est **arrondie au centre de sa
   cellule H3 (~150 m)** AVANT envoi ; aucune donnée personnelle ; session =
   jeton anonyme jetable ; pas de trace continue ré-identifiable. Consentement
