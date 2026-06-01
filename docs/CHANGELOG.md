@@ -5,6 +5,23 @@
 
 ## 2026-06-01
 
+- **Mesure même sans GPS — interpolation « depuis les rails » (branche
+  `worktree-mesure-sans-gps`)** : le mode mesure était piloté par les positions GPS,
+  donc **aveugle dès que le GPS décrochait** — tunnels (donnée pourtant la plus utile)
+  et surtout **cold-start**, où le 1er fix peut mettre plusieurs minutes pendant
+  lesquelles on affichait « en attente » sans rien mesurer alors que le réseau est là.
+  Désormais un **tick de secours** (~5 s) pingue quand le GPS n'est pas frais et
+  bufferise ces mesures **sans position** ; à la reprise GPS **sur les rails de la même
+  ligne** (preuve qu'on n'a pas quitté le train), leur position est reconstruite le long
+  du tracé : **interpolée** entre deux fix (tunnel) ou **extrapolée en arrière** depuis
+  les deux premiers fix (cold-start). Garde-fous : entrée+sortie ≤ 1 km du tracé, trou
+  ≤ 5 min, sinon buffer jeté. Nouvelle primitive pure testée `src/lib/geo/interpolate.ts`
+  (`projectOntoPath` / `positionAtDist` / `reconstructAlongPath`), orchestration dans
+  `src/lib/measure/controller.ts`. Nouvelle colonne `measurements.pos_source`
+  (`gps`/`interpolated`, migration `0002`) — points interpolés agrégés comme les GPS pour
+  l'instant, distinction visuelle à venir. Bonus acquisition : le **1er fix réutilise une
+  position récente** du téléphone (`geolocation.ts`, `maximumAge` relâché) au lieu de la
+  jeter, ce qui tue l'attente au redémarrage. _Non encore mergé sur `main`._
 - **Trajets-tronçons générés depuis les données (branche `feat/trajets-troncons`)** :
   des relations très cherchées comme **Bordeaux↔Toulouse** ou **Poitiers↔Bordeaux**
   n'existaient pas, car le référentiel ne contient que les relations terminus→terminus

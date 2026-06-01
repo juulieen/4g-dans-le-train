@@ -114,6 +114,25 @@ Conventions produit :
   succès/échec + latence (RTT). Méthode cross-navigateur (iOS inclus), contrairement
   à `navigator.connection` non fiable. Le type de réseau (4g/5g) est un bonus
   lu quand le navigateur l'expose.
+- **Mesure même sans GPS (interpolation « depuis les rails »)** : le ping ne dépend
+  plus uniquement des positions GPS. Un **tick de secours** (`controller.ts`,
+  toutes les ~5 s) prend le relais quand le GPS n'est pas frais — en **tunnel** et
+  au **cold-start** (le 1er fix GPS peut mettre des minutes ; on ne reste plus « en
+  attente » sans rien mesurer). Ces pings sont **bufferisés sans position**, puis
+  placés **a posteriori** le long du tracé de la ligne (`static/data/route-profiles/`,
+  primitive `src/lib/geo/interpolate.ts`) :
+  - **tunnel** → position **interpolée** entre le dernier fix avant et le premier
+    après le trou ;
+  - **cold-start** → pings pré-fix **extrapolés en arrière** depuis les deux premiers
+    fixes (qui donnent le sens du trajet).
+  - **Garde-fous** : on ne place que si entrée **et** sortie collent au tracé (≤ 1 km,
+    preuve qu'on n'a pas quitté le train), trou ≤ 5 min, sinon le buffer est **jeté**.
+  - **Honnêteté** : ces points portent `measurements.pos_source = 'interpolated'`
+    (vs `'gps'`). En l'état ils sont **agrégés comme les mesures GPS** ; la colonne
+    permettra de les distinguer visuellement plus tard.
+  - Côté acquisition, le **premier fix** réutilise une position récente du téléphone
+    (`getCurrentPosition`, `maximumAge` relâché) au lieu de la jeter — décisif au
+    redémarrage d'une mesure.
 - État dérivé : `ok` (ça capte) / `degraded` (lent) / `none` (ça coupe).
 - **Vie privée (non négociable)** : la position est **arrondie au centre de sa
   cellule H3 (~150 m)** AVANT envoi ; aucune donnée personnelle ; session =

@@ -22,6 +22,8 @@ const MeasurementInput = z.object({
 	gpsAccuracy: z.number().nonnegative().nullable().optional(),
 	/** Instant réel de la mesure (époch ms) — sert à dériver les coupures. */
 	measuredAt: z.number().int().nonnegative().nullable().optional(),
+	/** Origine de la position : `gps` par défaut, `interpolated` si reconstruite sur le tracé. */
+	posSource: z.enum(['gps', 'interpolated']).default('gps'),
 	sessionId: z.string().uuid()
 });
 
@@ -65,6 +67,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		gpsAccuracy: m.gpsAccuracy ?? null,
 		lineSlug,
 		measuredAt: m.measuredAt ?? null,
+		posSource: m.posSource,
 		sessionId: m.sessionId
 	});
 

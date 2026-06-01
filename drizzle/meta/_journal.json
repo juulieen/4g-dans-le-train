@@ -15,6 +15,13 @@
       "when": 1780186800040,
       "tag": "0001_dapper_wong",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1780316766797,
+      "tag": "0002_material_wilson_fisk",
+      "breakpoints": true
     }
   ]
 }

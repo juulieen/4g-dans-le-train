@@ -28,6 +28,12 @@ export interface QueuedMeasurement {
 	 *  faussé par le rejeu hors-ligne (une mesure de tunnel arrive bien après sa capture). */
 	measuredAt: number;
 	sessionId: string;
+	/**
+	 * Origine de la position : `gps` (mesure normale) ou `interpolated` (position
+	 * reconstruite le long du tracé pendant un trou GPS, cf. controller.ts). Optionnel
+	 * et par défaut `gps` côté serveur — les mesures GPS n'ont pas besoin de le poser.
+	 */
+	posSource?: 'gps' | 'interpolated';
 }
 
 /** Sous-ensemble de l'API Storage dont on a besoin (web Storage compatible). */

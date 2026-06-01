@@ -1,0 +1,1 @@
+ALTER TABLE `measurements` ADD `pos_source` text DEFAULT 'gps' NOT NULL;

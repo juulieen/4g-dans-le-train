@@ -44,6 +44,15 @@ export const measurements = sqliteTable(
 		 * mesures antérieures à cette fonctionnalité n'en ont pas.
 		 */
 		measuredAt: integer('measured_at'),
+		/**
+		 * Origine de la position : `gps` (mesure GPS directe) ou `interpolated`
+		 * (position reconstruite le long du tracé pendant un trou GPS, cf.
+		 * src/lib/measure/controller.ts). Permet de distinguer plus tard ces points
+		 * sur la carte. Défaut `gps` → les mesures historiques restent cohérentes.
+		 */
+		posSource: text('pos_source', { enum: ['gps', 'interpolated'] })
+			.notNull()
+			.default('gps'),
 		createdAt: integer('created_at')
 			.notNull()
 			.default(sql`(unixepoch())`)
