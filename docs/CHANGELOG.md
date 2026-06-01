@@ -5,6 +5,20 @@
 
 ## 2026-06-01
 
+- **Mesure — débit léger opt-in + cadence stable 1/s (branche `feat/debit-mesure`)** :
+  refonte de la boucle de mesure autour d'un **tick maître à 1 s** qui pilote tout
+  (un ping/s quoi qu'il arrive) ; `watchPosition` ne sert plus qu'à rafraîchir la
+  position et refermer les trous GPS. Ce tick **unifie** le mode normal et le secours
+  tunnel/cold-start (interpolation « depuis les rails » conservée). Nouveau **débit
+  descendant opt-in** (OFF par défaut) : 1 mesure GPS sur 5, blob incompressible ~128 Ko
+  via le nouvel endpoint `GET /api/probe` (aléatoire pré-généré, `no-store`, sans CORS,
+  taille bornée), mesuré **en tâche de fond** et **jamais en tunnel**. Le débit est
+  **classé sur l'échelle ARCEP** (`levelFromKbps`, seuils 4000/1000/200 kbps) → réel et
+  théorique partagent le code couleur. Décision produit : on **abandonne le jitter et la
+  rafale** (jugés redondants avec l'agrégation par cellule) — la fiabilité reste portée
+  par `successRate` + `medianRtt`. Schéma : `downlink_kbps` (mesures) + `median_downlink`
+  (agrégats, exposé par `/api/coverage`), migration additive `0003`. Tests Vitest (débit,
+  seuils usage). _Non encore mergé sur `main`._
 - **Mesure — capture découplée de la synchro + retour visuel (suite)** : la capture
   d'un point ne dépend plus de l'envoi réseau. Le verrou `busy` ne couvre que le ping
   (plus le `flush`, désormais en tâche de fond), et une position arrivée pendant un ping

@@ -75,3 +75,28 @@ export function bestLevel(levels: Partial<Record<UsageOp, Level>>): Level {
 	}
 	return best;
 }
+
+/**
+ * Seuils de débit descendant mesuré (kbps) → niveau ARCEP. On classe le RÉEL sur
+ * la MÊME échelle que la couverture théorique ARCEP (TBC/BC/CL/none) : la carte et
+ * le mode mesure parlent ainsi le même langage, et l'écart théorie/réel — le cœur
+ * du projet — se lit au même code couleur. Seuils exigeants (visio/HD confortable) :
+ * - ≥ 4000 kbps → TBC (streaming vidéo, visio)
+ * - ≥ 1000 kbps → BC (web, réseaux sociaux)
+ * - ≥ 200 kbps → CL (messages, navigation lente)
+ * - < 200 ou inconnu → none
+ */
+export const KBPS_THRESHOLDS: Record<Exclude<Level, 'none'>, number> = {
+	TBC: 4000,
+	BC: 1000,
+	CL: 200
+};
+
+/** Traduit un débit descendant mesuré (kbps, ou null si non mesuré) en niveau ARCEP. */
+export function levelFromKbps(kbps: number | null): Level {
+	if (kbps == null) return 'none';
+	if (kbps >= KBPS_THRESHOLDS.TBC) return 'TBC';
+	if (kbps >= KBPS_THRESHOLDS.BC) return 'BC';
+	if (kbps >= KBPS_THRESHOLDS.CL) return 'CL';
+	return 'none';
+}

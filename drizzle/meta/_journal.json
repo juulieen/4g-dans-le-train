@@ -22,6 +22,13 @@
       "when": 1780316766797,
       "tag": "0002_material_wilson_fisk",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1780327458420,
+      "tag": "0003_bouncy_giant_man",
+      "breakpoints": true
     }
   ]
 }

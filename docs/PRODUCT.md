@@ -110,15 +110,18 @@ Conventions produit :
 
 - L'utilisateur active le **mode mesure** sur son téléphone (page ouverte,
   écran maintenu via Wake Lock).
-- À chaque position GPS, l'app fait un **ping actif** (petite requête réseau) →
-  succès/échec + latence (RTT). Méthode cross-navigateur (iOS inclus), contrairement
-  à `navigator.connection` non fiable. Le type de réseau (4g/5g) est un bonus
-  lu quand le navigateur l'expose.
-- **Mesure même sans GPS (interpolation « depuis les rails »)** : le ping ne dépend
-  plus uniquement des positions GPS. Un **tick de secours** (`controller.ts`,
-  toutes les ~5 s) prend le relais quand le GPS n'est pas frais — en **tunnel** et
-  au **cold-start** (le 1er fix GPS peut mettre des minutes ; on ne reste plus « en
-  attente » sans rien mesurer). Ces pings sont **bufferisés sans position**, puis
+- **Cadence stable à 1/s** : un **tick maître** (`controller.ts`, toutes les 1 s)
+  pilote toute la mesure → un **ping actif** (petite requête réseau) par seconde,
+  quoi qu'il arrive. `watchPosition` (irrégulier selon l'OS) ne sert plus qu'à
+  **rafraîchir la position courante** et à refermer les trous GPS ; il ne déclenche
+  plus la mesure. On en tire succès/échec + latence (RTT). Méthode cross-navigateur
+  (iOS inclus, uniquement `fetch`/`performance.now()`), contrairement à
+  `navigator.connection` non fiable. Le type de réseau (4g/5g) est un bonus lu quand
+  le navigateur l'expose.
+- **Mesure même sans GPS (interpolation « depuis les rails »)** : le même tick 1/s
+  prend le relais quand le GPS n'est pas frais — en **tunnel** et au **cold-start**
+  (le 1er fix GPS peut mettre des minutes ; on ne reste plus « en attente » sans rien
+  mesurer). Ces pings sont **bufferisés sans position**, puis
   placés **a posteriori** le long du tracé de la ligne (`static/data/route-profiles/`,
   primitive `src/lib/geo/interpolate.ts`) :
   - **tunnel** → position **interpolée** entre le dernier fix avant et le premier
@@ -134,13 +137,23 @@ Conventions produit :
     (`getCurrentPosition`, `maximumAge` relâché) au lieu de la jeter — décisif au
     redémarrage d'une mesure.
 - État dérivé : `ok` (ça capte) / `degraded` (lent) / `none` (ça coupe).
+- **Débit léger (opt-in)** : « ça répond au ping » ≠ « ça streame ». Si l'utilisateur
+  coche **« Mesurer aussi le débit »** (OFF par défaut — ça consomme sa data mobile),
+  l'app télécharge **1 mesure GPS sur 5** un petit blob incompressible (~128 Ko) via
+  `GET /api/probe?size=…` (aléatoire pré-généré, `no-store`, taille bornée 64–512 Ko,
+  pas de CORS, aucune donnée client) et en déduit un **débit (kbps)**. Le débit est
+  **classé sur la même échelle ARCEP** que la couverture théorique (`src/lib/usage.ts`,
+  `levelFromKbps`) : ≥ 4000 → TBC, ≥ 1000 → BC, ≥ 200 → CL, sinon none. Ainsi le réel
+  mesuré et le théorique se lisent **au même code couleur** → l'écart se voit d'un
+  coup d'œil. La mesure tourne **en tâche de fond** (jamais bloquante) et **jamais en
+  tunnel/interpolation** (pas de réseau, data gaspillée).
 - **Vie privée (non négociable)** : la position est **arrondie au centre de sa
   cellule H3 (~150 m)** AVANT envoi ; aucune donnée personnelle ; session =
   jeton anonyme jetable ; pas de trace continue ré-identifiable. Consentement
   explicite requis avant tout envoi.
 - **Agrégation** (`src/lib/server/ingest.ts`) : par cellule H3 × opérateur →
-  taux de réussite, latence médiane, nombre de mesures. Servi par
-  `GET /api/coverage`.
+  taux de réussite, latence médiane, **débit médian** (nullable : seulement si des
+  mesures de débit existent), nombre de mesures. Servi par `GET /api/coverage`.
 - **Rattachement à une ligne (snapping)** : à l'ingestion, la cellule H3 de la
   mesure est rattachée à sa **ligne commerciale** via un index pré-calculé
   (`src/lib/geo/line-snap.ts` → `line-index.json`, cf. `docs/DATA.md` § 3). Le

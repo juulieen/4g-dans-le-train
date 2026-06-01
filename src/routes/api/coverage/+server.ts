@@ -48,6 +48,7 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
 			samples: r.samples,
 			successRate: r.successRate,
 			medianRtt: r.medianRtt,
+			medianDownlink: r.medianDownlink,
 			lineSlug: r.lineSlug,
 			lastSeen: r.lastSeen
 		}
