@@ -24,7 +24,15 @@
 import { mkdir, writeFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { CURATED_LINES, type CommercialLine } from '../src/lib/geo/lines-base';
-import { GTFS_SOURCES, download, unzipTo, readCsv, parseCommercialRoute } from './lib/gtfs';
+import {
+	GTFS_SOURCES,
+	download,
+	unzipTo,
+	readCsv,
+	parseCommercialRoute,
+	itinerariesBySlug
+} from './lib/gtfs';
+import { discoverTroncons } from './lib/troncons';
 
 const TMP = '/tmp/sncf-gtfs-import';
 const OUT_FILE = 'src/lib/geo/commercial-lines.json';
@@ -80,14 +88,32 @@ async function main() {
 		...generated.filter((l) => !curatedSlugs.has(l.slug))
 	];
 
+	// Tronçons générés (sous-relations ville↔ville absentes des libellés GTFS) :
+	// découverts depuis les itinéraires de gares du GTFS, par hub-ness. `minHub`
+	// est le CURSEUR de largeur (réglable via TRONCON_MIN_HUB) — on peut shipper
+	// large puis resserrer en re-générant, sans retouche manuelle.
+	const minHub = Number(process.env.TRONCON_MIN_HUB ?? 3);
+	console.log(`[lines] découverte des tronçons (hub-ness ≥ ${minHub})…`);
+	const itineraries = await itinerariesBySlug(merged);
+	const troncons = discoverTroncons(itineraries, merged, { minHub });
+	const all: CommercialLine[] = [...merged, ...troncons.map((t) => t.line)];
+
 	// Indentation par tabulation pour coller au style Prettier (useTabs) du repo :
 	// évite qu'une régénération casse `bun run lint` ou crée un diff de reformatage.
-	await writeFile(OUT_FILE, JSON.stringify(merged, null, '\t') + '\n');
+	await writeFile(OUT_FILE, JSON.stringify(all, null, '\t') + '\n');
 
 	console.log(
-		`[lines] écrit ${OUT_FILE} : ${merged.length} lignes ` +
-			`(${CURATED_LINES.length} curatées + ${merged.length - CURATED_LINES.length} générées)`
+		`[lines] écrit ${OUT_FILE} : ${all.length} lignes ` +
+			`(${CURATED_LINES.length} curatées + ${merged.length - CURATED_LINES.length} générées + ` +
+			`${troncons.length} tronçons)`
 	);
+	if (troncons.length) {
+		console.log(`[lines] ${troncons.length} tronçons (slug · hubFrom/hubTo · issu de) :`);
+		for (const t of troncons)
+			console.log(
+				`          – ${t.line.slug.padEnd(34)} ${String(t.hubFrom)}/${t.hubTo}  ← ${t.parents.join(', ')}`
+			);
+	}
 	if (dropped.length) {
 		console.log(`[lines] ${dropped.length} relations écartées (non exploitables) :`);
 		for (const d of dropped.sort()) console.log(`          – ${d}`);

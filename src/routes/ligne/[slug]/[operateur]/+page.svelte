@@ -58,6 +58,9 @@
 	<title>{title}</title>
 	<meta name="description" content={description} />
 	<link rel="canonical" href={url} />
+	{#if data.noindex}
+		<meta name="robots" content="noindex,follow" />
+	{/if}
 	<meta property="og:title" content={title} />
 	<meta property="og:description" content={description} />
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -->

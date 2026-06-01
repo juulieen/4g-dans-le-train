@@ -32,6 +32,21 @@ export interface CommercialLine {
 	service: string;
 	from: string;
 	to: string;
+	/**
+	 * Si défini : ce trajet est un TRONÇON de la relation GTFS `segmentOf` (slug
+	 * d'une ligne parente), découpé entre les gares `from` et `to`. Renseigné
+	 * **automatiquement par le générateur** (`scripts/lib/troncons.ts`), pas à la
+	 * main : publie des sous-relations absentes des libellés GTFS — où l'une des
+	 * gares n'est qu'un arrêt intermédiaire (ex. « Bordeaux – Toulouse » dans
+	 * « Paris – Toulouse », « Poitiers – Bordeaux » dans « Paris – Bordeaux »).
+	 *
+	 * Un tronçon obtient une frise de couverture + des stats ARCEP comme toute
+	 * ligne (cf. build-line-index.ts / build-line-stats.ts), mais NE participe PAS
+	 * à l'index spatial des mesures (`line-index.json`) : il partage la voie de sa
+	 * ligne parente, qui reste le slug primaire pour l'attribution des mesures
+	 * communautaires (évite de détourner les mesures de la ligne parente).
+	 */
+	segmentOf?: string;
 }
 
 /**

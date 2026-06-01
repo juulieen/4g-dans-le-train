@@ -18,5 +18,8 @@ export const load: PageLoad = ({ params }) => {
 	const operator = findOperator(params.operateur);
 	if (!line || !operator) throw error(404, 'Page inconnue');
 	const stats = lineStats(line.slug) ?? null;
-	return { line, operator, stats };
+	// Sous-page opérateur × tronçon : surface la plus dupliquée → noindex (la page
+	// tronçon principale reste indexable si riche). Liens suivis pour le maillage.
+	const noindex = Boolean(line.segmentOf);
+	return { line, operator, stats, noindex };
 };

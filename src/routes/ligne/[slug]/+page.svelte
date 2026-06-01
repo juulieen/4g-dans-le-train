@@ -13,8 +13,17 @@
 	let { data }: { data: PageData } = $props();
 	const line = $derived(data.line);
 	const stats = $derived(data.stats);
+	const parent = $derived(data.parent);
+	const isTroncon = $derived(data.isTroncon);
+	// Un tronçon est bidirectionnel : on l'affiche « A ↔ B » (une seule page pour
+	// les deux sens), une ligne classique garde son libellé « A – B ».
+	const relationLabel = $derived(isTroncon ? `${line.from} ↔ ${line.to}` : line.name);
 
-	const title = $derived(`Couverture mobile 4G/5G — ligne ${line.name} (${line.service})`);
+	const title = $derived(
+		isTroncon
+			? `Couverture mobile 4G/5G dans le train — ${line.from} ↔ ${line.to}`
+			: `Couverture mobile 4G/5G — ligne ${line.name} (${line.service})`
+	);
 	const description = $derived(
 		lineMetaDescription(line.name, line.from, line.to, stats ?? undefined)
 	);
@@ -55,6 +64,10 @@
 	<title>{title}</title>
 	<meta name="description" content={description} />
 	<link rel="canonical" href={url} />
+	{#if data.noindex}
+		<!-- Tronçon mince (sans stats ARCEP fiables) : exclu de l'index, liens suivis. -->
+		<meta name="robots" content="noindex,follow" />
+	{/if}
 	<meta property="og:title" content={title} />
 	<meta property="og:description" content={description} />
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -->
@@ -62,12 +75,20 @@
 </svelte:head>
 
 <PageWrap>
-	<nav class="crumbs"><a href="/lignes">Lignes</a> › {line.name}</nav>
-	<h1>Couverture mobile dans le train&nbsp;: {line.name}</h1>
-	<p class="lede">
-		Ligne <strong>{line.service}</strong> entre {line.from} et {line.to}. Découvrez où la 4G/5G
-		passe (ou coupe) grâce aux mesures de la communauté.
-	</p>
+	<nav class="crumbs"><a href="/lignes">Lignes</a> › {relationLabel}</nav>
+	<h1>Couverture mobile dans le train&nbsp;: {relationLabel}</h1>
+	{#if isTroncon}
+		<p class="lede">
+			Trajet <strong>{line.from} ↔ {line.to}</strong> (dans les deux sens), portion de la ligne
+			{#if parent}<a href="/ligne/{parent.slug}">{parent.name}</a>{:else}{line.service}{/if}.
+			Découvrez où la 4G/5G passe (ou coupe) grâce aux mesures de la communauté.
+		</p>
+	{:else}
+		<p class="lede">
+			Ligne <strong>{line.service}</strong> entre {line.from} et {line.to}. Découvrez où la 4G/5G
+			passe (ou coupe) grâce aux mesures de la communauté.
+		</p>
+	{/if}
 
 	<section class="profil">
 		<h2>Le profil de votre trajet, gare après gare</h2>

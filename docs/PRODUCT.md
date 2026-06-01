@@ -65,6 +65,31 @@ décrit le profil pour les lecteurs d'écran. Le composant
 généré au build dans `static/data/route-profiles/<slug>.json` (cf. `docs/DATA.md` § 3) ;
 réel et coupures chargés à la volée via `/api/coverage?line=` et `/api/outages?line=`.
 
+## Les trajets-tronçons (sous-relations ville↔ville)
+
+Les gens ne cherchent pas que les grandes relations terminus→terminus : ils cherchent
+**leur** trajet, souvent une **portion** (« couverture 4G **Poitiers–Bordeaux** en
+train »). Or le référentiel ne contient que les relations **nommées dans le GTFS** :
+`Bordeaux–Toulouse`, `Poitiers–Bordeaux` n'y figuraient pas (Poitiers n'est qu'une gare
+intermédiaire de Paris–Bordeaux). On **génère donc automatiquement des « tronçons »**
+depuis les données (cf. `docs/DATA.md` § 2, `scripts/lib/troncons.ts`).
+
+Conventions produit :
+
+- **Une page bidirectionnelle** par couple : `Poitiers–Bordeaux` et `Bordeaux–Poitiers`
+  = **un seul slug** (alpha), affichée « A ↔ B » (le sens n'a pas de sens en couverture).
+- **Frise + stats ARCEP comme toute ligne** : le tronçon est découpé dans l'itinéraire de
+  sa ligne parente (`segmentOf`) puis routé/échantillonné normalement.
+- **Mesures partagées avec la parente** : un tronçon n'a **pas** de mesures propres — il
+  partage la voie de sa parente, qui reste le **slug primaire** des mesures
+  (`line-index.json`). Sa page affiche les mesures communautaires de la **portion**
+  correspondante de la parente (résolution `troncon-cells.json` → `troncon-snap.ts`).
+- **SEO « large + monitoring »** : on publie large (≈ 50 tronçons, curseur
+  `TRONCON_MIN_HUB`), mais on **n'indexe que les tronçons riches** (stats ARCEP fiables) ;
+  les tronçons minces et les sous-pages opérateur × tronçon sont en `noindex,follow` et
+  hors `sitemap.xml`. Le seuil se resserre en re-générant si Google Search Console montre
+  de la dilution — désindexer une page faible n'est pas une pénalité mais le remède.
+
 ## Comment sont calculées les données ARCEP (théorique)
 
 - **Source** : Open Data ARCEP, « Cartes de couverture théorique » (jeu « Mon

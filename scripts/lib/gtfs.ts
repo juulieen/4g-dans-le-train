@@ -10,13 +10,17 @@
  * Source : GTFS « Voyages » (TGV INOUI) et « Intercités » SNCF Open Data.
  * Licence : Licence Ouverte / Open Licence (Etalab).
  */
-import { mkdir, readFile, writeFile, rm, rename } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rm, rename, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 import sevenZip from '7zip-min';
-import { slugifyLine } from '../../src/lib/geo/lines-base';
+import { slugifyLine, type CommercialLine } from '../../src/lib/geo/lines-base';
 
 const unpack = promisify(sevenZip.unpack);
+
+/** Dossier de travail partagé pour les téléchargements/décompressions GTFS. */
+export const GTFS_TMP = '/tmp/sncf-gtfs-import';
 
 /** Sources GTFS à agréger, dans l'ordre de priorité (1re source gagne en cas de slug identique). */
 export const GTFS_SOURCES: { url: string; service: string }[] = [
@@ -235,4 +239,142 @@ export function parseCommercialRoute(
 	const slug = slugifyLine(`${rel.from}-${rel.to}`);
 	if (!slug) return null;
 	return { slug, name, from: rel.from, to: rel.to };
+}
+
+// --- Itinéraires de gares par ligne (suite ordonnée des arrêts) -------------
+//
+// Mutualisé entre `import-commercial-lines.ts` (découverte des tronçons) et
+// `build-line-index.ts` (index spatial + découpage des tronçons). LE POINT
+// CRUCIAL — comme pour `parseCommercialRoute` — est que les deux scripts dérivent
+// le MÊME itinéraire par ligne : sinon un tronçon découvert par l'un ne serait
+// pas redécoupable par l'autre.
+
+type Coord = [number, number]; // [lng, lat]
+
+/** Une gare d'un itinéraire : sa position et son libellé GTFS. */
+export interface Station {
+	coord: Coord;
+	name: string;
+}
+
+/**
+ * Vrai si le slug d'une gare correspond à une ville (slug du référentiel), par
+ * **segment** et non sous-chaîne brute : « latour-de-carol-enveitg » matche
+ * « latour-de-carol », mais « tourcoing » ne matche PAS « tours ». Évite les faux
+ * positifs silencieux de scoring/orientation/découpage.
+ */
+export function cityMatches(stationSlug: string, citySlug: string): boolean {
+	if (!citySlug) return false;
+	return (
+		stationSlug === citySlug ||
+		stationSlug.startsWith(citySlug + '-') ||
+		stationSlug.endsWith('-' + citySlug) ||
+		stationSlug.includes('-' + citySlug + '-')
+	);
+}
+
+/**
+ * Combien des deux terminus du référentiel (`from`/`to`) sont couverts par les
+ * gares extrêmes d'un itinéraire (0, 1 ou 2). Sert à préférer un trajet qui va
+ * VRAIMENT de la gare de départ à la gare d'arrivée, plutôt que le plus riche en
+ * arrêts (qui peut dépasser le terminus ou bifurquer — ex. Paris–Saint-Brieuc
+ * prolongé jusqu'à Saint-Malo).
+ */
+export function endpointScore(stops: Station[], from: string, to: string): number {
+	if (stops.length < 2) return 0;
+	const a = slugifyLine(stops[0].name);
+	const b = slugifyLine(stops[stops.length - 1].name);
+	const f = slugifyLine(from);
+	const t = slugifyLine(to);
+	const coversFrom = cityMatches(a, f) || cityMatches(b, f);
+	const coversTo = cityMatches(a, t) || cityMatches(b, t);
+	return (coversFrom ? 1 : 0) + (coversTo ? 1 : 0);
+}
+
+/**
+ * Renvoie, par slug de ligne du référentiel, l'itinéraire de gares le plus
+ * pertinent agrégé sur les feeds GTFS : d'abord la course dont les terminus
+ * collent le mieux au `from`/`to` du référentiel, puis — à correspondance égale —
+ * la plus riche en arrêts. Les slugs de tronçons (`segmentOf`) n'ont aucune route
+ * GTFS et n'apparaissent donc jamais ici (ils sont découpés en aval).
+ */
+export async function itinerariesBySlug(lines: CommercialLine[]): Promise<Map<string, Station[]>> {
+	const known = new Set(lines.map((l) => l.slug));
+	const meta = new Map(lines.map((l) => [l.slug, l]));
+	await mkdir(GTFS_TMP, { recursive: true });
+	const best = new Map<string, Station[]>();
+
+	for (const src of GTFS_SOURCES) {
+		const name = src.url.split('/').pop() ?? 'gtfs.zip';
+		const archive = join(GTFS_TMP, name);
+		await download(src.url, archive);
+		const dir = await unzipTo(archive, join(GTFS_TMP, name.replace(/\.zip$/, '')));
+		const files = await readdir(dir);
+		if (!['routes.txt', 'trips.txt', 'stop_times.txt', 'stops.txt'].every((f) => files.includes(f)))
+			continue;
+
+		// stops.txt : stop_id → [lng, lat] + nom de la gare
+		const coordOf = new Map<string, Coord>();
+		const nameOf = new Map<string, string>();
+		for (const s of await readCsv(join(dir, 'stops.txt'))) {
+			const lat = Number(s.stop_lat);
+			const lng = Number(s.stop_lon);
+			if (Number.isFinite(lat) && Number.isFinite(lng)) {
+				coordOf.set(s.stop_id, [lng, lat]);
+				if (s.stop_name) nameOf.set(s.stop_id, s.stop_name.trim());
+			}
+		}
+
+		// routes.txt : route_id → slug (uniquement les routes du référentiel)
+		const slugOfRoute = new Map<string, string>();
+		for (const r of await readCsv(join(dir, 'routes.txt'))) {
+			const rel = parseCommercialRoute((r.route_long_name ?? '').trim());
+			if (rel && known.has(rel.slug)) slugOfRoute.set(r.route_id, rel.slug);
+		}
+
+		// trips.txt : trip_id → slug
+		const slugOfTrip = new Map<string, string>();
+		for (const t of await readCsv(join(dir, 'trips.txt'))) {
+			const slug = slugOfRoute.get(t.route_id);
+			if (slug) slugOfTrip.set(t.trip_id, slug);
+		}
+
+		// stop_times.txt : course → arrêts ordonnés (uniquement les courses retenues)
+		const seqByTrip = new Map<string, { seq: number; stopId: string }[]>();
+		for (const st of await readCsv(join(dir, 'stop_times.txt'))) {
+			if (!slugOfTrip.has(st.trip_id)) continue;
+			const seq = Number(st.stop_sequence);
+			if (!Number.isFinite(seq)) continue;
+			let arr = seqByTrip.get(st.trip_id);
+			if (!arr) seqByTrip.set(st.trip_id, (arr = []));
+			arr.push({ seq, stopId: st.stop_id });
+		}
+
+		// Par course : gares ordonnées. On garde par slug le meilleur itinéraire.
+		for (const [tripId, stopsOfTrip] of seqByTrip) {
+			const slug = slugOfTrip.get(tripId)!;
+			const stops: Station[] = [];
+			let prev: Coord | null = null;
+			for (const { stopId } of stopsOfTrip.sort((a, b) => a.seq - b.seq)) {
+				const c = coordOf.get(stopId);
+				if (!c) continue;
+				if (prev && prev[0] === c[0] && prev[1] === c[1]) continue;
+				stops.push({ coord: c, name: nameOf.get(stopId) ?? '' });
+				prev = c;
+			}
+			if (stops.length < 2) continue;
+			const m = meta.get(slug);
+			const cur = best.get(slug);
+			if (!cur) {
+				best.set(slug, stops);
+			} else if (m) {
+				const sc = endpointScore(stops, m.from, m.to);
+				const scCur = endpointScore(cur, m.from, m.to);
+				if (sc > scCur || (sc === scCur && stops.length > cur.length)) best.set(slug, stops);
+			} else if (stops.length > cur.length) {
+				best.set(slug, stops);
+			}
+		}
+	}
+	return best;
 }

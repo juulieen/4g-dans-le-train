@@ -34,9 +34,20 @@ curaté `CURATED_LINES` (`src/lib/geo/lines-base.ts`) qui prime pour la qualité
 alimente `RAIL_LINES`, donc les pages `/ligne/[slug]`, `/lignes`, le `sitemap.xml` et
 `/operateur/[slug]`.
 
-Le téléchargement, le parsing CSV et **surtout la dérivation du slug d'une route**
-(`parseCommercialRoute`) sont mutualisés dans `scripts/lib/gtfs.ts` : c'est ce qui garantit
-que l'index ligne (§ 3) pointe vers exactement les mêmes slugs que ce référentiel.
+Le téléchargement, le parsing CSV, **la dérivation du slug d'une route**
+(`parseCommercialRoute`) et **l'extraction des itinéraires de gares**
+(`itinerariesBySlug`) sont mutualisés dans `scripts/lib/gtfs.ts` : c'est ce qui garantit
+que l'index ligne (§ 3) pointe vers exactement les mêmes slugs/itinéraires que ce référentiel.
+
+**Tronçons générés** : après la fusion, `import-commercial-lines.ts` **découvre des
+sous-relations ville↔ville** absentes des libellés GTFS (ex. `Bordeaux↔Toulouse`,
+`Poitiers↔Bordeaux`) via `scripts/lib/troncons.ts` et les **append** au référentiel (avec
+un champ `segmentOf` = slug de la ligne parente). Principe : la **hub-ness** d'une gare =
+nombre de relations distinctes qui la desservent ; pour chaque ligne, on émet un tronçon
+par **paire de gares majeures** (hub-ness ≥ `TRONCON_MIN_HUB`, défaut 3), canonicalisé en
+couple non ordonné (slug alpha → page bidirectionnelle). Garde-fous de nommage légers :
+alias gare→ville (`saint-pierre-des-corps → Tours`…) + liste noire de nœuds TGV. `minHub`
+est un **curseur de largeur** : `TRONCON_MIN_HUB=2 bun run data:lines` ratisse plus large.
 
 Le fichier est committé pour que le build/prerender tourne sans rejouer l'import ; il est
 à **régénérer + commiter** périodiquement. Pour ajouter une source (ex. TER), ajouter une
@@ -49,9 +60,14 @@ entrée dans `GTFS_SOURCES` (URL du GTFS + libellé de service).
 - **Import** : `bun run data:line-index`
 - **Sorties** :
   - `src/lib/geo/line-index.json` (**committé**, exclu de Prettier dans
-    `.prettierignore` ; format compact `{ slugs, cells }`, ~1 Mo) — le snapping ;
-  - `static/data/route-profiles/<slug>.json` (un par ligne, ~1,2 Mo au total ;
-    `static/data/` est déjà gitignoré de Prettier) — les **profils de trajet**.
+    `.prettierignore` ; format compact `{ slugs, cells }`, ~1 Mo) — le snapping
+    (**hors tronçons** : un tronçon partage la voie de sa parente, qui reste primaire) ;
+  - `static/data/route-profiles/<slug>.json` (un par ligne **et par tronçon** ;
+    `static/data/` est déjà gitignoré de Prettier) — les **profils de trajet** ;
+  - `src/lib/geo/troncon-cells.json` (**committé**, exclu de Prettier ;
+    `{ <slug>: { parent, cells } }`) — rattache chaque **tronçon** à sa ligne parente
+    et à ses cellules, pour que les API `coverage`/`outages` servent les mesures de la
+    **portion** correspondante (cf. `src/lib/geo/troncon-snap.ts`).
 
 `scripts/build-line-index.ts` construit l'index spatial **cellule H3 (résolution 9) →
 ligne(s) commerciale(s)** qui permet de renseigner `lineSlug` à l'ingestion en O(1)
@@ -185,7 +201,8 @@ clôt la chaîne car il agrège ces profils.
   changement de réseau ou d'offre commerciale.
 
 Après régénération, **commiter `src/lib/geo/commercial-lines.json`,
-`src/lib/geo/line-index.json` et `src/lib/geo/line-stats.json`** (les GeoJSON de
+`src/lib/geo/line-index.json`, `src/lib/geo/troncon-cells.json` et
+`src/lib/geo/line-stats.json`** (les GeoJSON de
 `static/data/` restent gitignorés et sont régénérés au déploiement si besoin).
 
 ## Licences
