@@ -23,7 +23,11 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
 
 	const filters = [
 		operator ? eq(cellAggregates.operator, operator) : undefined,
-		lineFilter ? eq(cellAggregates.lineSlug, lineFilter.lineSlug) : undefined
+		// Ligne normale : filtre SQL par `lineSlug`. Tronçon : on NE filtre PAS par
+		// `lineSlug` — le slug stocké est le PRIMAIRE de la cellule (ligne la plus
+		// locale du tronc commun), pas la parente du tronçon ; on filtre par les
+		// CELLULES de la portion (en mémoire ci-dessous), qui l'identifient exactement.
+		lineFilter && !lineFilter.cells ? eq(cellAggregates.lineSlug, lineFilter.lineSlug) : undefined
 	].filter((f) => f !== undefined);
 
 	const allRows = filters.length
@@ -32,8 +36,7 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
 				.from(cellAggregates)
 				.where(filters.length === 1 ? filters[0] : and(...filters))
 		: await db.select().from(cellAggregates);
-	// Tronçon : on ne garde que les cellules de la portion (filtre en mémoire,
-	// la requête SQL ayant déjà restreint à la ligne parente).
+	// Tronçon : on ne garde que les cellules de la portion correspondante.
 	const rows = lineFilter?.cells ? allRows.filter((r) => lineFilter.cells!.has(r.cellId)) : allRows;
 
 	const features = rows.map((r) => ({

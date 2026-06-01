@@ -175,10 +175,12 @@ export async function aggregateOutages(
 		...r,
 		measuredAt: r.measuredAt as number
 	}));
-	// Tronçon : on agrège les coupures de la ligne PARENTE restreintes à ses cellules.
+	// Tronçon : on filtre par les CELLULES de la portion (et NON par `lineSlug`, qui
+	// est le slug primaire de la cellule — pas la parente du tronçon sur un tronc
+	// commun). Ligne normale : filtre classique par `lineSlug`.
 	const lineFilter = resolveLineFilter(opts.lineSlug ?? null);
-	return buildOutageAggregates(typed, {
-		lineSlug: lineFilter?.lineSlug ?? null,
-		cells: lineFilter?.cells
-	});
+	return buildOutageAggregates(
+		typed,
+		lineFilter?.cells ? { cells: lineFilter.cells } : { lineSlug: lineFilter?.lineSlug ?? null }
+	);
 }

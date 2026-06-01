@@ -492,8 +492,12 @@ async function writeRouteProfiles(
 		// être inverse (ex. itinéraire Lyon→Paris pour la ligne « Paris – Lyon ») :
 		// on compare le slug des gares terminales aux villes from/to et on inverse
 		// le tracé au besoin, pour que la distance croisse depuis la gare de départ.
+		// Les tronçons sont DÉJÀ orientés from→to par `sliceItinerary` (via le
+		// résolveur de ville, robuste aux alias) : on saute cette ré-orientation, qui
+		// compare le nom BRUT de gare et produirait un warning bruyant sur les villes
+		// aliasées (« Saint-Pierre-des-Corps » ≠ Tours) sans rien corriger.
 		const m0 = meta.get(slug);
-		if (m0 && stations.length >= 2) {
+		if (m0 && !m0.segmentOf && stations.length >= 2) {
 			const first = slugifyLine(stations[0].name);
 			const last = slugifyLine(stations[stations.length - 1].name);
 			const fromC = slugifyLine(m0.from);

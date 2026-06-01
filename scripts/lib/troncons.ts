@@ -179,9 +179,13 @@ export function discoverTroncons(
 		const parentService = metaBySlug.get(parentSlug)?.service ?? 'TGV INOUI';
 		for (let i = 0; i < majors.length; i++) {
 			for (let j = i + 1; j < majors.length; j++) {
-				const from = majors[i];
-				const to = majors[j];
-				if (from.slug === to.slug) continue;
+				if (majors[i].slug === majors[j].slug) continue;
+				// Orientation DÉTERMINISTE = ordre alpha des slugs (= ordre du slug
+				// canonique). Sinon `from`/`to` dépendraient de l'ordre d'émission (Map),
+				// donc de l'ordre des courses GTFS, et pourraient flipper à une
+				// régénération (libellé/frise inversés sur un fichier pourtant committé).
+				const [from, to] =
+					majors[i].slug < majors[j].slug ? [majors[i], majors[j]] : [majors[j], majors[i]];
 				const slug = canonicalSlug(from.slug, to.slug);
 				if (existing.has(slug)) continue;
 				const prev = found.get(slug);

@@ -71,6 +71,16 @@ describe('buildOutageAggregates', () => {
 		expect(buildOutageAggregates(rows, { lineSlug: 'ligne-qui-nexiste-pas' })).toHaveLength(0);
 	});
 
+	it('filtre par cellules (tronçon) : ne garde que les coupures dont la cellule est dans le Set', () => {
+		// Chemin utilisé pour les tronçons : on filtre par les cellules de la portion,
+		// SANS contrainte de `lineSlug` (le slug primaire de la cellule peut différer
+		// de la parente du tronçon sur un tronc commun).
+		const rows = [row('s1', 0, 'ok'), row('s1', 10 * S, 'none'), row('s1', 30 * S, 'ok')];
+		const cell = buildOutageAggregates(rows)[0].cellStart;
+		expect(buildOutageAggregates(rows, { cells: new Set([cell]) })).toHaveLength(1);
+		expect(buildOutageAggregates(rows, { cells: new Set(['cellule-absente']) })).toHaveLength(0);
+	});
+
 	it('ne renvoie aucune donnée brute (ni sessionId, ni timestamp)', () => {
 		const rows = [row('s1', 0, 'ok'), row('s1', 10 * S, 'none'), row('s1', 30 * S, 'ok')];
 		const agg = buildOutageAggregates(rows);
