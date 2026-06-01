@@ -10,6 +10,7 @@
 const SESSION_KEY = '4gdt.session';
 const CONSENT_KEY = '4gdt.consent';
 const ONBOARDED_KEY = '4gdt.onboarded';
+const THROUGHPUT_OPT_KEY = '4gdt.opt.throughput';
 
 export function getSessionId(): string {
 	if (typeof localStorage === 'undefined') return 'ssr';
@@ -54,6 +55,30 @@ export function markOnboarded(): void {
 	if (typeof localStorage === 'undefined') return;
 	try {
 		localStorage.setItem(ONBOARDED_KEY, 'done');
+	} catch {
+		/* stockage bloqué : best-effort, on ignore */
+	}
+}
+
+/**
+ * Opt-in de la mesure de débit. OFF par défaut : le débit consomme la data mobile
+ * de l'utilisateur (il est dans le train et la paie), on ne l'active que sur choix
+ * explicite. Préférence locale persistée, sans donnée personnelle.
+ */
+export function getThroughputOptIn(): boolean {
+	if (typeof localStorage === 'undefined') return false;
+	try {
+		return localStorage.getItem(THROUGHPUT_OPT_KEY) === 'on';
+	} catch {
+		return false;
+	}
+}
+
+export function setThroughputOptIn(on: boolean): void {
+	if (typeof localStorage === 'undefined') return;
+	try {
+		if (on) localStorage.setItem(THROUGHPUT_OPT_KEY, 'on');
+		else localStorage.removeItem(THROUGHPUT_OPT_KEY);
 	} catch {
 		/* stockage bloqué : best-effort, on ignore */
 	}

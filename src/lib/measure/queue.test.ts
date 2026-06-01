@@ -18,6 +18,7 @@ function measure(overrides: Partial<QueuedMeasurement> = {}): QueuedMeasurement 
 		lng: 2.35,
 		status: 'ok',
 		rttMs: 50,
+		downlinkKbps: null,
 		operator: 'orange',
 		netType: '4g',
 		speedKmh: 120,

@@ -19,6 +19,8 @@ export interface QueuedMeasurement {
 	lng: number;
 	status: 'ok' | 'degraded' | 'none';
 	rttMs: number | null;
+	/** Débit descendant (kbps). null quand non mesuré (opt-in + cadencé). */
+	downlinkKbps: number | null;
 	operator: string;
 	netType: string | null;
 	speedKmh: number | null;

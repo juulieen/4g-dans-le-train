@@ -6,6 +6,13 @@ import { cellAggregates, measurements, type NewMeasurement } from './db/schema';
 /** Type de l'enum opérateur, dérivé du schéma. */
 type Operator = NonNullable<NewMeasurement['operator']>;
 
+/** Médiane (haute) des valeurs non nulles ; null si aucune. Le filtrage des null
+ *  est voulu : une cellule sans mesure de débit reste à null. */
+function median(values: Array<number | null>): number | null {
+	const nums = values.filter((v): v is number => v != null).sort((a, b) => a - b);
+	return nums.length ? nums[Math.floor(nums.length / 2)] : null;
+}
+
 /**
  * Insère une mesure puis recalcule l'agrégat (cellule × opérateur).
  *
@@ -22,6 +29,7 @@ async function recomputeCell(cellId: string, operator: Operator): Promise<void> 
 		.select({
 			status: measurements.status,
 			rttMs: measurements.rttMs,
+			downlinkKbps: measurements.downlinkKbps,
 			lat: measurements.lat,
 			lng: measurements.lng
 		})
@@ -33,11 +41,10 @@ async function recomputeCell(cellId: string, operator: Operator): Promise<void> 
 	const samples = rows.length;
 	const okCount = rows.filter((r) => r.status === 'ok').length;
 	const successRate = okCount / samples;
-	const rtts = rows
-		.map((r) => r.rttMs)
-		.filter((v): v is number => v != null)
-		.sort((a, b) => a - b);
-	const medianRtt = rtts.length ? rtts[Math.floor(rtts.length / 2)] : null;
+	const medianRtt = median(rows.map((r) => r.rttMs));
+	// Débit médian : ne compte que les mesures qui en portent (opt-in/cadencé) →
+	// null si la cellule n'a aucune mesure de débit.
+	const medianDownlink = median(rows.map((r) => r.downlinkKbps));
 	const { lat, lng } = rows[0];
 	// `lineSlug` est une fonction déterministe de la cellule : on le dérive de
 	// l'index plutôt que de `rows[0]` (dont l'ordre n'est pas garanti). Reste
@@ -61,6 +68,7 @@ async function recomputeCell(cellId: string, operator: Operator): Promise<void> 
 		samples,
 		successRate,
 		medianRtt,
+		medianDownlink,
 		lineSlug,
 		lastSeen: sql`(unixepoch())`
 	};

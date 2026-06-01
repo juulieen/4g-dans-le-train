@@ -21,6 +21,8 @@ export const measurements = sqliteTable(
 		status: text('status', { enum: ['ok', 'degraded', 'none'] }).notNull(),
 		/** Latence aller-retour du ping en ms (null si timeout). */
 		rttMs: integer('rtt_ms'),
+		/** Débit descendant estimé en kbps (null si non mesuré — débit opt-in/cadencé). */
+		downlinkKbps: integer('downlink_kbps'),
 		/** Opérateur déclaré par l'utilisateur. */
 		operator: text('operator', {
 			enum: ['orange', 'sfr', 'free', 'bouygues', 'autre', 'inconnu']
@@ -81,6 +83,8 @@ export const cellAggregates = sqliteTable(
 		/** Part de mesures avec status = 'ok' (0..1). */
 		successRate: real('success_rate').notNull().default(0),
 		medianRtt: integer('median_rtt'),
+		/** Débit descendant médian en kbps (null si aucune mesure de débit). */
+		medianDownlink: integer('median_downlink'),
 		lineSlug: text('line_slug'),
 		lastSeen: integer('last_seen')
 			.notNull()
