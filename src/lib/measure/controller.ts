@@ -61,6 +61,13 @@ export interface LiveState {
 	queued: number;
 	/** Pings capturés sans position (trou GPS), en attente de recalage sur le tracé. */
 	buffered: number;
+	/**
+	 * Aucune position GPS précise depuis plus de MAX_GAP_MS (5 min) : la fenêtre
+	 * d'interpolation est dépassée, les pings bufferisés ne pourront plus être recalés.
+	 * Cas typique : ordinateur sans vrai GPS. La mesure CONTINUE (si le GPS finit par
+	 * accrocher, on enregistre) — ce drapeau ne sert qu'à informer l'UI.
+	 */
+	gpsStale: boolean;
 	/** Nombre de coupures réseau détectées pendant la session (live, éphémère). */
 	outages: number;
 	/** Dernière coupure clôturée, pour le retour « coupure de 1 min 40 s ». */
@@ -95,6 +102,7 @@ const initialState: LiveState = {
 	buffered: 0,
 	outages: 0,
 	lastOutage: null,
+	gpsStale: false,
 	wakeLockActive: false,
 	error: null
 };
@@ -174,6 +182,11 @@ export class MeasurementController {
 	// --- Suivi GPS (cache de position + interpolation des trous) ----------------
 	/** Époch ms du dernier point GPS valide (pour détecter le trou). */
 	private lastGpsAt = 0;
+	/**
+	 * Époch ms du début du trou GPS courant (1er tick sans position fraîche), ou null
+	 * si le GPS est frais. Sert à détecter le dépassement de MAX_GAP_MS (cf. gpsStale).
+	 */
+	private gapStartedAt: number | null = null;
 	/** Dernière position GPS connue (le tick mesure « avec » elle quand elle est fraîche). */
 	private currentSample: GeoSample | null = null;
 	/** Dernier point GPS avant le trou en cours (point d'entrée à interpoler). */
@@ -222,6 +235,7 @@ export class MeasurementController {
 		this.gapEntry = null;
 		this.gapBuffer = [];
 		this.lastGpsAt = 0;
+		this.gapStartedAt = null;
 		this.currentSample = null;
 		// Réinitialise le suivi de débit (et invalide une mesure de débit en vol).
 		this.lastThroughputAt = 0;
@@ -354,6 +368,17 @@ export class MeasurementController {
 
 			const sample = this.currentSample;
 			const fresh = sample !== null && now - this.lastGpsAt <= GAP_THRESHOLD_MS;
+
+			// Suivi du trou GPS courant : on note quand il commence pour signaler (gpsStale)
+			// le dépassement de la fenêtre d'interpolation (MAX_GAP_MS). La mesure n'est
+			// JAMAIS interrompue — si le GPS finit par accrocher, on repasse en mode normal.
+			if (fresh) {
+				this.gapStartedAt = null;
+			} else if (this.gapStartedAt === null) {
+				this.gapStartedAt = now;
+			}
+			const gpsStale = this.gapStartedAt !== null && now - this.gapStartedAt > MAX_GAP_MS;
+			if (gpsStale !== this.state.gpsStale) this.patch({ gpsStale });
 
 			if (fresh && sample) {
 				// --- Mode normal : mesure positionnée ---

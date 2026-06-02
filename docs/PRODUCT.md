@@ -163,6 +163,15 @@ Conventions produit :
   - Côté acquisition, le **premier fix** réutilise une position récente du téléphone
     (`getCurrentPosition`, `maximumAge` relâché) au lieu de la jeter — décisif au
     redémarrage d'une mesure.
+  - **Garde-fou desktop / GPS imprécis** : sur ordinateur (pas de vrai GPS, position
+    Wi-Fi/IP > 100 m rejetée silencieusement par `geolocation.ts`), aucun fix valide
+    n'arrive. Au-delà de **5 min** sans position fraîche (`MAX_GAP_MS` — la fenêtre
+    d'interpolation est alors dépassée, les pings bufferisés ne sont plus recalables),
+    le controller lève `gpsStale` et la carte affiche un **avertissement** invitant à
+    mesurer depuis un téléphone. La mesure **n'est jamais interrompue** (si le GPS finit
+    par accrocher, on enregistre). En complément, un **QR code** vers le site s'affiche
+    dans le panneau mesure **uniquement sur desktop** (`@media (min-width: 761px)`,
+    lib `uqr`) pour basculer facilement sur mobile.
 - État dérivé : `ok` (ça capte) / `degraded` (lent) / `none` (ça coupe).
 - **Wi-Fi de bord (ne pas polluer la couverture mobile)** : si l'utilisateur reste
   branché sur le **Wi-Fi du train** tout en mesurant, le ping mesure ce Wi-Fi (et son

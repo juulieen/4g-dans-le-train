@@ -15,16 +15,23 @@
 		getThroughputOptIn,
 		setThroughputOptIn
 	} from '$measure/session';
-	import { levelFromKbps, USAGE_TEXT, USAGE_COLORS } from '$lib/usage';
+	import { levelFromKbps, USAGE_TEXT, USAGE_COLORS, OPERATOR_LABEL, USAGE_OPS } from '$lib/usage';
+	import { pluralS } from '$lib/plural';
+	import { buildQrSvg } from '$lib/qr';
+	import { env } from '$env/dynamic/public';
 	import type { PageData } from './$types';
+
+	// URL encodée dans le QR « mesure depuis ton téléphone » (affiché sur desktop).
+	// Fallback prod en dur si la variable n'est pas définie au build (cf. autres usages).
+	const SITE_URL = env.PUBLIC_SITE_URL || 'https://4g-dans-le-train.juulieen.fr';
+	const qrSvg = buildQrSvg(SITE_URL);
 
 	let { data }: { data: PageData } = $props();
 
+	// Opérateurs du mode mesure : les 4 opérateurs ARCEP (libellés partagés via
+	// OPERATOR_LABEL) + deux choix propres à la mesure (« Autre » / « Je ne sais pas »).
 	const OPERATORS: { value: Operator; label: string }[] = [
-		{ value: 'orange', label: 'Orange' },
-		{ value: 'sfr', label: 'SFR' },
-		{ value: 'free', label: 'Free' },
-		{ value: 'bouygues', label: 'Bouygues' },
+		...USAGE_OPS.map((value) => ({ value, label: OPERATOR_LABEL[value] })),
 		{ value: 'autre', label: 'Autre' },
 		{ value: 'inconnu', label: 'Je ne sais pas' }
 	];
@@ -129,12 +136,12 @@
 		if (b > 0)
 			return {
 				cls: 'buffering',
-				text: `📍 ${b} point${b > 1 ? 's' : ''} capturé${b > 1 ? 's' : ''} sans GPS — position recalée au retour du signal`
+				text: `📍 ${b} point${pluralS(b)} capturé${pluralS(b)} sans GPS — position recalée au retour du signal`
 			};
 		if (live.queued > 0)
 			return {
 				cls: 'pending',
-				text: `⏳ ${live.queued} point${live.queued > 1 ? 's' : ''} gardé${live.queued > 1 ? 's' : ''} hors-ligne — envoi au retour du réseau`
+				text: `⏳ ${live.queued} point${pluralS(live.queued)} gardé${pluralS(live.queued)} hors-ligne — envoi au retour du réseau`
 			};
 		return { cls: 'synced', text: '✓ Tout est synchronisé' };
 	});
@@ -296,10 +303,9 @@
 				Afficher la couverture de&nbsp;:
 				<select id="view-operator" name="view-operator" bind:value={viewOperator}>
 					<option value="inconnu">Tous les opérateurs</option>
-					<option value="orange">Orange</option>
-					<option value="sfr">SFR</option>
-					<option value="free">Free</option>
-					<option value="bouygues">Bouygues</option>
+					{#each USAGE_OPS as op (op)}
+						<option value={op}>{OPERATOR_LABEL[op]}</option>
+					{/each}
 				</select>
 			</label>
 
@@ -339,6 +345,17 @@
 					Sur mobile, dans le train&nbsp;: gardez cette page ouverte (l'écran reste allumé) et on
 					mesure votre connexion en continu, de façon <strong>anonyme</strong>.
 				</p>
+
+				<!-- Desktop uniquement (CSS) : sur ordinateur le GPS est trop imprécis, on
+				     invite à mesurer depuis le téléphone via ce QR code. -->
+				<div class="qr-desktop">
+					<!-- eslint-disable-next-line svelte/no-at-html-tags : SVG généré localement, pas d'entrée utilisateur -->
+					{@html qrSvg}
+					<p class="qr-label">
+						Sur ordinateur, le GPS est trop imprécis. <strong>Scannez</strong> pour mesurer depuis votre
+						téléphone.
+					</p>
+				</div>
 
 				<label class="field" for="operator">
 					Votre opérateur
@@ -398,11 +415,16 @@
 							{statusLabel[live.status] ?? live.status}
 						</div>
 
+						{#if live.gpsStale}
+							<p class="warn" aria-live="polite">
+								<strong>En attente d'une position GPS précise…</strong> La mesure continue&nbsp;: si le
+								GPS finit par accrocher, vos données seront enregistrées.
+							</p>
+						{/if}
+
 						<div class="captured" aria-live="polite">
 							<span class="count">{captured}</span>
-							<span class="unit"
-								>point{captured > 1 ? 's' : ''} enregistré{captured > 1 ? 's' : ''}</span
-							>
+							<span class="unit">point{pluralS(captured)} enregistré{pluralS(captured)}</span>
 						</div>
 						<!-- Toujours rendue (hauteur réservée) → pas de saut de mise en page. -->
 						<p class="sync {syncInfo.cls}">{syncInfo.text}</p>
@@ -663,20 +685,43 @@
 		color: #fca5a5;
 		font-size: var(--fs-sm);
 	}
-	/* Avertissement « tu es en Wi-Fi » : jaune ambre, plus visible qu'un simple .hint. */
+	/* Avertissement (ambre) : informatif, moins critique qu'une erreur. Classe partagée
+	   par le rappel Wi-Fi de bord et l'attente de position GPS précise (gpsStale). */
 	.warn {
 		margin: 0.5rem 0 0;
-		padding: 0.5rem 0.65rem;
-		border-radius: 0.5rem;
-		background: rgba(252, 211, 77, 0.12);
-		border: 1px solid rgba(252, 211, 77, 0.4);
-		color: #fcd34d;
+		padding: 0.5rem 0.7rem;
+		border-radius: var(--r-sm);
+		background: rgba(251, 191, 36, 0.12);
+		border: 1px solid rgba(251, 191, 36, 0.35);
+		color: #fbbf24;
 		font-size: var(--fs-sm);
-		line-height: 1.35;
+		line-height: 1.4;
+	}
+	.warn strong {
+		color: #fcd34d;
 	}
 	/* Rappel statique sous le select opérateur (couvre iOS où le Wi-Fi est indétectable). */
 	.wifi-hint {
 		margin: -0.25rem 0 0.75rem;
+	}
+	/* QR « mesure depuis ton téléphone » : masqué par défaut (mobile-first),
+	   affiché uniquement sur desktop (cf. @media min-width: 761px). */
+	.qr-desktop {
+		display: none;
+	}
+	.qr-desktop :global(svg) {
+		width: 132px;
+		height: 132px;
+		background: #fff;
+		padding: 7px;
+		border-radius: var(--r-sm);
+	}
+	.qr-label {
+		margin: 0;
+		font-size: var(--fs-sm);
+		color: var(--muted);
+		text-align: center;
+		max-width: 22ch;
 	}
 	.queued-note {
 		color: var(--muted);
@@ -844,6 +889,13 @@
 		}
 		.panel {
 			padding: 1.25rem;
+		}
+		.qr-desktop {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: var(--sp-2);
+			margin: 0.25rem 0 1rem;
 		}
 	}
 

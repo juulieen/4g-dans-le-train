@@ -3,8 +3,21 @@
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { cellToBoundary } from 'h3-js';
-	import { USAGE_COLORS, usageLabel, rateToLevel } from '$lib/usage';
+	import {
+		USAGE_COLORS,
+		USAGE_SHORT,
+		USAGE_CSS_VAR,
+		USAGE_OPS,
+		OPERATOR_LABEL,
+		usageLabel,
+		rateToLevel,
+		type Level
+	} from '$lib/usage';
 	import { worstByCell, type CellRate } from '$lib/coverage-quality';
+	import { pluralS } from '$lib/plural';
+
+	/** Niveaux d'usage, du meilleur au pire — ordre d'affichage de la légende. */
+	const LEGEND_LEVELS: Level[] = ['TBC', 'BC', 'CL', 'none'];
 
 	let {
 		coverage = null,
@@ -392,14 +405,7 @@
 			const p = f.properties as Record<string, string>;
 			const field = operator === 'inconnu' || operator === 'autre' ? 'best' : operator;
 			const lvl = p[field] ?? null;
-			const opLine = [
-				['Orange', p.orange],
-				['SFR', p.sfr],
-				['Free', p.free],
-				['Bouygues', p.bouygues]
-			]
-				.map(([name, l]) => `${name} ${dot(l)}`)
-				.join(' · ');
+			const opLine = USAGE_OPS.map((op) => `${OPERATOR_LABEL[op]} ${dot(p[op])}`).join(' · ');
 			const baseHtml =
 				`<strong>Couverture théorique (ARCEP)</strong>` +
 				`<div style="margin:.35em 0">${usageLabel(lvl)}</div>` +
@@ -507,7 +513,7 @@
 			.join('');
 		const more =
 			rest > 0
-				? `<div style="font-size:.82em;color:var(--muted)">+${rest} autre${rest > 1 ? 's' : ''}</div>`
+				? `<div style="font-size:.82em;color:var(--muted)">+${rest} autre${pluralS(rest)}</div>`
 				: '';
 		return (
 			`<div style="margin-top:.5em;padding-top:.4em;border-top:1px solid var(--glass-border)">` +
@@ -577,10 +583,9 @@
 {#if hasArcep}
 	<div class="legend-overlay glass">
 		<strong>Sur la voie, vous pourrez :</strong>
-		<span><i style="background:var(--usage-tbc)"></i> Streaming vidéo</span>
-		<span><i style="background:var(--usage-bc)"></i> Web & réseaux sociaux</span>
-		<span><i style="background:var(--usage-cl)"></i> Messages seulement</span>
-		<span><i style="background:var(--usage-none)"></i> Rien (zone blanche)</span>
+		{#each LEGEND_LEVELS as lvl (lvl)}
+			<span><i style="background:{USAGE_CSS_VAR[lvl]}"></i> {USAGE_SHORT[lvl]}</span>
+		{/each}
 		<span class="real"
 			><i style="background:var(--usage-tbc)"></i> Mesuré en vrai (ruban &amp; cellules, mêmes couleurs)</span
 		>
