@@ -171,6 +171,22 @@ Conventions produit :
 - **Agrégation** (`src/lib/server/ingest.ts`) : par cellule H3 × opérateur →
   taux de réussite, latence médiane, **débit médian** (nullable : seulement si des
   mesures de débit existent), nombre de mesures. Servi par `GET /api/coverage`.
+- **Rubans le long de la voie** (`GET /api/coverage/segments`) : pour la carte (zoom
+  faible/moyen), les cellules d'une ligne sont projetées sur le tracé de son profil et
+  fusionnées en segments de même niveau (`src/lib/coverage-segments.ts`, logique pure
+  testée). En vue « tous opérateurs », chaque cellule prend le **pire** taux
+  (`worstByCell`, `src/lib/coverage-quality.ts`).
+  - **Perf (full-scan)** : en vue globale, l'endpoint lit **toute** la table
+    `cell_aggregates` à chaque requête (pas d'agrégat pré-calculé), atténué par le
+    cache HTTP 60 s et la mémoïsation des profils. Borné et rapide au volume actuel
+    (~10-50 ms), mais le coût croît avec le volume de mesures. Si ça devient lent :
+    pré-calculer les rubans (façon `route-profiles`) ou matérialiser une table de
+    segments recalculée à l'ingestion.
+  - **Limite connue (lignes repliées)** : la projection retient l'abscisse de plus
+    petit écart, sans contrainte de continuité → sur une ligne parcourue deux fois
+    (aller-retour, troncs communs), une cellule peut se placer sur la mauvaise branche
+    et « faire sauter » un segment. Même limite que `RouteProfile.distOf` ; impact
+    faible au volume actuel.
 - **Rattachement à une ligne (snapping)** : à l'ingestion, la cellule H3 de la
   mesure est rattachée à sa **ligne commerciale** via un index pré-calculé
   (`src/lib/geo/line-snap.ts` → `line-index.json`, cf. `docs/DATA.md` § 3). Le
