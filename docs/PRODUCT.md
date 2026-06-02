@@ -30,14 +30,18 @@ Tout l'intérêt est de **révéler les écarts** entre la promesse et le vécu.
   possible (fond « théorique », trait large et un peu pâle).
 - **Mesures communautaires** (le « réel », par-dessus) = un **rendu progressif au
   zoom** plutôt qu'une traînée de pastilles (vite illisible quand un trajet génère
-  des centaines de cellules) :
-  - **zoom faible/intermédiaire** → un **ruban coloré qui suit la voie** : les
-    cellules mesurées d'une ligne sont projetées sur son tracé puis fusionnées en
+  des centaines de cellules). **Le réel prime visuellement sur le théorique** : il est
+  **cerclé de blanc** (liseré/contour) pour ressortir nettement au-dessus de la voie
+  ARCEP — c'est la signature « ça, c'est du vécu » (héritée des anciennes pastilles), et
+  l'incitation à contribuer (mesurer = voir sa ligne « s'allumer » en gras). L'ARCEP est
+  donc volontairement **en léger retrait** (plus pâle/floue) mais reste lisible.
+  - **zoom faible/intermédiaire** → un **ruban coloré bordé de blanc qui suit la voie** :
+    les cellules mesurées d'une ligne sont projetées sur son tracé puis fusionnées en
     segments de même niveau (`GET /api/coverage/segments`, run-length le long du
     `path` des profils de trajet) ;
   - **zoom fort** (z ≥ ~13) → un **quadrillage de cellules hexagonales H3** (les
-    vraies cellules ~150 m, construites côté client via `cellToBoundary`), avec
-    **fondu croisé** du ruban autour de z 11→13.
+    vraies cellules ~150 m, **cerclées de blanc**, construites côté client via
+    `cellToBoundary`), avec **fondu croisé** du ruban autour de z 11→13.
   - En vue « tous opérateurs », chaque cellule/segment retient le **pire** taux de
     réussite parmi les opérateurs mesurés (`worstByCell`, `src/lib/coverage-quality.ts`) :
     on met ainsi en avant les **risques de coupure**. Avec un opérateur sélectionné,

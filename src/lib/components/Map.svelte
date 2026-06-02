@@ -112,6 +112,16 @@
 	}
 
 	/**
+	 * Couleur du « cerclage » du réel (liseré du ruban, contour des hexagones) : doit
+	 * CONTRASTER avec le fond de carte. Blanc sur fond sombre, foncé sur fond clair
+	 * (sinon le liseré blanc disparaît sur le basemap positron). Recalculé à chaque
+	 * bascule de thème, qui passe par setStyle → addOverlays (recrée les couches).
+	 */
+	function realEdgeColor(): string {
+		return currentTheme() === 'light' ? '#0f172a' : '#ffffff';
+	}
+
+	/**
 	 * Quadrillage H3 (zoom fort) construit côté client à partir des points `/api/coverage` :
 	 * chaque cellule mesurée devient un hexagone (`cellToBoundary`) colorié par son niveau.
 	 * En vue « tous opérateurs », on retient le PIRE taux par cellule (`worstByCell`).
@@ -237,8 +247,9 @@
 					paint: {
 						'line-color': arcepColor(operator),
 						'line-width': ['interpolate', ['linear'], ['zoom'], 5, 3, 12, 8],
-						'line-opacity': 0.9,
-						'line-blur': 0.4
+						// Légèrement en retrait (le réel prime), mais toujours bien lisible.
+						'line-opacity': 0.8,
+						'line-blur': 0.6
 					}
 				});
 			}
@@ -249,8 +260,36 @@
 		//   • zoom fort → QUADRILLAGE H3 (les vraies cellules ~174 m, honnête sur la granularité).
 		// Fondu croisé entre les deux autour du zoom 11→13.
 		const vis = showCommunity ? 'visible' : 'none';
+		// Le ruban « réel » se distingue de la voie ARCEP par un LISERÉ BLANC (casing) :
+		// reprend la signature « cerclé de blanc = vrai » des anciennes pastilles, fait
+		// flotter le réel au-dessus du théorique. Le fondu (opacité) accompagne la bascule
+		// vers le quadrillage H3 au zoom fort (13).
+		const segFade: maplibregl.ExpressionSpecification = [
+			'interpolate',
+			['linear'],
+			['zoom'],
+			5,
+			0.95,
+			11,
+			0.95,
+			13,
+			0
+		];
 		if (!map.getSource('community-segments')) {
 			map.addSource('community-segments', { type: 'geojson', data: lastSegments });
+			// 1) Liseré blanc (dessous, plus large) — la « bordure » du ruban.
+			map.addLayer({
+				id: 'community-segments-casing',
+				type: 'line',
+				source: 'community-segments',
+				layout: { visibility: vis, 'line-cap': 'round', 'line-join': 'round' },
+				paint: {
+					'line-color': realEdgeColor(),
+					'line-width': ['interpolate', ['linear'], ['zoom'], 5, 7, 11, 12],
+					'line-opacity': segFade
+				}
+			});
+			// 2) Cœur coloré (dessus, plus étroit) — l'usage mesuré.
 			map.addLayer({
 				id: 'community-segments',
 				type: 'line',
@@ -258,9 +297,8 @@
 				layout: { visibility: vis, 'line-cap': 'round', 'line-join': 'round' },
 				paint: {
 					'line-color': communityColor(),
-					// Un peu plus épais que l'ARCEP : le réel prime visuellement.
-					'line-width': ['interpolate', ['linear'], ['zoom'], 5, 3.5, 11, 7],
-					'line-opacity': ['interpolate', ['linear'], ['zoom'], 5, 0.95, 11, 0.95, 13, 0]
+					'line-width': ['interpolate', ['linear'], ['zoom'], 5, 4, 11, 8],
+					'line-opacity': segFade
 				}
 			});
 		}
@@ -282,9 +320,11 @@
 				source: 'community-hex',
 				layout: { visibility: vis },
 				paint: {
-					'line-color': communityColor(),
-					'line-width': 1,
-					'line-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0, 13, 0.9]
+					// Contour contrasté (blanc en sombre, foncé en clair) : même signature
+					// « réel = cerclé » que le ruban, visible sur les deux fonds de carte.
+					'line-color': realEdgeColor(),
+					'line-width': 1.5,
+					'line-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0, 13, 0.95]
 				}
 			});
 		}
@@ -499,7 +539,12 @@
 	$effect(() => {
 		if (!loaded || !map) return;
 		const vis = showCommunity ? 'visible' : 'none';
-		for (const id of ['community-segments', 'community-hex-fill', 'community-hex-outline']) {
+		for (const id of [
+			'community-segments-casing',
+			'community-segments',
+			'community-hex-fill',
+			'community-hex-outline'
+		]) {
 			if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis);
 		}
 		if (map.getLayer('arcep-lines')) {
@@ -570,7 +615,8 @@
 		width: 18px;
 		height: 7px;
 		border-radius: 4px;
-		border: 1.5px solid #fff;
+		/* Bordure contrastée selon le thème (comme le cerclage du ruban sur la carte). */
+		border: 1.5px solid var(--text);
 	}
 	.legend-overlay .real {
 		margin-top: 2px;
