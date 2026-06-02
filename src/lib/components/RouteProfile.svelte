@@ -1,5 +1,12 @@
 <script lang="ts">
-	import { USAGE_TEXT, USAGE_SHORT, USAGE_OPS, type Level, type UsageOp } from '$lib/usage';
+	import {
+		USAGE_TEXT,
+		USAGE_SHORT,
+		USAGE_OPS,
+		rateToLevel,
+		type Level,
+		type UsageOp
+	} from '$lib/usage';
 
 	let {
 		slug,
@@ -128,19 +135,6 @@
 		return best <= 0.0025 ? dist : null;
 	}
 
-	/**
-	 * Niveau d'usage « réel » dérivé du taux de réussite mesuré (seuils produit 80/40,
-	 * cohérents avec `usageFromRate` de la carte). Le niveau intermédiaire `BC` est
-	 * volontairement absent : la mesure est un ping binaire (OK/KO), trop grossier
-	 * pour distinguer « web » de « streaming ». Le réel n'a donc que 3 paliers
-	 * (vert/orange/rouge), là où le théorique ARCEP en distingue 4.
-	 */
-	function rateLevel(rate: number): Level {
-		if (rate >= 0.8) return 'TBC';
-		if (rate >= 0.4) return 'CL';
-		return 'none';
-	}
-
 	// --- Chargement des couches réel + coupures (au changement ligne/opérateur) --
 
 	$effect(() => {
@@ -171,7 +165,7 @@
 							const rate = Number(f.properties.successRate) || 0;
 							pts.push({
 								distKm: d,
-								level: rateLevel(rate),
+								level: rateToLevel(rate),
 								successRate: rate,
 								samples: Number(f.properties.samples) || 0
 							});

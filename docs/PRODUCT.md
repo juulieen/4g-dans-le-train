@@ -28,8 +28,20 @@ Tout l'intérêt est de **révéler les écarts** entre la promesse et le vécu.
 
 - **Couverture ARCEP** = le **tracé de la voie ferrée coloré** selon l'usage
   possible (fond « théorique », trait large et un peu pâle).
-- **Mesures communautaires** = **pastilles vives cerclées de blanc** posées
-  par-dessus (le « réel »).
+- **Mesures communautaires** (le « réel », par-dessus) = un **rendu progressif au
+  zoom** plutôt qu'une traînée de pastilles (vite illisible quand un trajet génère
+  des centaines de cellules) :
+  - **zoom faible/intermédiaire** → un **ruban coloré qui suit la voie** : les
+    cellules mesurées d'une ligne sont projetées sur son tracé puis fusionnées en
+    segments de même niveau (`GET /api/coverage/segments`, run-length le long du
+    `path` des profils de trajet) ;
+  - **zoom fort** (z ≥ ~13) → un **quadrillage de cellules hexagonales H3** (les
+    vraies cellules ~150 m, construites côté client via `cellToBoundary`), avec
+    **fondu croisé** du ruban autour de z 11→13.
+  - En vue « tous opérateurs », chaque cellule/segment retient le **pire** taux de
+    réussite parmi les opérateurs mesurés (`worstByCell`, `src/lib/coverage-quality.ts`) :
+    on met ainsi en avant les **risques de coupure**. Avec un opérateur sélectionné,
+    on n'affiche que le sien.
 
 Code couleur **par usage** (et non par jargon technique) :
 

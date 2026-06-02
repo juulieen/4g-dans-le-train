@@ -3,6 +3,21 @@
 > Ajoute ici une entrée (date + résumé) pour toute évolution fonctionnelle ou de
 > contenu notable. Le plus récent en haut. Voir `../CLAUDE.md`.
 
+## 2026-06-02
+
+- **Carte — lisibilité des mesures : ruban le long de la voie + quadrillage H3** :
+  remplacement des **pastilles empilées** (illisibles dès qu'un trajet génère des
+  centaines de cellules — ex. Paris-Arcachon : 656 cellules) par un **rendu
+  progressif au zoom**. Au zoom faible/intermédiaire, un **ruban coloré suit le
+  tracé** (nouvel endpoint `GET /api/coverage/segments` : projection des cellules sur
+  le `path` du profil de ligne, fusion run-length par niveau d'usage) ; au zoom fort,
+  un **quadrillage de cellules hexagonales H3** (`cellToBoundary` côté client) avec
+  fondu croisé. En vue « tous opérateurs », chaque cellule/segment prend le **pire**
+  taux parmi les opérateurs (`worstByCell`) → on met en avant les risques de coupure.
+  Seuils de classification du réel centralisés dans `src/lib/usage.ts` (`rateToLevel`,
+  80/40 → TBC/CL/none), réutilisés par la carte et la frise `RouteProfile`.
+  `/api/coverage` (points) reste inchangé. _Non encore mergé sur `main`._
+
 ## 2026-06-01
 
 - **Mesure — débit : maîtrise de la consommation data** : la cadence du test de débit
