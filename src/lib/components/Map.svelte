@@ -335,7 +335,7 @@
 	function bindInteractions() {
 		if (!map) return;
 
-		// Popup ARCEP : ce qu'on peut faire ici (théorique).
+		// Popup ARCEP : ce qu'on peut faire ici (théorique) + lignes qui passent ici.
 		map.on('click', 'arcep-lines', (e) => {
 			const f = e.features?.[0];
 			if (!f || !map) return;
@@ -350,14 +350,19 @@
 			]
 				.map(([name, l]) => `${name} ${dot(l)}`)
 				.join(' · ');
-			new maplibregl.Popup()
-				.setLngLat(e.lngLat)
-				.setHTML(
-					`<strong>Couverture théorique (ARCEP)</strong>` +
-						`<div style="margin:.35em 0">${usageLabel(lvl)}</div>` +
-						`<div style="font-size:.82em;color:var(--muted)">${opLine}</div>`
-				)
-				.addTo(map);
+			const baseHtml =
+				`<strong>Couverture théorique (ARCEP)</strong>` +
+				`<div style="margin:.35em 0">${usageLabel(lvl)}</div>` +
+				`<div style="font-size:.82em;color:var(--muted)">${opLine}</div>`;
+			const popup = new maplibregl.Popup().setLngLat(e.lngLat).setHTML(baseHtml).addTo(map);
+
+			// Quelles lignes commerciales passent ici ? Rattachement par cellule H3
+			// côté serveur (line-index.json), ajouté à la popup quand la réponse
+			// arrive (si la popup est toujours ouverte).
+			void fetchLinesAt(e.lngLat.lat, e.lngLat.lng).then((lines) => {
+				if (!popup.isOpen()) return;
+				popup.setHTML(baseHtml + linesSection(lines));
+			});
 		});
 
 		// Popup mesure communautaire — RUBAN (tronçon mesuré, zoom faible/moyen).
@@ -408,6 +413,48 @@
 	function opLabel(op: unknown): string {
 		const name = op ?? 'inconnu';
 		return isSpecificOp(operator) ? `Opérateur ${name}` : `Pire opérateur mesuré : ${name}`;
+	}
+
+	type LineHit = { slug: string; name: string; service: string };
+
+	/** Lignes commerciales passant par une position cliquée (via /api/lines). */
+	async function fetchLinesAt(lat: number, lng: number): Promise<LineHit[]> {
+		try {
+			const res = await fetch(`/api/lines?lat=${lat}&lng=${lng}`);
+			if (!res.ok) return [];
+			const data = (await res.json()) as { lines?: LineHit[] };
+			return data.lines ?? [];
+		} catch {
+			return [];
+		}
+	}
+
+	/** Section « Lignes qui passent ici » de la popup ARCEP (liens vers /ligne/…). */
+	function linesSection(lines: LineHit[]): string {
+		if (!lines.length) return '';
+		// Sur un nœud (gare), une cellule peut porter beaucoup de lignes : on en
+		// montre les plus pertinentes (les premières = les plus spécifiques) et on
+		// résume le reste.
+		const MAX = 6;
+		const shown = lines.slice(0, MAX);
+		const rest = lines.length - shown.length;
+		const items = shown
+			.map(
+				(l) =>
+					`<a href="/ligne/${l.slug}" style="display:block;color:var(--text);text-decoration:none">` +
+					`<strong style="font-weight:600">${l.name}</strong>` +
+					`<span style="color:var(--muted);font-size:.82em"> · ${l.service}</span></a>`
+			)
+			.join('');
+		const more =
+			rest > 0
+				? `<div style="font-size:.82em;color:var(--muted)">+${rest} autre${rest > 1 ? 's' : ''}</div>`
+				: '';
+		return (
+			`<div style="margin-top:.5em;padding-top:.4em;border-top:1px solid var(--glass-border)">` +
+			`<div style="font-size:.82em;color:var(--muted);margin-bottom:.25em">Lignes qui passent ici</div>` +
+			`<div style="display:flex;flex-direction:column;gap:.2em">${items}${more}</div></div>`
+		);
 	}
 
 	/** Pastille emoji par niveau ARCEP, pour les badges opérateurs des popups. */
