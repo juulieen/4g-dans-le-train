@@ -5,6 +5,18 @@
 
 ## 2026-06-02
 
+- **Carte — lisibilité des mesures : ruban le long de la voie + quadrillage H3** :
+  remplacement des **pastilles empilées** (illisibles dès qu'un trajet génère des
+  centaines de cellules — ex. Paris-Arcachon : 656 cellules) par un **rendu
+  progressif au zoom**. Au zoom faible/intermédiaire, un **ruban coloré suit le
+  tracé** (nouvel endpoint `GET /api/coverage/segments` : projection des cellules sur
+  le `path` du profil de ligne, fusion run-length par niveau d'usage) ; au zoom fort,
+  un **quadrillage de cellules hexagonales H3** (`cellToBoundary` côté client) avec
+  fondu croisé. En vue « tous opérateurs », chaque cellule/segment prend le **pire**
+  taux parmi les opérateurs (`worstByCell`) → on met en avant les risques de coupure.
+  Seuils de classification du réel centralisés dans `src/lib/usage.ts` (`rateToLevel`,
+  80/40 → TBC/CL/none), réutilisés par la carte et la frise `RouteProfile`.
+  `/api/coverage` (points) reste inchangé.
 - **Carte — cliquer sur une voie révèle les lignes qui passent ici** : la popup
   ARCEP (au clic sur une voie colorée) gagne une section « Lignes qui passent ici »
   listant les **lignes commerciales** du référentiel traversant ce point, chacune
@@ -13,7 +25,7 @@
   croise avec `line-index.json` via `lineSlugsForCell`, en élargissant anneau par
   anneau (`gridDisk` k=0→2) pour rester robuste à un clic légèrement décalé du
   tracé. Affichage plafonné à 6 lignes (les plus spécifiques d'abord) avec un
-  résumé « +N autres ». _Non encore mergé sur `main`._
+  résumé « +N autres ».
 
 ## 2026-06-01
 

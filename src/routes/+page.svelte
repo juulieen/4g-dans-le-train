@@ -46,17 +46,6 @@
 	// svelte-ignore state_referenced_locally
 	let coverage = $state(data.coverage);
 
-	// Couverture communautaire filtrée selon l'opérateur d'affichage choisi.
-	const filteredCoverage = $derived.by(() => {
-		if (viewOperator === 'inconnu') return coverage;
-		return {
-			type: 'FeatureCollection' as const,
-			features: coverage.features.filter(
-				(f) => (f.properties as Record<string, unknown>)?.operator === viewOperator
-			)
-		};
-	});
-
 	let controller: MeasurementController | null = null;
 
 	$effect(() => {
@@ -257,7 +246,7 @@
 <section class="layout">
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div class="map-wrap" onpointerdown={onMapInteract}>
-		<Map coverage={filteredCoverage} operator={viewOperator} {showArcep} {showCommunity} />
+		<Map {coverage} operator={viewOperator} {showArcep} {showCommunity} />
 		<button
 			class="info-fab glass"
 			onpointerdown={(e) => e.stopPropagation()}
@@ -316,8 +305,8 @@
 
 			<p class="explain">
 				La <strong>voie est colorée</strong> selon ce que vous pourrez y faire (couverture théorique
-				des opérateurs). Les <strong>pastilles cerclées de blanc</strong> sont les mesures réelles des
-				voyageurs&nbsp;: là, c'est du vécu, pas de la théorie.
+				des opérateurs). Les <strong>rubans le long de la voie</strong> (et les cellules au fort zoom)
+				sont les mesures réelles des voyageurs&nbsp;: là, c'est du vécu, pas de la théorie.
 			</p>
 
 			<div class="layers">

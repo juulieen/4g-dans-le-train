@@ -2,7 +2,9 @@
 	import { onMount } from 'svelte';
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
-	import { USAGE_COLORS, usageLabel } from '$lib/usage';
+	import { cellToBoundary } from 'h3-js';
+	import { USAGE_COLORS, usageLabel, rateToLevel } from '$lib/usage';
+	import { worstByCell, type CellRate } from '$lib/coverage-quality';
 
 	let {
 		coverage = null,
@@ -27,6 +29,10 @@
 	let hasArcep = $state(false);
 
 	const EMPTY: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+	// Derniers segments « réel » récupérés : conservés pour ré-alimenter la source après
+	// un setStyle (bascule de thème), qui repart d'un style vierge et ne re-déclenche pas
+	// le $effect de fetch (lui ne dépend que de coverage/operator, pas du thème).
+	let lastSegments: GeoJSON.FeatureCollection = EMPTY;
 
 	// Données géo mises en cache (fetch une seule fois ; ré-utilisées après un
 	// changement de fond de carte qui réinitialise les couches).
@@ -81,6 +87,92 @@
 			USAGE_COLORS.CL,
 			USAGE_COLORS.none // défaut = zone blanche
 		] as unknown as maplibregl.ExpressionSpecification;
+	}
+
+	/** Opérateur précis sélectionné (sinon vue « tous » → agrégation « pire »). */
+	function isSpecificOp(op: string): boolean {
+		return op !== 'inconnu' && op !== 'autre';
+	}
+
+	/**
+	 * Expression MapLibre : couleur d'une mesure communautaire selon le niveau d'usage
+	 * `quality` (3 paliers du réel : TBC/CL/none). Partagée par le ruban (segments) et
+	 * le quadrillage H3.
+	 */
+	function communityColor(): maplibregl.ExpressionSpecification {
+		return [
+			'match',
+			['get', 'quality'],
+			'TBC',
+			USAGE_COLORS.TBC,
+			'CL',
+			USAGE_COLORS.CL,
+			USAGE_COLORS.none // défaut = ça coupe
+		] as unknown as maplibregl.ExpressionSpecification;
+	}
+
+	/**
+	 * Quadrillage H3 (zoom fort) construit côté client à partir des points `/api/coverage` :
+	 * chaque cellule mesurée devient un hexagone (`cellToBoundary`) colorié par son niveau.
+	 * En vue « tous opérateurs », on retient le PIRE taux par cellule (`worstByCell`).
+	 */
+	function buildHexFC(fc: GeoJSON.FeatureCollection | null, op: string): GeoJSON.FeatureCollection {
+		if (!fc) return EMPTY;
+		const rows: CellRate[] = fc.features.map((f) => {
+			const p = f.properties as Record<string, unknown>;
+			const [lng, lat] = (f.geometry as GeoJSON.Point).coordinates;
+			return {
+				cellId: String(p.cellId),
+				operator: String(p.operator),
+				successRate: Number(p.successRate),
+				samples: Number(p.samples ?? 0),
+				lat,
+				lng
+			};
+		});
+		const cells = isSpecificOp(op)
+			? rows
+					.filter((r) => r.operator === op)
+					.map((r) => ({
+						cellId: r.cellId,
+						rate: r.successRate,
+						samples: r.samples,
+						operator: r.operator
+					}))
+			: [...worstByCell(rows).values()].map((c) => ({
+					cellId: c.cellId,
+					rate: c.rate,
+					samples: c.samples,
+					operator: c.operator
+				}));
+		const features: GeoJSON.Feature[] = cells.map((c) => {
+			// cellToBoundary renvoie [[lat, lng], …] ; GeoJSON veut [lng, lat] + anneau fermé.
+			const ring = cellToBoundary(c.cellId).map(([lat, lng]) => [lng, lat] as [number, number]);
+			ring.push(ring[0]);
+			return {
+				type: 'Feature',
+				geometry: { type: 'Polygon', coordinates: [ring] },
+				properties: {
+					quality: rateToLevel(c.rate),
+					rate: Math.round(c.rate * 100),
+					samples: c.samples,
+					operator: c.operator
+				}
+			};
+		});
+		return { type: 'FeatureCollection', features };
+	}
+
+	/** Récupère les segments « réel » le long des voies pour l'opérateur courant. */
+	async function fetchSegments(op: string): Promise<GeoJSON.FeatureCollection> {
+		const qs = isSpecificOp(op) ? `?operator=${encodeURIComponent(op)}` : '';
+		try {
+			const res = await fetch(`/api/coverage/segments${qs}`);
+			if (res.ok) return (await res.json()) as GeoJSON.FeatureCollection;
+		} catch {
+			/* segments indisponibles : la carte reste utilisable (quadrillage au zoom) */
+		}
+		return EMPTY;
 	}
 
 	async function ensureData() {
@@ -152,30 +244,47 @@
 			}
 		}
 
-		// Mesures communautaires (le RÉEL, vif, par-dessus).
-		if (!map.getSource('coverage')) {
-			map.addSource('coverage', { type: 'geojson', data: coverage ?? EMPTY });
+		// Mesures communautaires (le RÉEL, vif, par-dessus) — rendu progressif au zoom :
+		//   • zoom faible/moyen → RUBAN coloré le long de la voie (lisible, suit le rail) ;
+		//   • zoom fort → QUADRILLAGE H3 (les vraies cellules ~174 m, honnête sur la granularité).
+		// Fondu croisé entre les deux autour du zoom 11→13.
+		const vis = showCommunity ? 'visible' : 'none';
+		if (!map.getSource('community-segments')) {
+			map.addSource('community-segments', { type: 'geojson', data: lastSegments });
 			map.addLayer({
-				id: 'coverage-fill',
-				type: 'circle',
-				source: 'coverage',
-				layout: { visibility: showCommunity ? 'visible' : 'none' },
+				id: 'community-segments',
+				type: 'line',
+				source: 'community-segments',
+				layout: { visibility: vis, 'line-cap': 'round', 'line-join': 'round' },
 				paint: {
-					'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 4, 12, 9],
-					'circle-color': [
-						'interpolate',
-						['linear'],
-						['get', 'successRate'],
-						0,
-						'#ef4444',
-						0.5,
-						'#f59e0b',
-						1,
-						'#22c55e'
-					],
-					'circle-stroke-color': '#ffffff',
-					'circle-stroke-width': 2,
-					'circle-opacity': 0.95
+					'line-color': communityColor(),
+					// Un peu plus épais que l'ARCEP : le réel prime visuellement.
+					'line-width': ['interpolate', ['linear'], ['zoom'], 5, 3.5, 11, 7],
+					'line-opacity': ['interpolate', ['linear'], ['zoom'], 5, 0.95, 11, 0.95, 13, 0]
+				}
+			});
+		}
+		if (!map.getSource('community-hex')) {
+			map.addSource('community-hex', { type: 'geojson', data: buildHexFC(coverage, operator) });
+			map.addLayer({
+				id: 'community-hex-fill',
+				type: 'fill',
+				source: 'community-hex',
+				layout: { visibility: vis },
+				paint: {
+					'fill-color': communityColor(),
+					'fill-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0, 13, 0.5]
+				}
+			});
+			map.addLayer({
+				id: 'community-hex-outline',
+				type: 'line',
+				source: 'community-hex',
+				layout: { visibility: vis },
+				paint: {
+					'line-color': communityColor(),
+					'line-width': 1,
+					'line-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0, 13, 0.9]
 				}
 			});
 		}
@@ -256,24 +365,37 @@
 			});
 		});
 
-		// Popup mesure communautaire : la réalité mesurée.
-		map.on('click', 'coverage-fill', (e) => {
+		// Popup mesure communautaire — RUBAN (tronçon mesuré, zoom faible/moyen).
+		map.on('click', 'community-segments', (e) => {
 			const f = e.features?.[0];
 			if (!f || !map) return;
 			const p = f.properties as Record<string, unknown>;
-			const rate = Math.round(Number(p.successRate) * 100);
-			const rtt = p.medianRtt ? `${p.medianRtt} ms` : 'n/a';
 			new maplibregl.Popup()
 				.setLngLat(e.lngLat)
 				.setHTML(
-					`<strong>Mesuré par la communauté</strong>` +
-						`<div style="margin:.35em 0">${usageFromRate(rate)} — ${rate}% de réussite</div>` +
-						`<div style="font-size:.82em;color:var(--muted)">Opérateur ${p.operator ?? 'inconnu'} · ${p.samples ?? 0} mesures · latence ${rtt}</div>`
+					`<strong>Tronçon mesuré par la communauté</strong>` +
+						`<div style="margin:.35em 0">${usageLabel(String(p.quality))}</div>` +
+						`<div style="font-size:.82em;color:var(--muted)">${opLabel(p.operator)} · ${p.samples ?? 0} mesures</div>`
 				)
 				.addTo(map);
 		});
 
-		for (const layer of ['arcep-lines', 'coverage-fill']) {
+		// Popup mesure communautaire — CELLULE H3 (zoom fort).
+		map.on('click', 'community-hex-fill', (e) => {
+			const f = e.features?.[0];
+			if (!f || !map) return;
+			const p = f.properties as Record<string, unknown>;
+			new maplibregl.Popup()
+				.setLngLat(e.lngLat)
+				.setHTML(
+					`<strong>Cellule mesurée (~150 m)</strong>` +
+						`<div style="margin:.35em 0">${usageLabel(String(p.quality))} — ${p.rate ?? 0}% de réussite</div>` +
+						`<div style="font-size:.82em;color:var(--muted)">${opLabel(p.operator)} · ${p.samples ?? 0} mesures</div>`
+				)
+				.addTo(map);
+		});
+
+		for (const layer of ['arcep-lines', 'community-segments', 'community-hex-fill']) {
 			map.on('mouseenter', layer, () => {
 				if (map) map.getCanvas().style.cursor = 'pointer';
 			});
@@ -281,6 +403,16 @@
 				if (map) map.getCanvas().style.cursor = '';
 			});
 		}
+	}
+
+	/**
+	 * Libellé opérateur d'une popup « réel » : en vue « tous », la valeur est le PIRE
+	 * opérateur du segment/cellule → on le dit explicitement pour ne pas laisser croire
+	 * que seul cet opérateur est concerné.
+	 */
+	function opLabel(op: unknown): string {
+		const name = op ?? 'inconnu';
+		return isSpecificOp(operator) ? `Opérateur ${name}` : `Pire opérateur mesuré : ${name}`;
 	}
 
 	type LineHit = { slug: string; name: string; service: string };
@@ -325,11 +457,6 @@
 		);
 	}
 
-	function usageFromRate(rate: number): string {
-		if (rate >= 80) return '🟢 ça capte bien';
-		if (rate >= 40) return '🟠 réseau dégradé';
-		return '🔴 ça coupe';
-	}
 	/** Pastille emoji par niveau ARCEP, pour les badges opérateurs des popups. */
 	function dot(lvl: string | null | undefined): string {
 		switch (lvl) {
@@ -344,18 +471,36 @@
 		}
 	}
 
-	// Rafraîchit la couverture communautaire quand la prop change.
+	// Rafraîchit les mesures communautaires quand la couverture ou l'opérateur change :
+	//   • quadrillage H3 → reconstruit côté client depuis les points ;
+	//   • ruban → re-fetch des segments (filtré/agrégé côté serveur).
 	$effect(() => {
 		if (!loaded || !map) return;
-		const src = map.getSource('coverage') as maplibregl.GeoJSONSource | undefined;
-		src?.setData(coverage ?? EMPTY);
+		// Lecture explicite pour que l'effet se redéclenche sur ces deux dépendances.
+		const cov = coverage;
+		const op = operator;
+		const hexSrc = map.getSource('community-hex') as maplibregl.GeoJSONSource | undefined;
+		hexSrc?.setData(buildHexFC(cov, op));
+
+		// Garde anti-course : une réponse périmée (opérateur changé) ne doit pas écraser.
+		let cancelled = false;
+		void fetchSegments(op).then((fc) => {
+			if (cancelled || !map) return;
+			lastSegments = fc;
+			const segSrc = map.getSource('community-segments') as maplibregl.GeoJSONSource | undefined;
+			segSrc?.setData(fc);
+		});
+		return () => {
+			cancelled = true;
+		};
 	});
 
 	// Visibilité des couches + recoloration ARCEP selon l'opérateur.
 	$effect(() => {
 		if (!loaded || !map) return;
-		if (map.getLayer('coverage-fill')) {
-			map.setLayoutProperty('coverage-fill', 'visibility', showCommunity ? 'visible' : 'none');
+		const vis = showCommunity ? 'visible' : 'none';
+		for (const id of ['community-segments', 'community-hex-fill', 'community-hex-outline']) {
+			if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis);
 		}
 		if (map.getLayer('arcep-lines')) {
 			map.setLayoutProperty('arcep-lines', 'visibility', showArcep ? 'visible' : 'none');
@@ -373,7 +518,7 @@
 		<span><i style="background:var(--usage-cl)"></i> Messages seulement</span>
 		<span><i style="background:var(--usage-none)"></i> Rien (zone blanche)</span>
 		<span class="real"
-			><i style="background:var(--usage-tbc); border:2px solid #fff"></i> Mesuré en vrai</span
+			><i style="background:var(--usage-tbc)"></i> Mesuré en vrai (ruban &amp; cellules, mêmes couleurs)</span
 		>
 	</div>
 {/if}
@@ -422,9 +567,10 @@
 		flex: none;
 	}
 	.legend-overlay .real i {
-		width: 12px;
-		height: 12px;
-		border-radius: 50%;
+		width: 18px;
+		height: 7px;
+		border-radius: 4px;
+		border: 1.5px solid #fff;
 	}
 	.legend-overlay .real {
 		margin-top: 2px;
