@@ -44,6 +44,15 @@ Un **filtre d'affichage** par opérateur (Tous / Orange / SFR / Free / Bouygues)
 recolore les voies ARCEP **et** filtre les mesures communautaires. Il est
 **distinct** du sélecteur « Votre opérateur » du mode mesure.
 
+**Cliquer sur une voie** ouvre une popup qui, en plus de la couverture théorique
+ARCEP, liste les **lignes commerciales qui passent par ce point** avec un lien
+vers leur page dédiée `/ligne/{slug}`. Le rattachement point → lignes se fait
+côté serveur via `GET /api/lines?lat=&lng=` : la position est convertie en
+cellule H3 (rés. 9, comme l'ingestion) puis croisée avec `line-index.json`
+(`lineSlugsForCell`), en élargissant anneau par anneau (`gridDisk`) si le clic
+tombe à côté du tracé échantillonné. Les lignes sont ordonnées de la plus
+spécifique à la plus générale (cf. désambiguïsation des troncs communs).
+
 ## Le profil de trajet (frise gare→gare)
 
 La carte répond à « **où** ça capte ? » ; le profil de trajet répond à « **quand,

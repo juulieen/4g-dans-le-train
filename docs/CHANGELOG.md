@@ -3,6 +3,18 @@
 > Ajoute ici une entrée (date + résumé) pour toute évolution fonctionnelle ou de
 > contenu notable. Le plus récent en haut. Voir `../CLAUDE.md`.
 
+## 2026-06-02
+
+- **Carte — cliquer sur une voie révèle les lignes qui passent ici** : la popup
+  ARCEP (au clic sur une voie colorée) gagne une section « Lignes qui passent ici »
+  listant les **lignes commerciales** du référentiel traversant ce point, chacune
+  avec un lien vers sa **page dédiée** `/ligne/{slug}`. Nouvel endpoint
+  `GET /api/lines?lat=&lng=` : convertit la position en cellule H3 (rés. 9) et la
+  croise avec `line-index.json` via `lineSlugsForCell`, en élargissant anneau par
+  anneau (`gridDisk` k=0→2) pour rester robuste à un clic légèrement décalé du
+  tracé. Affichage plafonné à 6 lignes (les plus spécifiques d'abord) avec un
+  résumé « +N autres ». _Non encore mergé sur `main`._
+
 ## 2026-06-01
 
 - **Mesure — débit : maîtrise de la consommation data** : la cadence du test de débit
