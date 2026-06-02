@@ -305,8 +305,8 @@
 
 			<p class="explain">
 				La <strong>voie est colorée</strong> selon ce que vous pourrez y faire (couverture théorique
-				des opérateurs). Les <strong>pastilles cerclées de blanc</strong> sont les mesures réelles des
-				voyageurs&nbsp;: là, c'est du vécu, pas de la théorie.
+				des opérateurs). Les <strong>rubans le long de la voie</strong> (et les cellules au fort zoom)
+				sont les mesures réelles des voyageurs&nbsp;: là, c'est du vécu, pas de la théorie.
 			</p>
 
 			<div class="layers">

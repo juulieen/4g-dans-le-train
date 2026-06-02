@@ -41,12 +41,20 @@ interface ProjectedCell {
 /** Coordonnées [lng, lat] d'un segment le long du tracé, épousant les courbes du rail. */
 function segmentCoords(path: PathPoint[], fromKm: number, toKm: number): [number, number][] {
 	const a = positionAtDist(path, fromKm);
-	const coords: [number, number][] = [[a.lng, a.lat]];
+	const raw: [number, number][] = [[a.lng, a.lat]];
 	for (const [lng, lat, d] of path) {
-		if (d > fromKm && d < toKm) coords.push([lng, lat]);
+		if (d > fromKm && d < toKm) raw.push([lng, lat]);
 	}
 	const b = positionAtDist(path, toKm);
-	coords.push([b.lng, b.lat]);
+	raw.push([b.lng, b.lat]);
+	// Dédoublonne les points consécutifs identiques : aux extrémités du tracé, le PAD
+	// est clampé par positionAtDist et peut coïncider avec un point intermédiaire →
+	// éviter une LineString dégénérée (segments de longueur nulle).
+	const coords: [number, number][] = [];
+	for (const c of raw) {
+		const prev = coords[coords.length - 1];
+		if (!prev || prev[0] !== c[0] || prev[1] !== c[1]) coords.push(c);
+	}
 	return coords;
 }
 
@@ -82,6 +90,7 @@ export const GET: RequestHandler = async ({ url, fetch, setHeaders }) => {
 		const profile = await loadRouteProfile(fetch, slug);
 		if (!profile) continue;
 		const path = profile.path;
+		if (path.length < 2) continue; // un seul point : pas de tracé à suivre
 
 		// Cellules de cette ligne. En vue ligne/tronçon, `rows` est déjà restreint.
 		const cellsForLine = line ? rows : rows.filter((r) => r.lineSlug === slug);

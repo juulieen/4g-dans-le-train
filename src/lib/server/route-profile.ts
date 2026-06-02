@@ -31,16 +31,19 @@ export async function loadRouteProfile(
 	const cached = cache.get(slug);
 	if (cached !== undefined) return cached;
 
-	let result: RouteProfileGeometry | null = null;
 	try {
 		const res = await fetchFn(`/data/route-profiles/${slug}.json`);
+		// Réponse confirmée (200 valide ou 404) → résultat mémoïsable (asset immuable).
+		let result: RouteProfileGeometry | null = null;
 		if (res.ok) {
 			const data = (await res.json()) as RouteProfileGeometry;
 			if (Array.isArray(data?.path) && data.path.length > 0) result = data;
 		}
+		cache.set(slug, result);
+		return result;
 	} catch {
-		/* asset absent / illisible : on mémoïse null */
+		// Échec réseau transitoire : NE PAS mémoïser (sinon un blip figerait l'absence
+		// du profil — donc le ruban de la ligne — jusqu'au redémarrage du process).
+		return null;
 	}
-	cache.set(slug, result);
-	return result;
 }

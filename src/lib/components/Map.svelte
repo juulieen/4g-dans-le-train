@@ -29,6 +29,10 @@
 	let hasArcep = $state(false);
 
 	const EMPTY: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+	// Derniers segments « réel » récupérés : conservés pour ré-alimenter la source après
+	// un setStyle (bascule de thème), qui repart d'un style vierge et ne re-déclenche pas
+	// le $effect de fetch (lui ne dépend que de coverage/operator, pas du thème).
+	let lastSegments: GeoJSON.FeatureCollection = EMPTY;
 
 	// Données géo mises en cache (fetch une seule fois ; ré-utilisées après un
 	// changement de fond de carte qui réinitialise les couches).
@@ -246,7 +250,7 @@
 		// Fondu croisé entre les deux autour du zoom 11→13.
 		const vis = showCommunity ? 'visible' : 'none';
 		if (!map.getSource('community-segments')) {
-			map.addSource('community-segments', { type: 'geojson', data: EMPTY });
+			map.addSource('community-segments', { type: 'geojson', data: lastSegments });
 			map.addLayer({
 				id: 'community-segments',
 				type: 'line',
@@ -366,7 +370,7 @@
 				.setHTML(
 					`<strong>Tronçon mesuré par la communauté</strong>` +
 						`<div style="margin:.35em 0">${usageLabel(String(p.quality))}</div>` +
-						`<div style="font-size:.82em;color:var(--muted)">Opérateur ${p.operator ?? 'inconnu'} · ${p.samples ?? 0} mesures</div>`
+						`<div style="font-size:.82em;color:var(--muted)">${opLabel(p.operator)} · ${p.samples ?? 0} mesures</div>`
 				)
 				.addTo(map);
 		});
@@ -381,7 +385,7 @@
 				.setHTML(
 					`<strong>Cellule mesurée (~150 m)</strong>` +
 						`<div style="margin:.35em 0">${usageLabel(String(p.quality))} — ${p.rate ?? 0}% de réussite</div>` +
-						`<div style="font-size:.82em;color:var(--muted)">Opérateur ${p.operator ?? 'inconnu'} · ${p.samples ?? 0} mesures</div>`
+						`<div style="font-size:.82em;color:var(--muted)">${opLabel(p.operator)} · ${p.samples ?? 0} mesures</div>`
 				)
 				.addTo(map);
 		});
@@ -394,6 +398,16 @@
 				if (map) map.getCanvas().style.cursor = '';
 			});
 		}
+	}
+
+	/**
+	 * Libellé opérateur d'une popup « réel » : en vue « tous », la valeur est le PIRE
+	 * opérateur du segment/cellule → on le dit explicitement pour ne pas laisser croire
+	 * que seul cet opérateur est concerné.
+	 */
+	function opLabel(op: unknown): string {
+		const name = op ?? 'inconnu';
+		return isSpecificOp(operator) ? `Opérateur ${name}` : `Pire opérateur mesuré : ${name}`;
 	}
 
 	/** Pastille emoji par niveau ARCEP, pour les badges opérateurs des popups. */
@@ -425,6 +439,7 @@
 		let cancelled = false;
 		void fetchSegments(op).then((fc) => {
 			if (cancelled || !map) return;
+			lastSegments = fc;
 			const segSrc = map.getSource('community-segments') as maplibregl.GeoJSONSource | undefined;
 			segSrc?.setData(fc);
 		});
