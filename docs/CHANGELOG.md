@@ -5,6 +5,15 @@
 
 ## 2026-06-02
 
+- **Carte — le réel ressort (cerclé de blanc) au-dessus de l'ARCEP** : après la refonte
+  en rubans, les mesures se confondaient avec la voie ARCEP (formes/largeurs/couleurs
+  proches) → le réel ne primait plus, et l'incitation à contribuer baissait. Le ruban
+  « réel » reçoit un **liseré blanc** (casing) et s'épaissit, et les hexagones un
+  **contour blanc** : on retrouve la signature « cerclé de blanc = du vécu » des
+  anciennes pastilles, en gras au-dessus du théorique. Cerclage **contrasté selon le
+  thème** (blanc en sombre / foncé en clair, car le blanc disparaissait sur le fond
+  clair positron). L'ARCEP passe **légèrement en retrait** (opacité 0,9→0,8, flou accru) :
+  lisible **hors zones mesurées**, volontairement recouvert sous le ruban réel.
 - **Carte — lisibilité des mesures : ruban le long de la voie + quadrillage H3** :
   remplacement des **pastilles empilées** (illisibles dès qu'un trajet génère des
   centaines de cellules — ex. Paris-Arcachon : 656 cellules) par un **rendu
