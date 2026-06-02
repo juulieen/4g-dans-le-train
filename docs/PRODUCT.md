@@ -34,7 +34,9 @@ Tout l'intérêt est de **révéler les écarts** entre la promesse et le vécu.
   **cerclé de blanc** (liseré/contour) pour ressortir nettement au-dessus de la voie
   ARCEP — c'est la signature « ça, c'est du vécu » (héritée des anciennes pastilles), et
   l'incitation à contribuer (mesurer = voir sa ligne « s'allumer » en gras). L'ARCEP est
-  donc volontairement **en léger retrait** (plus pâle/floue) mais reste lisible.
+  donc volontairement **en léger retrait** (plus pâle/floue) : il **reste lisible là où il
+  n'y a pas de mesure**, mais **sous le ruban réel il est recouvert** — le vécu prime sur
+  la théorie, par design.
   - **zoom faible/intermédiaire** → un **ruban coloré bordé de blanc qui suit la voie** :
     les cellules mesurées d'une ligne sont projetées sur son tracé puis fusionnées en
     segments de même niveau (`GET /api/coverage/segments`, run-length le long du

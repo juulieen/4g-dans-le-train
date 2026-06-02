@@ -111,14 +111,19 @@
 		] as unknown as maplibregl.ExpressionSpecification;
 	}
 
+	// Couleurs du « cerclage » du réel, contrastées avec le fond de carte (les
+	// expressions MapLibre ne peuvent pas lire les variables CSS thématisées).
+	const REAL_EDGE_DARK = '#ffffff'; // sur basemap sombre
+	const REAL_EDGE_LIGHT = '#0f172a'; // sur basemap clair (positron)
+
 	/**
 	 * Couleur du « cerclage » du réel (liseré du ruban, contour des hexagones) : doit
-	 * CONTRASTER avec le fond de carte. Blanc sur fond sombre, foncé sur fond clair
-	 * (sinon le liseré blanc disparaît sur le basemap positron). Recalculé à chaque
-	 * bascule de thème, qui passe par setStyle → addOverlays (recrée les couches).
+	 * CONTRASTER avec le fond de carte (sinon le liseré blanc disparaît sur le basemap
+	 * clair). Recalculée à chaque bascule de thème, qui passe par setStyle → addOverlays
+	 * (recrée les couches).
 	 */
 	function realEdgeColor(): string {
-		return currentTheme() === 'light' ? '#0f172a' : '#ffffff';
+		return currentTheme() === 'light' ? REAL_EDGE_LIGHT : REAL_EDGE_DARK;
 	}
 
 	/**
@@ -350,12 +355,14 @@
 		});
 
 		// Bascule de thème : on échange le fond et on ré-ajoute les couches.
-		// `setStyle` repart d'un style vierge ; `styledata` (après parsing du
-		// nouveau style) est le moment fiable pour ré-ajouter nos sources/couches.
+		// `{ diff: false }` force un style VIERGE (pas de diff) : nos couches métier sont
+		// donc toujours supprimées puis recréées par `addOverlays` — garantit que le
+		// cerclage du réel (`realEdgeColor()`) reprend bien la couleur du nouveau thème.
+		// `styledata` (après parsing du nouveau style) est le moment fiable pour ré-ajouter.
 		// addOverlays est idempotent (gardes getSource) → pas de doublon.
 		const observer = new MutationObserver(() => {
 			if (!map) return;
-			map.setStyle(basemapStyle(currentTheme()));
+			map.setStyle(basemapStyle(currentTheme()), { diff: false });
 			map.once('styledata', () => {
 				void addOverlays();
 			});
@@ -405,8 +412,10 @@
 			});
 		});
 
-		// Popup mesure communautaire — RUBAN (tronçon mesuré, zoom faible/moyen).
-		map.on('click', 'community-segments', (e) => {
+		// Popup mesure communautaire — RUBAN (tronçon mesuré, zoom faible/moyen). Branché
+		// sur le cœur coloré ET le liseré (casing) : le liseré déborde de ~2px et partage
+		// la même source, donc un clic sur sa frange ouvre bien la même popup.
+		const segmentPopup = (e: maplibregl.MapLayerMouseEvent) => {
 			const f = e.features?.[0];
 			if (!f || !map) return;
 			const p = f.properties as Record<string, unknown>;
@@ -418,7 +427,9 @@
 						`<div style="font-size:.82em;color:var(--muted)">${opLabel(p.operator)} · ${p.samples ?? 0} mesures</div>`
 				)
 				.addTo(map);
-		});
+		};
+		map.on('click', 'community-segments', segmentPopup);
+		map.on('click', 'community-segments-casing', segmentPopup);
 
 		// Popup mesure communautaire — CELLULE H3 (zoom fort).
 		map.on('click', 'community-hex-fill', (e) => {
@@ -435,7 +446,12 @@
 				.addTo(map);
 		});
 
-		for (const layer of ['arcep-lines', 'community-segments', 'community-hex-fill']) {
+		for (const layer of [
+			'arcep-lines',
+			'community-segments',
+			'community-segments-casing',
+			'community-hex-fill'
+		]) {
 			map.on('mouseenter', layer, () => {
 				if (map) map.getCanvas().style.cursor = 'pointer';
 			});
