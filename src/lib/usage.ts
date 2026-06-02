@@ -17,6 +17,18 @@ export type Level = 'TBC' | 'BC' | 'CL' | 'none';
 export const USAGE_OPS = ['orange', 'sfr', 'free', 'bouygues'] as const;
 export type UsageOp = (typeof USAGE_OPS)[number];
 
+/**
+ * Libellé d'affichage des 4 opérateurs ARCEP — source unique réutilisée par les
+ * selects de la carte, les popups (`Map.svelte`) et le référentiel SEO (`lines.ts`),
+ * pour éviter que « Bouygues » diverge d'un endroit à l'autre.
+ */
+export const OPERATOR_LABEL: Record<UsageOp, string> = {
+	orange: 'Orange',
+	sfr: 'SFR',
+	free: 'Free',
+	bouygues: 'Bouygues'
+};
+
 /** Couleurs par niveau (hex). En CSS, préférer `var(--usage-*)` (thématisées). */
 export const USAGE_COLORS: Record<Level, string> = {
 	TBC: '#22c55e', // vert — streaming vidéo / visio

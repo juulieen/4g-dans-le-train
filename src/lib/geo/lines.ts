@@ -9,6 +9,7 @@
 import type { FeatureCollection } from 'geojson';
 import generatedLines from './commercial-lines.json';
 import { CURATED_LINES, type CommercialLine } from './lines-base';
+import { USAGE_OPS, OPERATOR_LABEL } from '../usage';
 
 export { slugifyLine, CURATED_LINES, type CommercialLine } from './lines-base';
 
@@ -39,12 +40,11 @@ export interface MobileOperator {
 	key: 'orange' | 'sfr' | 'free' | 'bouygues';
 }
 
-export const OPERATORS: MobileOperator[] = [
-	{ slug: 'orange', name: 'Orange', key: 'orange' },
-	{ slug: 'sfr', name: 'SFR', key: 'sfr' },
-	{ slug: 'free', name: 'Free', key: 'free' },
-	{ slug: 'bouygues', name: 'Bouygues Telecom', key: 'bouygues' }
-];
+export const OPERATORS: MobileOperator[] = USAGE_OPS.map((key) => ({
+	slug: key,
+	name: OPERATOR_LABEL[key],
+	key
+}));
 
 /** Retrouve une ligne / un opérateur par slug (helpers pour les pages SEO). */
 export const findLine = (slug: string) => RAIL_LINES.find((l) => l.slug === slug);

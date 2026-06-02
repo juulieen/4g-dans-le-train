@@ -5,6 +5,23 @@
 
 ## 2026-06-02
 
+- **Nettoyage — factorisation des textes de la carte (DRY)** : les libellés d'usage de
+  la légende (`Map.svelte`) viennent maintenant de `USAGE_SHORT`/`USAGE_CSS_VAR` (au lieu
+  d'être dupliqués en dur, comme le fait déjà `RouteProfile`) ; les libellés des 4
+  opérateurs ARCEP sont centralisés dans `OPERATOR_LABEL` (`usage.ts`), réutilisés par
+  les selects de la carte, les popups et le référentiel `lines.ts` — ce qui aligne au
+  passage **« Bouygues Telecom » → « Bouygues »** partout (pages opérateur incluses).
+  Nouveau helper `pluralS` (`src/lib/plural.ts`) pour les accords « point(s) ». Aussi :
+  message d'avertissement `gpsStale` resserré (le QR voisin porte déjà l'invite mobile).
+- **Mode mesure — garde-fou desktop (GPS imprécis) + QR vers le téléphone** : sur
+  ordinateur, sans vrai GPS, la position Wi-Fi/IP (> 100 m) est rejetée et aucune
+  mesure n'est positionnée. Le controller expose désormais `gpsStale` (aucun fix
+  valide depuis plus de `MAX_GAP_MS` = 5 min, seuil au-delà duquel l'interpolation
+  « depuis les rails » ne peut plus recaler les pings) ; la page affiche alors un
+  **avertissement ambre** — sans jamais interrompre la mesure (si le GPS accroche, on
+  enregistre). En complément, un **QR code** (lib `uqr`, ~5 Ko) vers le site s'affiche
+  dans le panneau mesure **uniquement sur desktop** (`@media min-width: 761px`) pour
+  inviter à mesurer depuis un téléphone. Nouveau helper `src/lib/qr.ts`.
 - **Carte — lisibilité des mesures : ruban le long de la voie + quadrillage H3** :
   remplacement des **pastilles empilées** (illisibles dès qu'un trajet génère des
   centaines de cellules — ex. Paris-Arcachon : 656 cellules) par un **rendu
