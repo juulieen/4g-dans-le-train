@@ -5,6 +5,18 @@
 
 ## 2026-06-02
 
+- **Mesure — détection du Wi-Fi de bord (anti-pollution de la couverture mobile)** :
+  si le téléphone reste sur le **Wi-Fi du train** pendant une mesure, le ping mesure ce
+  Wi-Fi (et son backhaul lent), pas le réseau mobile — on créditait à tort l'opérateur
+  choisi. Désormais le controller lit `navigator.connection.type` (`isOnWifi()`) à
+  chaque tick et **tague la mesure `operator = 'wifi-train'`** quand le Wi-Fi est
+  détecté. Cette valeur reste cantonnée à la couche mesure (hors `OPERATORS` SEO et
+  ARCEP) et est **exclue de toutes les vues de couverture mobile** au niveau des
+  lectures DB des agrégats (`+page.server.ts`, `/api/coverage`, `/api/coverage/segments`)
+  dès qu'aucun opérateur précis n'est demandé — carte « tous opérateurs » **et frise de
+  trajet**. UI : **rappel statique** invitant
+  à couper le Wi-Fi (seule parade sur iOS/Firefox où `connection.type` est absent) +
+  **bannière** quand le Wi-Fi est effectivement détecté. Aucune lecture de SSID.
 - **Carte — le réel ressort (cerclé de blanc) au-dessus de l'ARCEP** : après la refonte
   en rubans, les mesures se confondaient avec la voie ARCEP (formes/largeurs/couleurs
   proches) → le réel ne primait plus, et l'incitation à contribuer baissait. Le ruban

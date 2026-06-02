@@ -349,6 +349,12 @@
 					</select>
 				</label>
 
+				<p class="hint wifi-hint">
+					Pour mesurer votre réseau mobile, <strong>désactivez le Wi-Fi</strong> (y compris le Wi-Fi du
+					train)&nbsp;: sinon la mesure est enregistrée comme «&nbsp;Wi-Fi de bord&nbsp;», pas comme couverture
+					opérateur.
+				</p>
+
 				<label class="throughput-opt">
 					<input
 						type="checkbox"
@@ -375,6 +381,14 @@
 
 				{#if live?.error}
 					<p class="error">{live.error}</p>
+				{/if}
+
+				{#if live?.running && live.onWifi}
+					<p class="warn" role="alert">
+						Vous semblez connecté en <strong>Wi-Fi</strong> (Wi-Fi du train&nbsp;?)&nbsp;: cette mesure
+						est enregistrée comme «&nbsp;Wi-Fi de bord&nbsp;», pas comme couverture mobile. Coupez le
+						Wi-Fi pour mesurer votre 4G/5G.
+					</p>
 				{/if}
 
 				{#if live?.running}
@@ -648,6 +662,21 @@
 	.error {
 		color: #fca5a5;
 		font-size: var(--fs-sm);
+	}
+	/* Avertissement « tu es en Wi-Fi » : jaune ambre, plus visible qu'un simple .hint. */
+	.warn {
+		margin: 0.5rem 0 0;
+		padding: 0.5rem 0.65rem;
+		border-radius: 0.5rem;
+		background: rgba(252, 211, 77, 0.12);
+		border: 1px solid rgba(252, 211, 77, 0.4);
+		color: #fcd34d;
+		font-size: var(--fs-sm);
+		line-height: 1.35;
+	}
+	/* Rappel statique sous le select opérateur (couvre iOS où le Wi-Fi est indétectable). */
+	.wifi-hint {
+		margin: -0.25rem 0 0.75rem;
 	}
 	.queued-note {
 		color: var(--muted);

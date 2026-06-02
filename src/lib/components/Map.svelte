@@ -154,7 +154,10 @@
 						samples: r.samples,
 						operator: r.operator
 					}))
-			: [...worstByCell(rows).values()].map((c) => ({
+			: // Vue « tous opérateurs » : le Wi-Fi de bord (`wifi-train`) est déjà exclu en
+				// amont par les lectures DB (/api/coverage, +page.server.ts) — il n'arrive
+				// jamais ici (cf. src/lib/operators.ts).
+				[...worstByCell(rows).values()].map((c) => ({
 					cellId: c.cellId,
 					rate: c.rate,
 					samples: c.samples,

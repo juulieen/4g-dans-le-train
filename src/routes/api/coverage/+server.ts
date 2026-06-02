@@ -1,8 +1,9 @@
 import { json } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import { cellAggregates } from '$lib/server/db/schema';
 import { resolveLineFilter } from '$geo/troncon-snap';
+import { WIFI_TRAIN_OPERATOR } from '$lib/operators';
 import type { RequestHandler } from './$types';
 
 /**
@@ -22,7 +23,12 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
 	const lineFilter = resolveLineFilter(line);
 
 	const filters = [
-		operator ? eq(cellAggregates.operator, operator) : undefined,
+		// Opérateur précis demandé → filtre exact (jamais `wifi-train` depuis l'UI).
+		// Sinon (vue « tous opérateurs », frise sans opérateur…) → on EXCLUT le Wi-Fi de
+		// bord, qui ne reflète pas la couverture mobile (cf. src/lib/operators.ts).
+		operator
+			? eq(cellAggregates.operator, operator)
+			: ne(cellAggregates.operator, WIFI_TRAIN_OPERATOR),
 		// Ligne normale : filtre SQL par `lineSlug`. Tronçon : on NE filtre PAS par
 		// `lineSlug` — le slug stocké est le PRIMAIRE de la cellule (ligne la plus
 		// locale du tronc commun), pas la parente du tronçon ; on filtre par les
