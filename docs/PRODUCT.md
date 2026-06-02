@@ -158,6 +158,23 @@ Conventions produit :
     (`getCurrentPosition`, `maximumAge` relâché) au lieu de la jeter — décisif au
     redémarrage d'une mesure.
 - État dérivé : `ok` (ça capte) / `degraded` (lent) / `none` (ça coupe).
+- **Wi-Fi de bord (ne pas polluer la couverture mobile)** : si l'utilisateur reste
+  branché sur le **Wi-Fi du train** tout en mesurant, le ping mesure ce Wi-Fi (et son
+  backhaul, souvent lent), pas le réseau mobile. On ne doit donc pas le créditer à un
+  opérateur. À chaque tick, le controller lit `navigator.connection.type`
+  (`isOnWifi()`, `src/lib/measure/netinfo.ts`) ; quand il vaut `'wifi'`, la mesure est
+  **taguée `operator = 'wifi-train'`** au lieu de l'opérateur choisi. Cette valeur
+  appartient à la **couche mesure uniquement** (constante `WIFI_TRAIN_OPERATOR`,
+  `src/lib/operators.ts`) : elle n'entre **pas** dans le référentiel SEO `OPERATORS`
+  (`src/lib/geo/lines.ts`) ni dans la couche ARCEP, et elle est **exclue de toutes les
+  vues de couverture mobile** directement au niveau des **lectures DB des agrégats**
+  (`+page.server.ts`, `/api/coverage`, `/api/coverage/segments`) dès qu'aucun opérateur
+  précis n'est demandé — carte « tous opérateurs », **frise de trajet**, etc. — sinon
+  un point Wi-Fi (backhaul lent) s'afficherait à tort comme couverture mobile. Côté
+  UI : un **rappel statique** invite à
+  couper le Wi-Fi (seule parade sur iOS/Firefox, où `connection.type` est absent), plus
+  une **bannière** quand le Wi-Fi est effectivement détecté. Pas de lecture de SSID
+  (non exposé au navigateur) → zéro impact vie privée.
 - **Débit léger (opt-in)** : « ça répond au ping » ≠ « ça streame ». Si l'utilisateur
   coche **« Mesurer aussi le débit »** (OFF par défaut — ça consomme sa data mobile),
   l'app télécharge **toutes les 60 s** un petit blob incompressible (~128 Ko) via

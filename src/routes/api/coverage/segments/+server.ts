@@ -1,8 +1,9 @@
 import { json } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import { cellAggregates } from '$lib/server/db/schema';
 import { resolveLineFilter } from '$geo/troncon-snap';
+import { WIFI_TRAIN_OPERATOR } from '$lib/operators';
 import { loadRouteProfile } from '$lib/server/route-profile';
 import { worstByCell, type CellRate } from '$lib/coverage-quality';
 import { buildLineSegments, type SegmentCell } from '$lib/coverage-segments';
@@ -35,9 +36,12 @@ export const GET: RequestHandler = async ({ url, fetch, setHeaders }) => {
 	const line = url.searchParams.get('line');
 	const lineFilter = resolveLineFilter(line);
 
-	// Mêmes filtres SQL que /api/coverage (cohérence avec la couche points).
+	// Mêmes filtres SQL que /api/coverage (cohérence avec la couche points) : opérateur
+	// précis exact, sinon exclusion du Wi-Fi de bord (cf. src/lib/operators.ts).
 	const filters = [
-		operator ? eq(cellAggregates.operator, operator) : undefined,
+		operator
+			? eq(cellAggregates.operator, operator)
+			: ne(cellAggregates.operator, WIFI_TRAIN_OPERATOR),
 		lineFilter && !lineFilter.cells ? eq(cellAggregates.lineSlug, lineFilter.lineSlug) : undefined
 	].filter((f) => f !== undefined);
 

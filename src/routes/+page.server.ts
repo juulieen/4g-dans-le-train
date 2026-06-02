@@ -1,5 +1,7 @@
+import { ne } from 'drizzle-orm';
 import { db } from '$lib/server/db/client';
 import { cellAggregates } from '$lib/server/db/schema';
+import { WIFI_TRAIN_OPERATOR } from '$lib/operators';
 import type { PageServerLoad } from './$types';
 
 // La carte dépend de la base : pas de prerender, rendu serveur à la volée.
@@ -19,7 +21,12 @@ export const load: PageServerLoad = async ({ setHeaders }) => {
 
 	let rows: (typeof cellAggregates.$inferSelect)[] = [];
 	try {
-		rows = await db.select().from(cellAggregates);
+		// Vue par défaut « tous opérateurs » : on EXCLUT le Wi-Fi de bord (wifi-train),
+		// qui ne reflète pas la couverture mobile (cf. src/lib/operators.ts).
+		rows = await db
+			.select()
+			.from(cellAggregates)
+			.where(ne(cellAggregates.operator, WIFI_TRAIN_OPERATOR));
 	} catch (e) {
 		console.warn('[coverage] base indisponible, couverture vide :', (e as Error).message);
 		return { coverage: EMPTY, cells: 0 };

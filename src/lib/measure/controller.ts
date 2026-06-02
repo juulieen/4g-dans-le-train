@@ -17,13 +17,22 @@ import { ping, type PingStatus } from './ping';
 import { measureDownlink } from './throughput';
 import { GeoTracker, type GeoSample } from './geolocation';
 import { ScreenWakeLock } from './wakeLock';
-import { readNetworkType } from './netinfo';
+import { readNetworkType, isOnWifi } from './netinfo';
 import { getSessionId, hasConsent } from './session';
 import { MeasurementQueue, type QueuedMeasurement } from './queue';
 import { OutageDetector } from './outage';
 import { reconstructAlongPath, type PathPoint } from '$geo/interpolate';
+import { WIFI_TRAIN_OPERATOR } from '$lib/operators';
 
 export type Operator = 'orange' | 'sfr' | 'free' | 'bouygues' | 'autre' | 'inconnu';
+
+/**
+ * Opérateur effectif d'UNE mesure : si la connexion est détectée en wifi (wifi de
+ * bord), on tague `wifi-train` au lieu de l'opérateur mobile choisi, pour ne pas
+ * polluer la couverture mobile. C'est une valeur de la couche mesure UNIQUEMENT —
+ * exclue du référentiel SEO `OPERATORS` et de la couche ARCEP.
+ */
+export type MeasuredOperator = Operator | typeof WIFI_TRAIN_OPERATOR;
 
 export interface LiveState {
 	running: boolean;
@@ -40,6 +49,12 @@ export interface LiveState {
 	speedKmh: number | null;
 	accuracy: number | null;
 	netType: string | null;
+	/**
+	 * Connexion détectée en wifi (wifi de bord) : la mesure est alors taguée
+	 * `wifi-train` et non l'opérateur mobile. `false` si l'info est indisponible
+	 * (iOS/Firefox) — on ne peut pas conclure, d'où le rappel statique côté UI.
+	 */
+	onWifi: boolean;
 	/** Mesures confirmées côté serveur. */
 	sent: number;
 	/** Mesures en attente d'envoi (hors-ligne / tunnel). */
@@ -74,6 +89,7 @@ const initialState: LiveState = {
 	speedKmh: null,
 	accuracy: null,
 	netType: null,
+	onWifi: false,
 	sent: 0,
 	queued: 0,
 	buffered: 0,
@@ -120,6 +136,8 @@ interface GapPing {
 	status: PingStatus;
 	rttMs: number | null;
 	netType: string | null;
+	/** Connexion en wifi à l'instant du ping (tag `wifi-train` au recalage). */
+	onWifi: boolean;
 }
 
 export class MeasurementController {
@@ -176,6 +194,15 @@ export class MeasurementController {
 
 	setOperator(operator: Operator) {
 		this.opts.operator = operator;
+	}
+
+	/**
+	 * Opérateur réellement stocké pour une mesure : `wifi-train` si la connexion est
+	 * détectée en wifi (on ne crédite pas un opérateur mobile d'une mesure faite sur
+	 * le wifi de bord), sinon l'opérateur choisi par l'utilisateur.
+	 */
+	private effectiveOperator(onWifi: boolean): MeasuredOperator {
+		return onWifi ? WIFI_TRAIN_OPERATOR : this.opts.operator;
 	}
 
 	/** Active/désactive la mesure de débit (opt-in). Modifiable même mode arrêté. */
@@ -322,7 +349,8 @@ export class MeasurementController {
 			const now = Date.now();
 			const { status, rttMs } = await ping(this.opts.endpoint);
 			const netType = readNetworkType();
-			this.patch({ status, rttMs, netType });
+			const onWifi = isOnWifi();
+			this.patch({ status, rttMs, netType, onWifi });
 
 			const sample = this.currentSample;
 			const fresh = sample !== null && now - this.lastGpsAt <= GAP_THRESHOLD_MS;
@@ -372,7 +400,7 @@ export class MeasurementController {
 						status,
 						rttMs,
 						downlinkKbps,
-						operator: this.opts.operator,
+						operator: this.effectiveOperator(onWifi),
 						netType,
 						speedKmh: sample.speedKmh,
 						gpsAccuracy: sample.accuracy,
@@ -400,7 +428,7 @@ export class MeasurementController {
 				}
 				// Bufferise pour rejeu ultérieur (consentement requis, comme le mode normal).
 				if (hasConsent() && this.gapBuffer.length < MAX_GAP_PINGS) {
-					this.gapBuffer.push({ measuredAt: now, status, rttMs, netType });
+					this.gapBuffer.push({ measuredAt: now, status, rttMs, netType, onWifi });
 					this.patch({ buffered: this.gapBuffer.length });
 				}
 			}
@@ -438,7 +466,6 @@ export class MeasurementController {
 		);
 		if (!positions) return; // garde-fous non réunis → buffer jeté par l'appelant
 
-		const operator = this.opts.operator;
 		const sessionId = getSessionId();
 		let placed = 0;
 		this.gapBuffer.forEach((g, i) => {
@@ -451,7 +478,7 @@ export class MeasurementController {
 				rttMs: g.rttMs,
 				// Pas de débit en tunnel (jamais mesuré sur le chemin interpolé).
 				downlinkKbps: null,
-				operator,
+				operator: this.effectiveOperator(g.onWifi),
 				netType: g.netType,
 				speedKmh: null,
 				gpsAccuracy: null,
