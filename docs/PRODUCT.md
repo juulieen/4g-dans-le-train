@@ -30,14 +30,20 @@ Tout l'intérêt est de **révéler les écarts** entre la promesse et le vécu.
   possible (fond « théorique », trait large et un peu pâle).
 - **Mesures communautaires** (le « réel », par-dessus) = un **rendu progressif au
   zoom** plutôt qu'une traînée de pastilles (vite illisible quand un trajet génère
-  des centaines de cellules) :
-  - **zoom faible/intermédiaire** → un **ruban coloré qui suit la voie** : les
-    cellules mesurées d'une ligne sont projetées sur son tracé puis fusionnées en
+  des centaines de cellules). **Le réel prime visuellement sur le théorique** : il est
+  **cerclé de blanc** (liseré/contour) pour ressortir nettement au-dessus de la voie
+  ARCEP — c'est la signature « ça, c'est du vécu » (héritée des anciennes pastilles), et
+  l'incitation à contribuer (mesurer = voir sa ligne « s'allumer » en gras). L'ARCEP est
+  donc volontairement **en léger retrait** (plus pâle/floue) : il **reste lisible là où il
+  n'y a pas de mesure**, mais **sous le ruban réel il est recouvert** — le vécu prime sur
+  la théorie, par design.
+  - **zoom faible/intermédiaire** → un **ruban coloré bordé de blanc qui suit la voie** :
+    les cellules mesurées d'une ligne sont projetées sur son tracé puis fusionnées en
     segments de même niveau (`GET /api/coverage/segments`, run-length le long du
     `path` des profils de trajet) ;
   - **zoom fort** (z ≥ ~13) → un **quadrillage de cellules hexagonales H3** (les
-    vraies cellules ~150 m, construites côté client via `cellToBoundary`), avec
-    **fondu croisé** du ruban autour de z 11→13.
+    vraies cellules ~150 m, **cerclées de blanc**, construites côté client via
+    `cellToBoundary`), avec **fondu croisé** du ruban autour de z 11→13.
   - En vue « tous opérateurs », chaque cellule/segment retient le **pire** taux de
     réussite parmi les opérateurs mesurés (`worstByCell`, `src/lib/coverage-quality.ts`) :
     on met ainsi en avant les **risques de coupure**. Avec un opérateur sélectionné,
@@ -167,6 +173,23 @@ Conventions produit :
     dans le panneau mesure **uniquement sur desktop** (`@media (min-width: 761px)`,
     lib `uqr`) pour basculer facilement sur mobile.
 - État dérivé : `ok` (ça capte) / `degraded` (lent) / `none` (ça coupe).
+- **Wi-Fi de bord (ne pas polluer la couverture mobile)** : si l'utilisateur reste
+  branché sur le **Wi-Fi du train** tout en mesurant, le ping mesure ce Wi-Fi (et son
+  backhaul, souvent lent), pas le réseau mobile. On ne doit donc pas le créditer à un
+  opérateur. À chaque tick, le controller lit `navigator.connection.type`
+  (`isOnWifi()`, `src/lib/measure/netinfo.ts`) ; quand il vaut `'wifi'`, la mesure est
+  **taguée `operator = 'wifi-train'`** au lieu de l'opérateur choisi. Cette valeur
+  appartient à la **couche mesure uniquement** (constante `WIFI_TRAIN_OPERATOR`,
+  `src/lib/operators.ts`) : elle n'entre **pas** dans le référentiel SEO `OPERATORS`
+  (`src/lib/geo/lines.ts`) ni dans la couche ARCEP, et elle est **exclue de toutes les
+  vues de couverture mobile** directement au niveau des **lectures DB des agrégats**
+  (`+page.server.ts`, `/api/coverage`, `/api/coverage/segments`) dès qu'aucun opérateur
+  précis n'est demandé — carte « tous opérateurs », **frise de trajet**, etc. — sinon
+  un point Wi-Fi (backhaul lent) s'afficherait à tort comme couverture mobile. Côté
+  UI : un **rappel statique** invite à
+  couper le Wi-Fi (seule parade sur iOS/Firefox, où `connection.type` est absent), plus
+  une **bannière** quand le Wi-Fi est effectivement détecté. Pas de lecture de SSID
+  (non exposé au navigateur) → zéro impact vie privée.
 - **Débit léger (opt-in)** : « ça répond au ping » ≠ « ça streame ». Si l'utilisateur
   coche **« Mesurer aussi le débit »** (OFF par défaut — ça consomme sa data mobile),
   l'app télécharge **toutes les 60 s** un petit blob incompressible (~128 Ko) via

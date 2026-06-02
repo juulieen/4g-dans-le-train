@@ -22,6 +22,27 @@
   enregistre). En complément, un **QR code** (lib `uqr`, ~5 Ko) vers le site s'affiche
   dans le panneau mesure **uniquement sur desktop** (`@media min-width: 761px`) pour
   inviter à mesurer depuis un téléphone. Nouveau helper `src/lib/qr.ts`.
+- **Mesure — détection du Wi-Fi de bord (anti-pollution de la couverture mobile)** :
+  si le téléphone reste sur le **Wi-Fi du train** pendant une mesure, le ping mesure ce
+  Wi-Fi (et son backhaul lent), pas le réseau mobile — on créditait à tort l'opérateur
+  choisi. Désormais le controller lit `navigator.connection.type` (`isOnWifi()`) à
+  chaque tick et **tague la mesure `operator = 'wifi-train'`** quand le Wi-Fi est
+  détecté. Cette valeur reste cantonnée à la couche mesure (hors `OPERATORS` SEO et
+  ARCEP) et est **exclue de toutes les vues de couverture mobile** au niveau des
+  lectures DB des agrégats (`+page.server.ts`, `/api/coverage`, `/api/coverage/segments`)
+  dès qu'aucun opérateur précis n'est demandé — carte « tous opérateurs » **et frise de
+  trajet**. UI : **rappel statique** invitant
+  à couper le Wi-Fi (seule parade sur iOS/Firefox où `connection.type` est absent) +
+  **bannière** quand le Wi-Fi est effectivement détecté. Aucune lecture de SSID.
+- **Carte — le réel ressort (cerclé de blanc) au-dessus de l'ARCEP** : après la refonte
+  en rubans, les mesures se confondaient avec la voie ARCEP (formes/largeurs/couleurs
+  proches) → le réel ne primait plus, et l'incitation à contribuer baissait. Le ruban
+  « réel » reçoit un **liseré blanc** (casing) et s'épaissit, et les hexagones un
+  **contour blanc** : on retrouve la signature « cerclé de blanc = du vécu » des
+  anciennes pastilles, en gras au-dessus du théorique. Cerclage **contrasté selon le
+  thème** (blanc en sombre / foncé en clair, car le blanc disparaissait sur le fond
+  clair positron). L'ARCEP passe **légèrement en retrait** (opacité 0,9→0,8, flou accru) :
+  lisible **hors zones mesurées**, volontairement recouvert sous le ruban réel.
 - **Carte — lisibilité des mesures : ruban le long de la voie + quadrillage H3** :
   remplacement des **pastilles empilées** (illisibles dès qu'un trajet génère des
   centaines de cellules — ex. Paris-Arcachon : 656 cellules) par un **rendu

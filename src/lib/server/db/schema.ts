@@ -1,5 +1,8 @@
 import { sql } from 'drizzle-orm';
 import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+// Import RELATIF (pas l'alias `$lib`) : ce fichier est aussi lu par drizzle-kit,
+// hors résolution d'alias SvelteKit.
+import { WIFI_TRAIN_OPERATOR } from '../../operators';
 
 /**
  * Mesures brutes contribuées par les voyageurs.
@@ -23,9 +26,13 @@ export const measurements = sqliteTable(
 		rttMs: integer('rtt_ms'),
 		/** Débit descendant estimé en kbps (null si non mesuré — débit opt-in/cadencé). */
 		downlinkKbps: integer('downlink_kbps'),
-		/** Opérateur déclaré par l'utilisateur. */
+		/**
+		 * Opérateur déclaré par l'utilisateur, OU `wifi-train` quand la mesure a été
+		 * faite sur du wifi détecté (wifi de bord) : on ne crédite alors aucun opérateur
+		 * mobile. `wifi-train` reste cantonné à la couche mesure (hors SEO/ARCEP).
+		 */
 		operator: text('operator', {
-			enum: ['orange', 'sfr', 'free', 'bouygues', 'autre', 'inconnu']
+			enum: ['orange', 'sfr', 'free', 'bouygues', 'autre', 'inconnu', WIFI_TRAIN_OPERATOR]
 		})
 			.notNull()
 			.default('inconnu'),

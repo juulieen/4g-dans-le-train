@@ -366,6 +366,12 @@
 					</select>
 				</label>
 
+				<p class="hint wifi-hint">
+					Pour mesurer votre réseau mobile, <strong>désactivez le Wi-Fi</strong> (y compris le Wi-Fi du
+					train)&nbsp;: sinon la mesure est enregistrée comme «&nbsp;Wi-Fi de bord&nbsp;», pas comme couverture
+					opérateur.
+				</p>
+
 				<label class="throughput-opt">
 					<input
 						type="checkbox"
@@ -392,6 +398,14 @@
 
 				{#if live?.error}
 					<p class="error">{live.error}</p>
+				{/if}
+
+				{#if live?.running && live.onWifi}
+					<p class="warn" role="alert">
+						Vous semblez connecté en <strong>Wi-Fi</strong> (Wi-Fi du train&nbsp;?)&nbsp;: cette mesure
+						est enregistrée comme «&nbsp;Wi-Fi de bord&nbsp;», pas comme couverture mobile. Coupez le
+						Wi-Fi pour mesurer votre 4G/5G.
+					</p>
 				{/if}
 
 				{#if live?.running}
@@ -671,7 +685,8 @@
 		color: #fca5a5;
 		font-size: var(--fs-sm);
 	}
-	/* Avertissement (ambre) : informatif, moins critique qu'une erreur. */
+	/* Avertissement (ambre) : informatif, moins critique qu'une erreur. Classe partagée
+	   par le rappel Wi-Fi de bord et l'attente de position GPS précise (gpsStale). */
 	.warn {
 		margin: 0.5rem 0 0;
 		padding: 0.5rem 0.7rem;
@@ -684,6 +699,10 @@
 	}
 	.warn strong {
 		color: #fcd34d;
+	}
+	/* Rappel statique sous le select opérateur (couvre iOS où le Wi-Fi est indétectable). */
+	.wifi-hint {
+		margin: -0.25rem 0 0.75rem;
 	}
 	/* QR « mesure depuis ton téléphone » : masqué par défaut (mobile-first),
 	   affiché uniquement sur desktop (cf. @media min-width: 761px). */

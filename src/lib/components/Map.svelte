@@ -124,6 +124,21 @@
 		] as unknown as maplibregl.ExpressionSpecification;
 	}
 
+	// Couleurs du « cerclage » du réel, contrastées avec le fond de carte (les
+	// expressions MapLibre ne peuvent pas lire les variables CSS thématisées).
+	const REAL_EDGE_DARK = '#ffffff'; // sur basemap sombre
+	const REAL_EDGE_LIGHT = '#0f172a'; // sur basemap clair (positron)
+
+	/**
+	 * Couleur du « cerclage » du réel (liseré du ruban, contour des hexagones) : doit
+	 * CONTRASTER avec le fond de carte (sinon le liseré blanc disparaît sur le basemap
+	 * clair). Recalculée à chaque bascule de thème, qui passe par setStyle → addOverlays
+	 * (recrée les couches).
+	 */
+	function realEdgeColor(): string {
+		return currentTheme() === 'light' ? REAL_EDGE_LIGHT : REAL_EDGE_DARK;
+	}
+
 	/**
 	 * Quadrillage H3 (zoom fort) construit côté client à partir des points `/api/coverage` :
 	 * chaque cellule mesurée devient un hexagone (`cellToBoundary`) colorié par son niveau.
@@ -152,7 +167,10 @@
 						samples: r.samples,
 						operator: r.operator
 					}))
-			: [...worstByCell(rows).values()].map((c) => ({
+			: // Vue « tous opérateurs » : le Wi-Fi de bord (`wifi-train`) est déjà exclu en
+				// amont par les lectures DB (/api/coverage, +page.server.ts) — il n'arrive
+				// jamais ici (cf. src/lib/operators.ts).
+				[...worstByCell(rows).values()].map((c) => ({
 					cellId: c.cellId,
 					rate: c.rate,
 					samples: c.samples,
@@ -250,8 +268,9 @@
 					paint: {
 						'line-color': arcepColor(operator),
 						'line-width': ['interpolate', ['linear'], ['zoom'], 5, 3, 12, 8],
-						'line-opacity': 0.9,
-						'line-blur': 0.4
+						// Légèrement en retrait (le réel prime), mais toujours bien lisible.
+						'line-opacity': 0.8,
+						'line-blur': 0.6
 					}
 				});
 			}
@@ -262,8 +281,36 @@
 		//   • zoom fort → QUADRILLAGE H3 (les vraies cellules ~174 m, honnête sur la granularité).
 		// Fondu croisé entre les deux autour du zoom 11→13.
 		const vis = showCommunity ? 'visible' : 'none';
+		// Le ruban « réel » se distingue de la voie ARCEP par un LISERÉ BLANC (casing) :
+		// reprend la signature « cerclé de blanc = vrai » des anciennes pastilles, fait
+		// flotter le réel au-dessus du théorique. Le fondu (opacité) accompagne la bascule
+		// vers le quadrillage H3 au zoom fort (13).
+		const segFade: maplibregl.ExpressionSpecification = [
+			'interpolate',
+			['linear'],
+			['zoom'],
+			5,
+			0.95,
+			11,
+			0.95,
+			13,
+			0
+		];
 		if (!map.getSource('community-segments')) {
 			map.addSource('community-segments', { type: 'geojson', data: lastSegments });
+			// 1) Liseré blanc (dessous, plus large) — la « bordure » du ruban.
+			map.addLayer({
+				id: 'community-segments-casing',
+				type: 'line',
+				source: 'community-segments',
+				layout: { visibility: vis, 'line-cap': 'round', 'line-join': 'round' },
+				paint: {
+					'line-color': realEdgeColor(),
+					'line-width': ['interpolate', ['linear'], ['zoom'], 5, 7, 11, 12],
+					'line-opacity': segFade
+				}
+			});
+			// 2) Cœur coloré (dessus, plus étroit) — l'usage mesuré.
 			map.addLayer({
 				id: 'community-segments',
 				type: 'line',
@@ -271,9 +318,8 @@
 				layout: { visibility: vis, 'line-cap': 'round', 'line-join': 'round' },
 				paint: {
 					'line-color': communityColor(),
-					// Un peu plus épais que l'ARCEP : le réel prime visuellement.
-					'line-width': ['interpolate', ['linear'], ['zoom'], 5, 3.5, 11, 7],
-					'line-opacity': ['interpolate', ['linear'], ['zoom'], 5, 0.95, 11, 0.95, 13, 0]
+					'line-width': ['interpolate', ['linear'], ['zoom'], 5, 4, 11, 8],
+					'line-opacity': segFade
 				}
 			});
 		}
@@ -295,9 +341,11 @@
 				source: 'community-hex',
 				layout: { visibility: vis },
 				paint: {
-					'line-color': communityColor(),
-					'line-width': 1,
-					'line-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0, 13, 0.9]
+					// Contour contrasté (blanc en sombre, foncé en clair) : même signature
+					// « réel = cerclé » que le ruban, visible sur les deux fonds de carte.
+					'line-color': realEdgeColor(),
+					'line-width': 1.5,
+					'line-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0, 13, 0.95]
 				}
 			});
 		}
@@ -323,12 +371,14 @@
 		});
 
 		// Bascule de thème : on échange le fond et on ré-ajoute les couches.
-		// `setStyle` repart d'un style vierge ; `styledata` (après parsing du
-		// nouveau style) est le moment fiable pour ré-ajouter nos sources/couches.
+		// `{ diff: false }` force un style VIERGE (pas de diff) : nos couches métier sont
+		// donc toujours supprimées puis recréées par `addOverlays` — garantit que le
+		// cerclage du réel (`realEdgeColor()`) reprend bien la couleur du nouveau thème.
+		// `styledata` (après parsing du nouveau style) est le moment fiable pour ré-ajouter.
 		// addOverlays est idempotent (gardes getSource) → pas de doublon.
 		const observer = new MutationObserver(() => {
 			if (!map) return;
-			map.setStyle(basemapStyle(currentTheme()));
+			map.setStyle(basemapStyle(currentTheme()), { diff: false });
 			map.once('styledata', () => {
 				void addOverlays();
 			});
@@ -371,8 +421,10 @@
 			});
 		});
 
-		// Popup mesure communautaire — RUBAN (tronçon mesuré, zoom faible/moyen).
-		map.on('click', 'community-segments', (e) => {
+		// Popup mesure communautaire — RUBAN (tronçon mesuré, zoom faible/moyen). Branché
+		// sur le cœur coloré ET le liseré (casing) : le liseré déborde de ~2px et partage
+		// la même source, donc un clic sur sa frange ouvre bien la même popup.
+		const segmentPopup = (e: maplibregl.MapLayerMouseEvent) => {
 			const f = e.features?.[0];
 			if (!f || !map) return;
 			const p = f.properties as Record<string, unknown>;
@@ -384,7 +436,9 @@
 						`<div style="font-size:.82em;color:var(--muted)">${opLabel(p.operator)} · ${p.samples ?? 0} mesures</div>`
 				)
 				.addTo(map);
-		});
+		};
+		map.on('click', 'community-segments', segmentPopup);
+		map.on('click', 'community-segments-casing', segmentPopup);
 
 		// Popup mesure communautaire — CELLULE H3 (zoom fort).
 		map.on('click', 'community-hex-fill', (e) => {
@@ -401,7 +455,12 @@
 				.addTo(map);
 		});
 
-		for (const layer of ['arcep-lines', 'community-segments', 'community-hex-fill']) {
+		for (const layer of [
+			'arcep-lines',
+			'community-segments',
+			'community-segments-casing',
+			'community-hex-fill'
+		]) {
 			map.on('mouseenter', layer, () => {
 				if (map) map.getCanvas().style.cursor = 'pointer';
 			});
@@ -505,7 +564,12 @@
 	$effect(() => {
 		if (!loaded || !map) return;
 		const vis = showCommunity ? 'visible' : 'none';
-		for (const id of ['community-segments', 'community-hex-fill', 'community-hex-outline']) {
+		for (const id of [
+			'community-segments-casing',
+			'community-segments',
+			'community-hex-fill',
+			'community-hex-outline'
+		]) {
 			if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis);
 		}
 		if (map.getLayer('arcep-lines')) {
@@ -575,7 +639,8 @@
 		width: 18px;
 		height: 7px;
 		border-radius: 4px;
-		border: 1.5px solid #fff;
+		/* Bordure contrastée selon le thème (comme le cerclage du ruban sur la carte). */
+		border: 1.5px solid var(--text);
 	}
 	.legend-overlay .real {
 		margin-top: 2px;
