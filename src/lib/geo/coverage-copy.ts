@@ -8,6 +8,8 @@
  *   CL  limitée (messages, navigation lente)     · none zone blanche.
  */
 import type { LevelDist, LineStats } from './line-stats';
+import type { LineReal, Blackspot } from './line-real';
+import { OPERATOR_LABEL, type UsageOp } from '../usage';
 
 const NBSP = ' ';
 
@@ -111,4 +113,148 @@ export function crossMetaDescription(
 	return `${opName} est annoncé en couverture 4G/5G sur ${pct(usable(d))} du trajet ${from}–${to}${
 		d.none >= 0.05 ? ` (${pct(d.none)} sans réseau)` : ''
 	}. Couverture théorique ARCEP croisée avec les mesures réelles des voyageurs.`;
+}
+
+// ===========================================================================
+// VERDICT « réponse d'abord » + points noirs (langage usager — cf. spec §2–4).
+// ===========================================================================
+
+const fmtDur = (s: number) => (s >= 60 ? `~${Math.round(s / 60)} min` : `~${Math.round(s)} s`);
+const fmtLen = (m: number) => (m >= 1000 ? `~${(m / 1000).toFixed(1)} km` : `~${Math.round(m)} m`);
+
+/** Libellé d'un point noir mesuré (titre + détail), en langage usager. */
+export function blackspotLabel(b: Blackspot): { head: string; detail: string } {
+	if (b.durationS > 0) {
+		return {
+			head: `Après ${b.afterStation} — ça coupe ${fmtDur(b.durationS)}`,
+			detail: b.lengthM ? `sur ${fmtLen(b.lengthM)}` : ''
+		};
+	}
+	return {
+		head: `Après ${b.afterStation} — pas de réseau`,
+		detail: b.lengthM ? fmtLen(b.lengthM) : ''
+	};
+}
+
+/**
+ * Regroupe les points noirs PAR GARE de référence : évite d'afficher 5 fois « Après
+ * {même gare} ». Une coupure isolée garde son libellé ; plusieurs au même endroit
+ * deviennent « Autour de {gare} — N coupures (la plus longue …) ».
+ */
+export function groupBlackspots(spots: Blackspot[]): { head: string; detail: string }[] {
+	const byStation = new Map<string, Blackspot[]>();
+	const order: string[] = [];
+	for (const s of spots) {
+		if (!byStation.has(s.afterStation)) order.push(s.afterStation);
+		byStation.set(s.afterStation, [...(byStation.get(s.afterStation) ?? []), s]);
+	}
+	return order.map((st) => {
+		const arr = byStation.get(st)!;
+		if (arr.length === 1) return blackspotLabel(arr[0]);
+		const maxDur = Math.max(...arr.map((a) => a.durationS));
+		const totalLen = arr.reduce((s, a) => s + a.lengthM, 0);
+		return {
+			head: `Après ${st} — ${arr.length} coupures`,
+			detail:
+				maxDur > 0
+					? `la plus longue ${fmtDur(maxDur)}, sur ${fmtLen(totalLen)} cumulés`
+					: `${fmtLen(totalLen)} cumulés`
+		};
+	});
+}
+
+/** Fraîcheur lisible d'une mesure (epoch s), relativement à `nowSec`. Null si jamais mesuré. */
+export function freshnessLabel(lastSeenSec: number, nowSec: number): string | null {
+	if (!lastSeenSec) return null;
+	const days = Math.floor((nowSec - lastSeenSec) / 86400);
+	if (days <= 0) return "mesuré aujourd'hui";
+	if (days === 1) return 'mesuré hier';
+	if (days < 30) return `dernière mesure il y a ${days} jours`;
+	const months = Math.floor(days / 30);
+	return months <= 1 ? 'dernière mesure il y a 1 mois' : `dernière mesure il y a ${months} mois`;
+}
+
+/** Verdict structuré d'une ligne : « la réponse d'abord » (réel si fiable, sinon ARCEP). */
+export interface Verdict {
+	/** Phrase principale (« ça capte ou pas »). */
+	lead: string;
+	/** Mention des coupures, ou null. */
+	cuts: string | null;
+	/** Meilleur opérateur, ou null. */
+	best: string | null;
+	/** Comparaison annoncé ↔ réel, ou null. */
+	gap: string | null;
+	/** Source / invitation à contribuer. */
+	source: string;
+	/** Tonalité pour la couleur du bloc. */
+	tone: 'good' | 'mixed' | 'bad' | 'unknown';
+	/** Verdict basé sur le réel mesuré (true) ou l'ARCEP (false). */
+	measured: boolean;
+}
+
+/**
+ * Construit le verdict d'une ligne (ou d'une ligne × opérateur si `opts.operatorName`).
+ * Si le réel couvre assez le trajet (`real.sufficient`), on parle « d'après les
+ * voyageurs » ; sinon on reste sur l'annoncé ARCEP et on invite à mesurer (spec §3).
+ * `opts.arcepDist` = répartition ARCEP à comparer (celle de l'opérateur sur la page
+ * opérateur ; sinon `stats.best`, « au mieux »).
+ */
+export function buildVerdict(
+	from: string,
+	to: string,
+	stats: LineStats | null,
+	real: LineReal,
+	opts: { operatorName?: string; arcepDist?: LevelDist } = {}
+): Verdict {
+	const dist = opts.arcepDist ?? stats?.best ?? null;
+	const arcepUsable = dist ? Math.round((dist.TBC + dist.BC) * 100) : null;
+	const arcepTbc = dist ? Math.round(dist.TBC * 100) : null;
+	const op = opts.operatorName;
+	const opLabel = (k: string) => OPERATOR_LABEL[k as UsageOp] ?? k;
+
+	if (real.sufficient) {
+		const g = real.goodPct;
+		const tone: Verdict['tone'] = g >= 70 ? 'good' : g >= 40 ? 'mixed' : 'bad';
+		return {
+			lead: op
+				? `D'après les voyageurs, avec ${op} ça capte bien sur ${g}${NBSP}% du trajet ${from}–${to} — de quoi regarder une vidéo.`
+				: `D'après les voyageurs, entre ${from} et ${to} ça capte bien sur ${g}${NBSP}% du trajet — de quoi regarder une vidéo.`,
+			cuts: real.blackspots.length
+				? `${real.blackspots.length} zone${real.blackspots.length > 1 ? 's' : ''} où ça coupe, notamment après ${real.blackspots[0].afterStation}.`
+				: null,
+			best: op ? null : real.bestOperator ? `Au mieux : ${opLabel(real.bestOperator)}.` : null,
+			// Dé-jargon : « sur le papier vs dans le train » plutôt que « ARCEP / excellente couverture ».
+			gap:
+				arcepTbc != null && Math.abs(arcepTbc - g) >= 10
+					? `Sur le papier : ${arcepTbc}${NBSP}% ; dans le train : ${g}${NBSP}%.`
+					: null,
+			// Transparence : signaler quand les mesures viennent surtout d'un opérateur.
+			source:
+				`D'après ${real.samples.toLocaleString('fr-FR')} mesure${real.samples > 1 ? 's' : ''} de voyageurs` +
+				(!op && real.operatorMix && real.operatorMix.share >= 0.7
+					? ` (principalement ${opLabel(real.operatorMix.operator)})`
+					: '') +
+				'.',
+			tone,
+			measured: true
+		};
+	}
+
+	return {
+		lead:
+			arcepUsable != null
+				? op
+					? `Avec ${op} entre ${from} et ${to}, le réseau est annoncé bon sur ${arcepUsable}${NBSP}% du trajet — selon les déclarations des opérateurs.`
+					: `Entre ${from} et ${to}, le réseau est annoncé bon sur ${arcepUsable}${NBSP}% du trajet — selon les déclarations des opérateurs.`
+				: `La couverture ${op ? op + ' ' : ''}entre ${from} et ${to} dépend des zones traversées.`,
+		cuts: null,
+		best: null,
+		gap: null,
+		source:
+			real.samples > 0
+				? `Mesures encore partielles (${real.coveragePct}${NBSP}% du trajet observé) — activez le mode mesure pour préciser.`
+				: `Pas encore de mesures de voyageurs ici — soyez le premier à les enregistrer.`,
+		tone: 'unknown',
+		measured: false
+	};
 }

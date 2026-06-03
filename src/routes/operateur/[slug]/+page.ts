@@ -21,15 +21,19 @@ export const load: PageLoad = ({ params }) => {
 	// pondérée par la longueur.
 	let wSum = 0;
 	let usableSum = 0;
-	const lines = RAIL_LINES.map((line) => {
-		const s = lineStats(line.slug);
-		const dist: LevelDist | null = s?.arcep[operator.key] ?? null;
-		if (s && dist) {
-			wSum += s.lengthKm;
-			usableSum += (dist.TBC + dist.BC) * s.lengthKm;
-		}
-		return { line, dist };
-	});
+	const lines = RAIL_LINES
+		// On ne liste/lie que les pages indexables (lignes complètes ou tronçons riches en
+		// ARCEP) : éviter d'envoyer le link equity du hub vers des sous-pages `noindex`.
+		.filter((line) => !line.segmentOf || lineStats(line.slug))
+		.map((line) => {
+			const s = lineStats(line.slug);
+			const dist: LevelDist | null = s?.arcep[operator.key] ?? null;
+			if (s && dist) {
+				wSum += s.lengthKm;
+				usableSum += (dist.TBC + dist.BC) * s.lengthKm;
+			}
+			return { line, dist };
+		});
 	const avgUsable = wSum > 0 ? usableSum / wSum : null;
 
 	return { operator, lines, avgUsable };

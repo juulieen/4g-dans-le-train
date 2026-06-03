@@ -8,21 +8,29 @@
 
 <style>
 	.prose {
+		width: 100%;
 		max-width: 760px;
 		margin: 0 auto;
 		padding: 2rem 1.1rem;
 		line-height: var(--lh);
+		box-sizing: border-box;
 	}
 
 	/* --- Typographie partagée (contenu slotté → :global, namespacé sous .prose) --- */
 	.prose :global(h1) {
 		font-size: var(--fs-xl);
+		line-height: 1.18;
 		letter-spacing: -0.01em;
 		margin: 0 0 0.6rem;
+		/* Évite tout débordement horizontal des noms de villes longs sur petit écran. */
+		overflow-wrap: anywhere;
+		text-wrap: balance;
 	}
 	.prose :global(h2) {
 		font-size: var(--fs-lg);
+		line-height: 1.25;
 		margin: 1.7rem 0 0.5rem;
+		overflow-wrap: anywhere;
 	}
 	.prose :global(p) {
 		color: var(--text);
@@ -147,6 +155,26 @@
 		min-height: 44px;
 		display: flex;
 		align-items: center;
+		justify-content: space-between;
+		gap: 0.6rem;
+		list-style: none;
+	}
+	.prose :global(summary)::-webkit-details-marker {
+		display: none;
+	}
+	/* Chevron explicite (l'accordéon n'était pas signalé visuellement). */
+	.prose :global(summary)::after {
+		content: '';
+		flex: none;
+		width: 0.5rem;
+		height: 0.5rem;
+		border-right: 2px solid var(--muted);
+		border-bottom: 2px solid var(--muted);
+		transform: rotate(45deg);
+		transition: transform 0.15s;
+	}
+	.prose :global(details[open] summary)::after {
+		transform: rotate(-135deg);
 	}
 	.prose :global(details p) {
 		color: var(--muted);
