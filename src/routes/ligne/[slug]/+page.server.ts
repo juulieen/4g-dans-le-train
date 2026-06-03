@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { RAIL_LINES } from '$geo/lines';
 import { lineStats } from '$geo/line-stats';
+import { freshnessLabel } from '$geo/coverage-copy';
 import { loadLineReal } from '$lib/server/line-real';
 import type { PageServerLoad } from './$types';
 
@@ -34,8 +35,11 @@ export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
 	// (coquilles) — réglable via GSC.
 	const noindex = Boolean(line.segmentOf) && !stats && !real.sufficient;
 
+	// Fraîcheur calculée CÔTÉ SERVEUR (évite un décalage d'hydratation avec Date.now client).
+	const freshness = freshnessLabel(real.lastSeen, Date.now() / 1000);
+
 	// Le réel bouge lentement → court cache (CDN/navigateur) pour amortir le SSR.
 	setHeaders({ 'cache-control': 'public, max-age=300' });
 
-	return { line, stats, parent, isTroncon: Boolean(line.segmentOf), noindex, real };
+	return { line, stats, parent, isTroncon: Boolean(line.segmentOf), noindex, real, freshness };
 };

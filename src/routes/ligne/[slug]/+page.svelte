@@ -1,12 +1,7 @@
 <script lang="ts">
 	import { OPERATORS } from '$geo/lines';
 	import { OPERATOR_LABEL } from '$lib/usage';
-	import {
-		describeOperator,
-		buildVerdict,
-		groupBlackspots,
-		freshnessLabel
-	} from '$geo/coverage-copy';
+	import { describeOperator, buildVerdict, groupBlackspots, clip } from '$geo/coverage-copy';
 	import PageWrap from '$components/PageWrap.svelte';
 	import RouteProfile from '$components/RouteProfile.svelte';
 	import Verdict from '$components/Verdict.svelte';
@@ -30,15 +25,17 @@
 					detail: `~${Math.round(z.lengthKm)} km`
 				}))
 	);
-	const freshness = $derived(freshnessLabel(real.lastSeen, Date.now() / 1000));
+	const freshness = $derived(data.freshness);
 
 	// --- SEO : titres / méta en langage usager, courts (différenciateur en tête) ---
 	const title = $derived(`Internet dans le train ${line.from}–${line.to} : ça capte ?`);
 	const description = $derived(
-		(verdict.measured
-			? `${verdict.lead}${verdict.cuts ? ' ' + verdict.cuts : ''}`
-			: `${verdict.lead} Comparez Orange, SFR, Free, Bouygues et les mesures réelles des voyageurs.`
-		).slice(0, 160)
+		clip(
+			verdict.measured
+				? `${verdict.lead}${verdict.cuts ? ' ' + verdict.cuts : ''}`
+				: `${verdict.lead} Comparez Orange, SFR, Free, Bouygues et les mesures réelles des voyageurs.`,
+			158
+		)
 	);
 	const url = $derived(`https://4g-dans-le-train.juulieen.fr/ligne/${line.slug}`);
 
@@ -119,15 +116,16 @@
 		{/if}
 		{#if stats}{Math.round(stats.lengthKm)}&nbsp;km{/if}{#if real.samples > 0}
 			·
-			{real.samples.toLocaleString('fr-FR')} mesures de voyageurs{#if freshness}
-				· {freshness}{/if}{/if}
+			{real.samples.toLocaleString('fr-FR')} mesures de voyageurs{/if}
 	</p>
 
 	<!-- VERDICT « réponse d'abord » + points noirs. -->
 	<Verdict {verdict} {blackspots} from={line.from} to={line.to} {freshness} />
 
 	<a class="cta" href="/">
-		{verdict.measured ? 'Voir où ça coupe sur la carte →' : 'Voir la couverture sur la carte →'}
+		{verdict.measured && blackspots.length
+			? 'Voir où ça coupe sur la carte →'
+			: 'Voir la couverture sur la carte →'}
 	</a>
 
 	<!-- FRISE — illustration gare après gare (secondaire). -->

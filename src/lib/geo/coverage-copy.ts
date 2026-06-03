@@ -48,11 +48,6 @@ export function describeOperator(name: string, d: LevelDist): string {
 	return s + '.';
 }
 
-/** Pourcentage saillant pour les <meta> / titres : couverture « au mieux » (best TBC). */
-export function bestTbcPct(stats: LineStats): string {
-	return pct(stats.best.TBC);
-}
-
 /** Noms de gares (dédupliqués) en tête des zones blanches d'une ligne. */
 export function whiteZoneStations(stats: LineStats, max = 3): string[] {
 	const seen = new Set<string>();
@@ -77,50 +72,26 @@ export function describeWhiteZones(stats: LineStats): string {
 	return `${noun}${where}.`;
 }
 
-/**
- * `<meta description>` enrichie d'un chiffre saillant pour une page LIGNE.
- */
-export function lineMetaDescription(
-	lineName: string,
-	from: string,
-	to: string,
-	stats: LineStats | undefined
-): string {
-	if (!stats) {
-		return `Où ça capte sur la ligne ${lineName} ? Carte communautaire de la couverture mobile 4G/5G dans le train entre ${from} et ${to}.`;
-	}
-	const zones = stats.zonesBlanches.count;
-	const zonesTxt =
-		zones > 0
-			? ` ${zones} zone${zones > 1 ? 's' : ''} blanche${zones > 1 ? 's' : ''} connue${zones > 1 ? 's' : ''}.`
-			: '';
-	return `Couverture 4G/5G annoncée excellente sur ${bestTbcPct(stats)} du trajet ${from}–${to}.${zonesTxt} Comparée aux mesures réelles des voyageurs sur la ligne ${lineName}.`;
-}
-
-/**
- * `<meta description>` enrichie pour une page LIGNE × OPÉRATEUR.
- */
-export function crossMetaDescription(
-	opName: string,
-	lineName: string,
-	from: string,
-	to: string,
-	d: LevelDist | undefined
-): string {
-	if (!d) {
-		return `Est-ce que ${opName} capte sur la ligne ${lineName} entre ${from} et ${to} ? Carte de la couverture 4G/5G ${opName}, mesures réelles des voyageurs incluses.`;
-	}
-	return `${opName} est annoncé en couverture 4G/5G sur ${pct(usable(d))} du trajet ${from}–${to}${
-		d.none >= 0.05 ? ` (${pct(d.none)} sans réseau)` : ''
-	}. Couverture théorique ARCEP croisée avec les mesures réelles des voyageurs.`;
-}
-
 // ===========================================================================
 // VERDICT « réponse d'abord » + points noirs (langage usager — cf. spec §2–4).
 // ===========================================================================
 
 const fmtDur = (s: number) => (s >= 60 ? `~${Math.round(s / 60)} min` : `~${Math.round(s)} s`);
 const fmtLen = (m: number) => (m >= 1000 ? `~${(m / 1000).toFixed(1)} km` : `~${Math.round(m)} m`);
+
+/** Tronque une chaîne à `max` caractères SANS couper un mot (ajoute « … »). */
+export function clip(text: string, max: number): string {
+	if (text.length <= max) return text;
+	return text.slice(0, max).replace(/\s+\S*$/, '') + '…';
+}
+
+/**
+ * Élision « que » → « qu' » devant une voyelle. Ex. `Est-ce ${elideQue('Orange')} capte` →
+ * « Est-ce qu'Orange capte » ; `elideQue('SFR')` → « que SFR ».
+ */
+export function elideQue(name: string): string {
+	return /^[aeiouyàâäéèêëîïôöùûü]/i.test(name) ? `qu'${name}` : `que ${name}`;
+}
 
 /** Libellé d'un point noir mesuré (titre + détail), en langage usager. */
 export function blackspotLabel(b: Blackspot): { head: string; detail: string } {
@@ -139,7 +110,7 @@ export function blackspotLabel(b: Blackspot): { head: string; detail: string } {
 /**
  * Regroupe les points noirs PAR GARE de référence : évite d'afficher 5 fois « Après
  * {même gare} ». Une coupure isolée garde son libellé ; plusieurs au même endroit
- * deviennent « Autour de {gare} — N coupures (la plus longue …) ».
+ * deviennent « Après {gare} — N coupures (la plus longue …) ».
  */
 export function groupBlackspots(spots: Blackspot[]): { head: string; detail: string }[] {
 	const byStation = new Map<string, Blackspot[]>();

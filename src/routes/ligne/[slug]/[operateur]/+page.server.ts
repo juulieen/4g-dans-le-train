@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { findLine, findOperator } from '$geo/lines';
 import { lineStats } from '$geo/line-stats';
+import { freshnessLabel } from '$geo/coverage-copy';
 import { loadLineReal } from '$lib/server/line-real';
 import type { PageServerLoad } from './$types';
 
@@ -23,8 +24,10 @@ export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
 
 	// Tronçon × opérateur : noindex SAUF s'il a du réel mesuré suffisant (contenu unique).
 	const noindex = Boolean(line.segmentOf) && !real.sufficient;
+	// Fraîcheur côté serveur (évite le décalage d'hydratation).
+	const freshness = freshnessLabel(real.lastSeen, Date.now() / 1000);
 
 	setHeaders({ 'cache-control': 'public, max-age=300' });
 
-	return { line, operator, stats, dist, noindex, real };
+	return { line, operator, stats, dist, noindex, real, freshness };
 };

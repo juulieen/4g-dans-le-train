@@ -5,7 +5,8 @@
 		describeWhiteZones,
 		buildVerdict,
 		groupBlackspots,
-		freshnessLabel,
+		clip,
+		elideQue,
 		pct
 	} from '$geo/coverage-copy';
 	import PageWrap from '$components/PageWrap.svelte';
@@ -36,27 +37,33 @@
 					detail: `~${Math.round(z.lengthKm)} km`
 				}))
 	);
-	const freshness = $derived(freshnessLabel(real.lastSeen, Date.now() / 1000));
+	const freshness = $derived(data.freshness);
 
 	// Autres opérateurs sur la même ligne (maillage interne).
 	const others = $derived(OPERATORS.filter((o) => o.slug !== op.slug));
 
 	const title = $derived(`${op.name} dans le train ${line.from}–${line.to} : ça capte ?`);
 	const description = $derived(
-		`${verdict.lead}${verdict.cuts ? ' ' + verdict.cuts : ''}`.slice(0, 160)
+		clip(`${verdict.lead}${verdict.cuts ? ' ' + verdict.cuts : ''}`, 158)
 	);
 	const url = $derived(`https://4g-dans-le-train.juulieen.fr/ligne/${line.slug}/${op.slug}`);
 
 	// FAQ propre à l'opérateur (factuel ARCEP de l'opérateur → contenu différencié).
 	const faqs = $derived([
 		{
-			q: `Est-ce que ${op.name} capte dans le train entre ${line.from} et ${line.to} ?`,
+			q: `Est-ce ${elideQue(op.name)} capte dans le train entre ${line.from} et ${line.to} ?`,
 			a: `${verdict.lead}${verdict.cuts ? ' ' + verdict.cuts : ''} Le wifi de bord peut dépanner, mais c'est votre réseau mobile ${op.name} (4G/5G) qui compte le plus.`
 		},
 		{
 			q: `Pourquoi ${op.name} ne capte pas partout entre ${line.from} et ${line.to} ?`,
 			a: dist
-				? `${describeOperator(op.name, dist)} ${stats && describeWhiteZones(stats) ? describeWhiteZones(stats) : ''} Sur le terrain, tunnels, zones rurales et grande vitesse provoquent des coupures.`
+				? [
+						describeOperator(op.name, dist),
+						stats ? describeWhiteZones(stats) : '',
+						'Sur le terrain, tunnels, zones rurales et grande vitesse provoquent des coupures.'
+					]
+						.filter(Boolean)
+						.join(' ')
 				: `Tunnels, zones rurales, carrosserie métallique et grande vitesse coupent le réseau ${op.name}, même là où il est annoncé bon.`
 		},
 		{
@@ -120,19 +127,19 @@
 	<nav class="crumbs">
 		<a href="/lignes">Lignes</a> › <a href="/ligne/{line.slug}">{line.name}</a> › {op.name}
 	</nav>
-	<h1>Est-ce que {op.name} capte dans le train entre {line.from} et {line.to}&nbsp;?</h1>
+	<h1>Est-ce {elideQue(op.name)} capte dans le train entre {line.from} et {line.to}&nbsp;?</h1>
 	<p class="lede">
 		Le réseau <strong>{op.name}</strong> sur la ligne {line.service}
 		{line.from} – {line.to}{#if real.samples > 0}
-			· {real.samples.toLocaleString('fr-FR')} mesures{#if freshness}
-				· {freshness}{/if}{/if}.
+			·
+			{real.samples.toLocaleString('fr-FR')} mesures{/if}.
 	</p>
 
 	<!-- VERDICT (cet opérateur) + points noirs. -->
 	<Verdict {verdict} {blackspots} from={line.from} to={line.to} {freshness} />
 
 	<a class="cta" href="/">
-		{verdict.measured
+		{verdict.measured && blackspots.length
 			? `Voir où ${op.name} coupe sur la carte →`
 			: `Voir la couverture ${op.name} sur la carte →`}
 	</a>

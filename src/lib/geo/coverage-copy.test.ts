@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { buildVerdict, blackspotLabel, groupBlackspots, freshnessLabel } from './coverage-copy';
+import {
+	buildVerdict,
+	blackspotLabel,
+	groupBlackspots,
+	freshnessLabel,
+	clip,
+	elideQue
+} from './coverage-copy';
 import type { LineStats } from './line-stats';
 import type { LineReal, Blackspot } from './line-real';
 
@@ -133,7 +140,7 @@ describe('blackspotLabel', () => {
 });
 
 describe('groupBlackspots', () => {
-	it('plusieurs coupures à la même gare → une seule entrée « Autour de … »', () => {
+	it('plusieurs coupures à la même gare → une seule entrée « Après … »', () => {
 		const g = groupBlackspots([
 			spot({ afterStation: 'Angoulême', distKm: 5, durationS: 120, lengthM: 4800 }),
 			spot({ afterStation: 'Angoulême', distKm: 10, durationS: 40, lengthM: 2300 }),
@@ -158,9 +165,32 @@ describe('freshnessLabel', () => {
 	it('jamais mesuré → null', () => {
 		expect(freshnessLabel(0, 1000 * day)).toBeNull();
 	});
-	it('hier / il y a N jours', () => {
+	it('aujourd’hui / hier / il y a N jours', () => {
+		expect(freshnessLabel(1000 * day, 1000 * day)).toContain("aujourd'hui");
 		expect(freshnessLabel(1000 * day - 1 * day, 1000 * day)).toBe('mesuré hier');
 		expect(freshnessLabel(1000 * day - 5 * day, 1000 * day)).toContain('il y a 5 jours');
+	});
+});
+
+describe('clip', () => {
+	it('chaîne courte → inchangée', () => {
+		expect(clip('court', 100)).toBe('court');
+	});
+	it('chaîne longue → coupée au mot + « … »', () => {
+		const out = clip('le réseau coupe souvent après Angoulême', 20);
+		expect(out.length).toBeLessThanOrEqual(21);
+		expect(out.endsWith('…')).toBe(true);
+		expect(out).not.toContain('souv'); // le mot tronqué « souv(ent) » a été retiré
+	});
+});
+
+describe('elideQue', () => {
+	it("voyelle → qu'", () => {
+		expect(elideQue('Orange')).toBe("qu'Orange");
+	});
+	it('consonne → que', () => {
+		expect(elideQue('SFR')).toBe('que SFR');
+		expect(elideQue('Bouygues')).toBe('que Bouygues');
 	});
 });
 
