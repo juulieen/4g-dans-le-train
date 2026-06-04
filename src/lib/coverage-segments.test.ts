@@ -3,6 +3,7 @@ import {
 	segmentCoords,
 	buildLineSegments,
 	buildArcepLineFeatures,
+	pathBounds,
 	type SegmentCell,
 	type ArcepProfileSegment
 } from './coverage-segments';
@@ -155,5 +156,27 @@ describe('buildArcepLineFeatures', () => {
 
 	it('tracé < 2 points → aucune Feature', () => {
 		expect(buildArcepLineFeatures([[0, 45, 0]], [seg({})])).toEqual([]);
+	});
+});
+
+describe('pathBounds', () => {
+	it('renvoie [[minLng,minLat],[maxLng,maxLat]]', () => {
+		expect(
+			pathBounds([
+				[2, 48, 0],
+				[4, 45, 10],
+				[3, 46, 5]
+			])
+		).toEqual([
+			[2, 45],
+			[4, 48]
+		]);
+	});
+
+	it('tracé vide → [[0,0],[0,0]] (garde, pas d’Infinity)', () => {
+		expect(pathBounds([])).toEqual([
+			[0, 0],
+			[0, 0]
+		]);
 	});
 });

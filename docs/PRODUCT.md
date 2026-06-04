@@ -342,8 +342,9 @@ une **vignette 1200×630** s'affiche (`og:image`), montrant le **trajet** (`A �
 
 ## Aperçu carte sur les pages ligne
 
-Les pages `/ligne/[slug]` portent, sous la frise, un **aperçu de carte statique** calé sur le
-tracé (le « où » géographique, complément du « quand » de la frise). Il **réutilise
+Les pages `/ligne/[slug]` — **et les croisées `/ligne/[slug]/[operateur]`** (voie colorée pour
+l'opérateur) — portent, sous la frise, un **aperçu de carte statique** calé sur le tracé (le
+« où » géographique, complément du « quand » de la frise). Il **réutilise
 `Map.svelte`** (rendu identique) mais reçoit des **données injectées légères** plutôt que les
 gros GeoJSON nationaux : la voie ARCEP de la ligne seule est reconstruite depuis son
 route-profile (`buildArcepLineFeatures` + `segmentCoords`, `src/lib/coverage-segments.ts`),

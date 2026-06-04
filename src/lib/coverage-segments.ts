@@ -36,6 +36,11 @@ export interface ArcepProfileSegment {
  * ligne et le deep-link de la carte pour caler le `fitBounds`.
  */
 export function pathBounds(path: PathPoint[]): [[number, number], [number, number]] {
+	if (!path.length)
+		return [
+			[0, 0],
+			[0, 0]
+		];
 	let minLng = Infinity,
 		minLat = Infinity,
 		maxLng = -Infinity,

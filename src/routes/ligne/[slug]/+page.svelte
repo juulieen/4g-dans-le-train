@@ -103,7 +103,7 @@
 	</section>
 
 	<section class="apercu-carte">
-		<h2>Où passe la ligne {isTroncon ? '' : line.name}</h2>
+		<h2>Où passe la ligne {isTroncon ? `${line.from} ↔ ${line.to}` : line.name}</h2>
 		<p>Le tracé de {line.from} à {line.to}, coloré par la couverture mobile attendue.</p>
 		<MapPreview slug={line.slug} />
 	</section>

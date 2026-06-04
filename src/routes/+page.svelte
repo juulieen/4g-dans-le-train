@@ -51,11 +51,14 @@
 
 	// Deep-link `/?line=<slug>` (depuis l'aperçu des pages ligne) : on cadre la carte sur la
 	// ligne et on pré-sélectionne sa frise. La carte démarre en vue nationale puis se recadre
-	// dès que la bbox (route-profile) arrive — bref flash accepté (cf. docs).
+	// dès que la bbox (route-profile) arrive — bref flash accepté (cf. PRODUCT.md § Aperçu carte).
 	let focusBounds = $state<maplibregl.LngLatBoundsLike | null>(null);
 	$effect(() => {
 		const slug = page.url.searchParams.get('line');
-		if (!slug) return;
+		if (!slug) {
+			focusBounds = null; // navigation (SPA) vers `/` sans `?line=` → on dé-cadre.
+			return;
+		}
 		if (sortedLines.some((l) => l.slug === slug)) selectedLine = slug;
 		let cancelled = false;
 		void (async () => {
