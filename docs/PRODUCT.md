@@ -340,6 +340,20 @@ une **vignette 1200×630** s'affiche (`og:image`), montrant le **trajet** (`A �
   avec repli prod) est désormais la source unique des `canonical`, du `sitemap.xml` et des
   balises `og`.
 
+## Aperçu carte sur les pages ligne
+
+Les pages `/ligne/[slug]` portent, sous la frise, un **aperçu de carte statique** calé sur le
+tracé (le « où » géographique, complément du « quand » de la frise). Il **réutilise
+`Map.svelte`** (rendu identique) mais reçoit des **données injectées légères** plutôt que les
+gros GeoJSON nationaux : la voie ARCEP de la ligne seule est reconstruite depuis son
+route-profile (`buildArcepLineFeatures` + `segmentCoords`, `src/lib/coverage-segments.ts`),
+les rubans réels sont scopés à la ligne (`&line=`). La carte est **non-interactive** (`Map.svelte`
+prop `interactive=false`) et **cliquable** : elle ouvre la carte complète **focalisée** via le
+deep-link `/?line=<slug>` (lu par la home → `fitBounds`). Côté perf (pages indexées),
+`MapPreview.svelte` monte la carte **paresseusement** (à l'entrée dans le viewport) et **importe
+MapLibre en dynamique** → aucun coût au chargement initial, et **aucun** fetch des 6 Mo de
+`arcep-lines.geojson` + `rail-lines.geojson`.
+
 ## État actuel
 
 MVP **déployé et fonctionnel** en production. Mode mesure validé en réel, couche

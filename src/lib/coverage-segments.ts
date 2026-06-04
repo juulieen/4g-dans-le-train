@@ -19,6 +19,73 @@
 import { rateToLevel, type Level } from './usage';
 import { projectOntoPath, positionAtDist, type PathPoint } from './geo/interpolate';
 
+/** Un segment ARCEP du profil de trajet (run-length le long du tracé). */
+export interface ArcepProfileSegment {
+	fromKm: number;
+	toKm: number;
+	orange: Level;
+	sfr: Level;
+	free: Level;
+	bouygues: Level;
+	best: Level;
+}
+
+/**
+ * Boîte englobante d'un tracé : `[[minLng,minLat],[maxLng,maxLat]]` (compatible
+ * `maplibregl.LngLatBoundsLike`). Pure, sans dépendance carto — partagée par l'aperçu de
+ * ligne et le deep-link de la carte pour caler le `fitBounds`.
+ */
+export function pathBounds(path: PathPoint[]): [[number, number], [number, number]] {
+	let minLng = Infinity,
+		minLat = Infinity,
+		maxLng = -Infinity,
+		maxLat = -Infinity;
+	for (const [lng, lat] of path) {
+		if (lng < minLng) minLng = lng;
+		if (lng > maxLng) maxLng = lng;
+		if (lat < minLat) minLat = lat;
+		if (lat > maxLat) maxLat = lat;
+	}
+	return [
+		[minLng, minLat],
+		[maxLng, maxLat]
+	];
+}
+
+/**
+ * Construit la géométrie ARCEP « ligne seule » d'un trajet, à partir de son profil
+ * (`path` + segments `arcep`), sous forme de Features LineString portant les niveaux par
+ * opérateur (`orange/sfr/free/bouygues/best`).
+ *
+ * POURQUOI : permet d'INJECTER la couche ARCEP d'UNE ligne dans la carte (aperçu sur les
+ * pages `/ligne`) au lieu de charger `arcep-lines.geojson` (national, 4,6 Mo). Les props
+ * sont identiques à ce gros fichier → l'expression de couleur de `Map.svelte` (`arcepColor`)
+ * les colore sans changement. Retourne `[]` si le tracé a moins de 2 points.
+ */
+export function buildArcepLineFeatures(
+	path: PathPoint[],
+	arcep: ArcepProfileSegment[]
+): GeoJSON.Feature[] {
+	if (path.length < 2) return [];
+	const features: GeoJSON.Feature[] = [];
+	for (const s of arcep) {
+		const coordinates = segmentCoords(path, s.fromKm, s.toKm);
+		if (coordinates.length < 2) continue; // segment dégénéré (bord de tracé) : on saute
+		features.push({
+			type: 'Feature',
+			geometry: { type: 'LineString', coordinates },
+			properties: {
+				orange: s.orange,
+				sfr: s.sfr,
+				free: s.free,
+				bouygues: s.bouygues,
+				best: s.best
+			}
+		});
+	}
+	return features;
+}
+
 /** Au-delà de cette distance au tracé, une cellule n'est pas « sur cette ligne ». */
 export const MAX_OFFSET_M = 600;
 /** Trou de mesure au-delà duquel on coupe le ruban (km) plutôt que relier dans le vide. */

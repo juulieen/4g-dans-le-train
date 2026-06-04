@@ -8,9 +8,15 @@
 
 <style>
 	.prose {
+		/* `width: 100%` est NÉCESSAIRE : `main` est un flex colonne et `margin: 0 auto`
+		   désactive le `stretch` → sans largeur définie, `.prose` se calerait sur son
+		   `max-width` (760px) et déborderait horizontalement sur mobile. `overflow-x: clip`
+		   garde-fou (aucun enfant ne doit dépasser ; la frise gère son propre scroll). */
+		width: 100%;
 		max-width: 760px;
 		margin: 0 auto;
 		padding: 2rem 1.1rem;
+		overflow-x: clip;
 		line-height: var(--lh);
 	}
 
@@ -75,9 +81,10 @@
 		gap: 0.5rem;
 	}
 	.prose :global(.pills a) {
-		display: inline-block;
+		display: inline-flex;
+		align-items: center;
 		padding: 0.5rem 0.9rem;
-		min-height: 38px;
+		min-height: 44px;
 		background: color-mix(in srgb, var(--panel) 75%, transparent);
 		border: 1px solid var(--border);
 		border-radius: 999px;
@@ -151,5 +158,14 @@
 	.prose :global(details p) {
 		color: var(--muted);
 		margin-top: 0;
+	}
+
+	/* --- Ajustements tactiles mobile --- */
+	@media (max-width: 760px) {
+		/* CTA pleine largeur : plus facile à viser au pouce. */
+		.prose :global(.cta) {
+			display: block;
+			text-align: center;
+		}
 	}
 </style>

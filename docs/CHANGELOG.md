@@ -5,6 +5,31 @@
 
 ## 2026-06-04
 
+- **UX mobile des pages de contenu (`PageWrap`)** : correction d'un **débordement horizontal**
+  qui coupait le contenu à droite sur mobile — `.prose` (`margin: 0 auto` dans un `<main>` en
+  flex colonne, où les marges auto désactivent le `stretch`) se calait sur son `max-width`
+  (760 px) au lieu de la largeur d'écran ; ajout de `width: 100%` + `overflow-x: clip`. Au
+  passage : **CTA pleine largeur** sur mobile, **pills opérateurs à 44 px** (cibles tactiles
+  WCAG), et `touch-action: pan-y` sur l'overlay de l'aperçu carte (le scroll vertical passe, pas
+  de navigation accidentelle au swipe). Touche toutes les pages `prose` (lignes, opérateurs,
+  FAQ…). _Non encore mergé sur `main`._
+
+- **Pages ligne — aperçu de carte zoomé sur la ligne (branche `feat/og-share-cards`)** : les
+  pages `/ligne/[slug]` (et croisées `…/[operateur]`) gagnent un **aperçu de carte statique et
+  cliquable**, calé sur le tracé de la ligne, sous la frise. Il **réutilise `Map.svelte`** (même
+  fond CARTO + voie colorée par usage) mais en lui **injectant des données légères** : la voie
+  ARCEP de la ligne seule, construite depuis son route-profile (`buildArcepLineFeatures` +
+  `segmentCoords`, ~dizaines de Ko) **au lieu de charger les GeoJSON nationaux** `arcep-lines`
+  (4,6 Mo) et `rail-lines` (1,7 Mo) ; rubans communautaires scopés à la ligne (`&line=`).
+  Nouvelles props additives sur `Map.svelte` : `interactive` (carte non-interactive en aperçu),
+  `focusBounds` (`fitBounds`), `arcepLinesData` (injection, court-circuite le fetch global),
+  `showRail`, `lineSlug`. Nouveau composant `MapPreview.svelte` : **init paresseuse**
+  (IntersectionObserver) + **import dynamique** de MapLibre → le chunk ne se charge qu'à l'entrée
+  dans le viewport (pas d'impact LCP sur les pages indexées). Le clic ouvre la carte interactive
+  **déjà focalisée** sur la ligne via un **deep-link `/?line=<slug>`** désormais lu par la home.
+  Helpers purs testés `buildArcepLineFeatures` / `pathBounds` (`src/lib/coverage-segments.ts`).
+  _Non encore mergé sur `main`._
+
 - **Partage social — vignettes « frise de trajet » (branche `feat/og-share-cards`)** :
   jusqu'ici, coller un lien `/ligne/<slug>` sur X / WhatsApp / Discord / Reddit n'affichait
   **aucune vignette** (les pages n'avaient ni `og:image` ni `twitter:card`). Première

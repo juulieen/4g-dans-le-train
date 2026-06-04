@@ -8,6 +8,7 @@
 	} from '$geo/coverage-copy';
 	import PageWrap from '$components/PageWrap.svelte';
 	import RouteProfile from '$components/RouteProfile.svelte';
+	import MapPreview from '$components/MapPreview.svelte';
 	import { ORIGIN } from '$lib/site';
 	import type { PageData } from './$types';
 
@@ -88,7 +89,10 @@
 		<RouteProfile slug={line.slug} operator={op.key} />
 	</section>
 
-	<a class="cta" href="/">Voir la carte interactive →</a>
+	<section class="apercu-carte">
+		<h2>Le tracé de {line.from} à {line.to}, couverture {op.name}</h2>
+		<MapPreview slug={line.slug} operator={op.key} />
+	</section>
 
 	<section>
 		<h2>{op.name} entre {line.from} et {line.to}</h2>

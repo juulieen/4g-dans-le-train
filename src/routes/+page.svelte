@@ -19,6 +19,9 @@
 	import { pluralS } from '$lib/plural';
 	import { buildQrSvg } from '$lib/qr';
 	import { ORIGIN } from '$lib/site';
+	import { pathBounds } from '$lib/coverage-segments';
+	import { page } from '$app/state';
+	import type maplibregl from 'maplibre-gl';
 	import type { PageData } from './$types';
 
 	// URL encodée dans le QR « mesure depuis ton téléphone » (affiché sur desktop).
@@ -45,6 +48,32 @@
 	// Ligne sélectionnée pour afficher son « profil de trajet » (frise). Vide = aucune.
 	let selectedLine = $state<string>('');
 	const sortedLines = [...RAIL_LINES].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+
+	// Deep-link `/?line=<slug>` (depuis l'aperçu des pages ligne) : on cadre la carte sur la
+	// ligne et on pré-sélectionne sa frise. La carte démarre en vue nationale puis se recadre
+	// dès que la bbox (route-profile) arrive — bref flash accepté (cf. docs).
+	let focusBounds = $state<maplibregl.LngLatBoundsLike | null>(null);
+	$effect(() => {
+		const slug = page.url.searchParams.get('line');
+		if (!slug) return;
+		if (sortedLines.some((l) => l.slug === slug)) selectedLine = slug;
+		let cancelled = false;
+		void (async () => {
+			try {
+				const res = await fetch(`/data/route-profiles/${slug}.json`);
+				if (!res.ok) return;
+				const profile = (await res.json()) as { path?: [number, number, number][] };
+				if (!cancelled && profile.path && profile.path.length >= 2) {
+					focusBounds = pathBounds(profile.path);
+				}
+			} catch {
+				/* pas de profil : on garde la vue nationale */
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	});
 
 	// --- Partage du trajet sélectionné (Web Share + repli presse-papier). ---
 	// La vignette sociale (`/og/<slug>.png`) fait l'accroche visuelle au moment du
@@ -276,7 +305,7 @@
 <section class="layout">
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div class="map-wrap" onpointerdown={onMapInteract}>
-		<Map {coverage} operator={viewOperator} {showArcep} {showCommunity} />
+		<Map {coverage} operator={viewOperator} {showArcep} {showCommunity} {focusBounds} />
 		<button
 			class="info-fab glass"
 			onpointerdown={(e) => e.stopPropagation()}

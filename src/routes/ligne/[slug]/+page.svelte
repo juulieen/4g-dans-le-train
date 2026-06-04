@@ -8,6 +8,7 @@
 	} from '$geo/coverage-copy';
 	import PageWrap from '$components/PageWrap.svelte';
 	import RouteProfile from '$components/RouteProfile.svelte';
+	import MapPreview from '$components/MapPreview.svelte';
 	import { ORIGIN } from '$lib/site';
 	import type { PageData } from './$types';
 
@@ -101,7 +102,11 @@
 		<RouteProfile slug={line.slug} />
 	</section>
 
-	<a class="cta" href="/">Voir la carte interactive →</a>
+	<section class="apercu-carte">
+		<h2>Où passe la ligne {isTroncon ? '' : line.name}</h2>
+		<p>Le tracé de {line.from} à {line.to}, coloré par la couverture mobile attendue.</p>
+		<MapPreview slug={line.slug} />
+	</section>
 
 	<section>
 		{#if stats}
@@ -144,9 +149,6 @@
 		<ul>
 			<li>Préchargez vos contenus (musique, vidéos, articles) avant les zones blanches connues.</li>
 			<li>Le Wi-Fi de bord peut prendre le relais sur certains TGV INOUI.</li>
-			<li>
-				Comparez les opérateurs&nbsp;: la couverture diffère selon Orange, SFR, Free et Bouygues.
-			</li>
 		</ul>
 	</section>
 </PageWrap>
