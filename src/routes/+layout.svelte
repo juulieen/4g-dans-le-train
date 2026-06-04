@@ -164,11 +164,13 @@
 		--sp-5: 1.5rem;
 		--sp-6: 2rem;
 
-		--fs-xs: 0.72rem;
-		--fs-sm: 0.85rem;
-		--fs-md: 0.95rem;
-		--fs-lg: 1.15rem;
-		--fs-xl: 1.6rem;
+		/* Échelle typographique : planchers lisibles sur mobile + titres FLUIDES (clamp)
+		   pour que les longues questions ne débordent plus sur petit écran. */
+		--fs-xs: 0.8rem;
+		--fs-sm: 0.9rem;
+		--fs-md: 1rem;
+		--fs-lg: clamp(1.1rem, 1rem + 0.6vw, 1.25rem);
+		--fs-xl: clamp(1.35rem, 1.05rem + 1.7vw, 1.7rem);
 		--lh: 1.6;
 
 		--glass-blur: 14px;
@@ -378,6 +380,10 @@
 	@media (max-width: 760px) {
 		.tools-label {
 			display: none;
+		}
+		/* Dégage le contenu de la bottom-nav fixe (sinon elle masque le bas de page). */
+		main {
+			padding-bottom: calc(64px + env(safe-area-inset-bottom));
 		}
 		.desktop-nav {
 			display: none;
