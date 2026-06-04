@@ -3,6 +3,28 @@
 > Ajoute ici une entrée (date + résumé) pour toute évolution fonctionnelle ou de
 > contenu notable. Le plus récent en haut. Voir `../CLAUDE.md`.
 
+## 2026-06-04
+
+- **Partage social — vignettes « frise de trajet » (branche `feat/og-share-cards`)** :
+  jusqu'ici, coller un lien `/ligne/<slug>` sur X / WhatsApp / Discord / Reddit n'affichait
+  **aucune vignette** (les pages n'avaient ni `og:image` ni `twitter:card`). Première
+  brique de la **boucle d'acquisition** : chaque page expose désormais une **carte sociale
+  1200×630 générée à la volée** (`GET /og/<slug>.png`) montrant le **trajet** (`A ↔ B`), la
+  **frise de couverture ARCEP colorée par usage** (le visuel signature), deux **stats
+  d'accroche** (« X % en streaming vidéo » + « Y % de zones blanches ») et le branding. Rendu
+  serveur **satori → resvg** (fonte DejaVu vendue dans `src/lib/server/og/fonts/`, fournie
+  aux deux étages pour un rendu déterministe sans fontes système). Stratégie **« ARCEP →
+  réel progressif »** : la carte montre la couverture théorique tant qu'une ligne a peu de
+  mesures, puis **superpose un résumé du réel communautaire** dès qu'il y en a (seuil
+  ≥ 3 cellules) — **sans rebuild** : endpoint runtime avec **cache 24 h** (en-tête HTTP +
+  mémo en process invalidé chaque jour). `/og/default.png` sert la carte générique. Câblage
+  des balises `og:image`/`twitter:image`/`og:url` **centralisé dans `+layout.svelte`**
+  (dérivées de la route, source unique, zéro doublon). Nouveau **bouton « Partager ce
+  trajet »** dans le panneau carte (`navigator.share` + repli presse-papier). Au passage,
+  **toutes les URLs absolues en dur** (canonical, `sitemap.xml`, `og:url`) passent par
+  `src/lib/site.ts` (`PUBLIC_SITE_URL` + repli prod). Aucune migration, aucune donnée
+  committée (l'image est dérivée à la demande). _Non encore mergé sur `main`._
+
 ## 2026-06-02
 
 - **Nettoyage — factorisation des textes de la carte (DRY)** : les libellés d'usage de

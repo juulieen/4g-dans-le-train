@@ -2,6 +2,7 @@
 	import { pct } from '$geo/coverage-copy';
 	import PageWrap from '$components/PageWrap.svelte';
 	import CommunityComparison from '$components/CommunityComparison.svelte';
+	import { ORIGIN } from '$lib/site';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -15,7 +16,7 @@
 			? `${op.name} est annoncé en couverture 4G/5G sur ${pct(avgUsable)} des grandes lignes SNCF en moyenne. Carte croisée avec les mesures réelles des voyageurs.`
 			: `Où capte ${op.name} dans le train en France ? Carte de la couverture mobile 4G/5G ${op.name} le long des lignes SNCF, croisée avec les mesures réelles des voyageurs.`
 	);
-	const url = $derived(`https://4g-dans-le-train.juulieen.fr/operateur/${op.slug}`);
+	const url = $derived(`${ORIGIN}/operateur/${op.slug}`);
 
 	const faqAnswer = $derived(
 		avgUsable !== null

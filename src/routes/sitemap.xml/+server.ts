@@ -1,11 +1,12 @@
 import { RAIL_LINES, OPERATORS } from '$geo/lines';
 import { lineStats } from '$geo/line-stats';
+import { ORIGIN } from '$lib/site';
 import type { RequestHandler } from './$types';
 
 /** Génère le sitemap.xml à partir des routes statiques + pages lignes/opérateurs. */
 export const prerender = true;
 
-const BASE = 'https://4g-dans-le-train.juulieen.fr';
+const BASE = ORIGIN;
 
 export const GET: RequestHandler = () => {
 	const staticPaths = ['', '/lignes', '/operateurs', '/faq', '/confidentialite'];

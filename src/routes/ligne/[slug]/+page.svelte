@@ -8,6 +8,7 @@
 	} from '$geo/coverage-copy';
 	import PageWrap from '$components/PageWrap.svelte';
 	import RouteProfile from '$components/RouteProfile.svelte';
+	import { ORIGIN } from '$lib/site';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -27,7 +28,7 @@
 	const description = $derived(
 		lineMetaDescription(line.name, line.from, line.to, stats ?? undefined)
 	);
-	const url = $derived(`https://4g-dans-le-train.juulieen.fr/ligne/${line.slug}`);
+	const url = $derived(`${ORIGIN}/ligne/${line.slug}`);
 
 	// Réponse FAQ enrichie des vrais chiffres ARCEP quand ils existent.
 	const faqAnswer = $derived(

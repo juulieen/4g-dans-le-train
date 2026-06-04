@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { OPERATORS } from '$geo/lines';
 	import PageWrap from '$components/PageWrap.svelte';
+	import { ORIGIN } from '$lib/site';
 </script>
 
 <svelte:head>
@@ -9,7 +10,7 @@
 		name="description"
 		content="Comparez la couverture mobile dans le train selon votre opérateur : Orange, SFR, Free, Bouygues. Carte 4G/5G le long des lignes SNCF."
 	/>
-	<link rel="canonical" href="https://4g-dans-le-train.juulieen.fr/operateurs" />
+	<link rel="canonical" href={`${ORIGIN}/operateurs`} />
 </svelte:head>
 
 <PageWrap>

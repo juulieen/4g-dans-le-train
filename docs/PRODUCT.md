@@ -301,10 +301,53 @@ Conventions produit :
 - **Données versionnées** : `rail-lines.geojson` et `arcep-lines.geojson` sont
   commités (déploiement clé en main, pas de re-téléchargement des ~500 Mo ARCEP).
 
+## Partage social (Open Graph) — la boucle d'acquisition
+
+Le projet est riche en features mais bute sur le **démarrage à froid** d'un
+crowdsourcing (pas de mesures → carte peu parlante → pas de visiteurs → pas de
+mesures). Première brique d'acquisition : faire de **chaque lien partagé une accroche
+visuelle**. Quand on colle un lien `/ligne/<slug>` sur X / WhatsApp / Discord / Reddit,
+une **vignette 1200×630** s'affiche (`og:image`), montrant le **trajet** (`A ↔ B`), la
+**frise de couverture colorée par usage** (le visuel signature), deux **stats**
+(« X % streaming » + « Y % zones blanches ») et le branding.
+
+- **Endpoint runtime, pas de PNG committé** : `GET /og/<slug>.png`
+  (`src/routes/og/[slug].png/+server.ts`) compose la carte à la demande — **satori**
+  (vue → SVG) puis **resvg** (SVG → PNG). La fonte (DejaVu, `src/lib/server/og/fonts/`)
+  est fournie **aux deux étages** (satori pour la mise en page, resvg pour dessiner le
+  texte ; `loadSystemFonts: false`) → rendu déterministe même si le conteneur n'a pas la
+  fonte installée. Le rendu est dans `src/lib/server/og/card.ts`.
+- **Stratégie « ARCEP → réel progressif »** : la vignette montre la couverture
+  **théorique** tant qu'une ligne a peu de mesures, et **superpose un résumé du réel
+  communautaire** dès qu'il dépasse un seuil (≥ 3 cellules). Cohérent avec l'ADN
+  (l'écart théorie/réel) **sans desservir** au démarrage (une carte « réel » vide
+  vendrait mal) : le réel reste surtout la **récompense au clic** (frise `RouteProfile`).
+  Le réel est lu via la même agrégation que `GET /api/coverage` (gestion des tronçons via
+  `resolveLineFilter`). La donnée de la frise vient du profil de trajet **lu sur disque**
+  (`static|build/client/data/route-profiles/<slug>.json`) — **pas** via `event.fetch`, qui
+  ne voit pas les fichiers statiques en adapter-node.
+- **Fraîcheur sans rebuild** : cache **24 h** = en-tête HTTP `max-age=86400` (crawlers,
+  Caddy, navigateurs) + **mémo en process** invalidé chaque jour. Une ligne qui se fait
+  mesurer voit donc sa vignette **s'enrichir d'elle-même** (~quotidiennement) — un
+  flywheel : meilleures cartes → plus de partages → plus de mesures.
+- **Câblage centralisé** : `og:image`/`twitter:image`/`og:url` sont dérivés de la route
+  **dans `+layout.svelte`** (source unique, pas de doublon de balises) — `/ligne/<slug>`
+  et `/ligne/<slug>/<operateur>` pointent vers `/og/<slug>.png`, tout le reste vers
+  `/og/default.png`. Les `og:title`/`og:description` restent propres à chaque page.
+- **Bouton « Partager ce trajet »** dans le panneau carte (`navigator.share` + repli
+  presse-papier) : la vignette fait l'accroche au moment du partage du lien `/ligne/<slug>`.
+- **URLs absolues centralisées** : `src/lib/site.ts` (`ORIGIN`, depuis `PUBLIC_SITE_URL`
+  avec repli prod) est désormais la source unique des `canonical`, du `sitemap.xml` et des
+  balises `og`.
+
 ## État actuel
 
 MVP **déployé et fonctionnel** en production. Mode mesure validé en réel, couche
 ARCEP intégrée (4 opérateurs, 4G), pages SEO en ligne, sitemap soumis à indexer.
 
+Vignettes sociales (Open Graph) en place — première brique de la boucle d'acquisition
+(cf. § Partage social).
+
 Chantiers connus / à venir : refonte UI « liquid glass » mobile-first + onboarding
-(voir `../HANDOFF-ui-refonte.md` si présent) ; couche 5G ; extension hors France.
+(voir `../HANDOFF-ui-refonte.md` si présent) ; couche 5G ; extension hors France ;
+suite de l'acquisition (seeding de densité sur lignes phares, communication X/Reddit).

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { RAIL_LINES } from '$geo/lines';
 	import PageWrap from '$components/PageWrap.svelte';
+	import { ORIGIN } from '$lib/site';
 </script>
 
 <svelte:head>
@@ -9,7 +10,7 @@
 		name="description"
 		content="Choisissez votre ligne de train (Paris-Lyon, Paris-Marseille…) pour voir la couverture mobile 4G/5G mesurée par la communauté."
 	/>
-	<link rel="canonical" href="https://4g-dans-le-train.juulieen.fr/lignes" />
+	<link rel="canonical" href={`${ORIGIN}/lignes`} />
 </svelte:head>
 
 <PageWrap>
