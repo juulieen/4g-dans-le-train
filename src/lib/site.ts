@@ -15,8 +15,3 @@ import { env } from '$env/dynamic/public';
 const FALLBACK = 'https://4g-dans-le-train.juulieen.fr';
 
 export const ORIGIN = (env.PUBLIC_SITE_URL || FALLBACK).replace(/\/+$/, '');
-
-/** Construit une URL absolue à partir d'un chemin (`/ligne/paris-lyon`). */
-export function absUrl(path: string): string {
-	return `${ORIGIN}${path.startsWith('/') ? path : `/${path}`}`;
-}

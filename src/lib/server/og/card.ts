@@ -17,6 +17,7 @@ import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
 import { read } from '$app/server';
 import { USAGE_COLORS, toLevel, type Level } from '$lib/usage';
+import { ORIGIN } from '$lib/site';
 import regularUrl from './fonts/DejaVuSans.ttf';
 import boldUrl from './fonts/DejaVuSans-Bold.ttf';
 
@@ -26,7 +27,10 @@ const FONT = 'DejaVu Sans';
 const BG = '#0b1220';
 const FG = '#e2e8f0';
 const MUTED = '#94a3b8';
-const ACCENT = '#38bdf8';
+/** Accent identique à celui du site (`--accent`, vert = « tout va bien »). */
+const ACCENT = USAGE_COLORS.TBC;
+/** Domaine affiché sur la vignette, dérivé de l'origine (sans protocole). */
+const DOMAIN = ORIGIN.replace(/^https?:\/\//, '');
 
 /** Un segment ARCEP du profil de trajet (run-length le long du tracé). */
 interface ArcepSeg {
@@ -46,8 +50,6 @@ export interface RouteProfile {
 export interface RealSummary {
 	cells: number;
 	samples: number;
-	streamingPct: number;
-	nonePct: number;
 }
 /** Données d'une ligne pour composer la carte. */
 export interface LineCardData {
@@ -89,7 +91,12 @@ async function loadFonts(): Promise<LoadedFonts> {
 				],
 				resvgFiles: [regularPath, boldPath]
 			};
-		})();
+		})().catch((e) => {
+			// Ne pas figer un rejet : on réinitialise pour réessayer au prochain rendu
+			// (ex. tmpdir momentanément non inscriptible au démarrage).
+			fontsPromise = null;
+			throw e;
+		});
 	}
 	return fontsPromise;
 }
@@ -126,7 +133,7 @@ function header(): El {
 			box({ width: 18, height: 18, borderRadius: 9, backgroundColor: ACCENT, marginRight: 14 }),
 			txt({ fontSize: 30, fontWeight: 700, color: FG }, '4G dans le train')
 		]),
-		txt({ fontSize: 24, color: MUTED }, '4g-dans-le-train.juulieen.fr')
+		txt({ fontSize: 24, color: MUTED }, DOMAIN)
 	]);
 }
 

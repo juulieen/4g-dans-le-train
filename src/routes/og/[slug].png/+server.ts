@@ -11,12 +11,12 @@
  * sert la carte générique (home, opérateurs, repli).
  */
 import { readFile } from 'node:fs/promises';
-import { eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { RAIL_LINES } from '$geo/lines';
 import { resolveLineFilter } from '$geo/troncon-snap';
+import { WIFI_TRAIN_OPERATOR } from '$lib/operators';
 import { db } from '$lib/server/db/client';
 import { cellAggregates, type CellAggregate } from '$lib/server/db/schema';
-import { levelFromKbps, type Level } from '$lib/usage';
 import {
 	renderDefaultCard,
 	renderLineCard,
@@ -50,40 +50,34 @@ async function loadProfile(slug: string): Promise<RouteProfile | null> {
 	return null;
 }
 
-/** Niveau « réel » d'une cellule : débit médian si mesuré, sinon taux de réussite. */
-function cellLevel(r: CellAggregate): Level {
-	if (r.medianDownlink != null) return levelFromKbps(r.medianDownlink);
-	// Cf. table produit (docs/PRODUCT.md) : ≥80 % vert, 40–80 % orange, <40 % rouge.
-	if (r.successRate >= 0.8) return 'TBC';
-	if (r.successRate >= 0.4) return 'CL';
-	return 'none';
-}
-
 /**
  * Résumé du réel pour une ligne, ou null si trop peu de données (< 3 cellules) ou base
- * indisponible. Miroir du filtrage de `/api/coverage` (gère les tronçons).
+ * indisponible. Miroir du filtrage de `/api/coverage` (gère les tronçons ET exclut le
+ * Wi-Fi de bord).
  */
 async function realSummary(slug: string): Promise<RealSummary | null> {
 	const filter = resolveLineFilter(slug);
 	if (!filter) return null;
 	try {
+		// On EXCLUT le Wi-Fi de bord (`wifi-train`) comme toutes les vues de couverture
+		// mobile (cf. /api/coverage) : il ne crédite aucun opérateur mobile.
+		const notWifi = ne(cellAggregates.operator, WIFI_TRAIN_OPERATOR);
 		let rows: CellAggregate[];
 		if (filter.cells) {
-			// Tronçon : on filtre par cellules (le slug stocké est le primaire, pas la parente).
-			rows = (await db.select().from(cellAggregates)).filter((r) => filter.cells!.has(r.cellId));
+			// Tronçon : le slug stocké est le primaire (pas la parente) → on filtre par cellules.
+			rows = (await db.select().from(cellAggregates).where(notWifi)).filter((r) =>
+				filter.cells!.has(r.cellId)
+			);
 		} else {
 			rows = await db
 				.select()
 				.from(cellAggregates)
-				.where(eq(cellAggregates.lineSlug, filter.lineSlug));
+				.where(and(eq(cellAggregates.lineSlug, filter.lineSlug), notWifi));
 		}
 		const cells = new Set(rows.map((r) => r.cellId)).size;
 		if (cells < 3) return null;
 		const samples = rows.reduce((a, r) => a + r.samples, 0);
-		const len = rows.length || 1;
-		const streaming = rows.filter((r) => cellLevel(r) === 'TBC').length / len;
-		const none = rows.filter((r) => cellLevel(r) === 'none').length / len;
-		return { cells, samples, streamingPct: streaming, nonePct: none };
+		return { cells, samples };
 	} catch {
 		return null; // base vide / absente : on dégrade vers ARCEP seul.
 	}
@@ -97,13 +91,17 @@ export const GET: RequestHandler = async ({ params }) => {
 		'cache-control': 'public, max-age=86400'
 	};
 
-	const cached = memo.get(slug);
+	const line = slug === 'default' ? undefined : RAIL_LINES.find((l) => l.slug === slug);
+	// Clé de cache BORNÉE : tout slug inconnu retombe sur la carte par défaut sous la clé
+	// 'default' (sinon le mémo grossirait sans limite sous des requêtes /og/<aléatoire>.png).
+	const cacheKey = line ? slug : 'default';
+
+	const cached = memo.get(cacheKey);
 	if (cached && cached.bucket === bucket) {
 		return new Response(cached.png, { headers });
 	}
 
 	let png: ArrayBuffer;
-	const line = slug === 'default' ? undefined : RAIL_LINES.find((l) => l.slug === slug);
 	if (!line) {
 		png = await renderDefaultCard();
 	} else {
@@ -118,6 +116,6 @@ export const GET: RequestHandler = async ({ params }) => {
 		});
 	}
 
-	memo.set(slug, { bucket, png });
+	memo.set(cacheKey, { bucket, png });
 	return new Response(png, { headers });
 };
