@@ -25,16 +25,16 @@
 
 <section class="verdict tone-{verdict.tone}" aria-label="En bref">
 	<p class="lead">{verdict.lead}</p>
-	{#if verdict.cuts}<p class="cuts">⚠ {verdict.cuts}</p>{/if}
+	{#if verdict.cuts}<p class="cuts"><span aria-hidden="true">⚠</span> {verdict.cuts}</p>{/if}
 	{#if verdict.best}<p class="best">{verdict.best}</p>{/if}
 	{#if verdict.gap}<p class="gap">{verdict.gap}</p>{/if}
 	<p class="source">
-		{verdict.source}{#if freshness}
-			· {freshness}{/if}
+		{verdict.source}{#if freshness}&nbsp;· {freshness}{/if}
 	</p>
 	{#if !verdict.measured}
-		<a class="measure-cta" href="/">📍 Prenez ce train&nbsp;? Mesurez votre connexion en 1 clic →</a
-		>
+		<a class="measure-cta" href="/">
+			<span aria-hidden="true">📍</span> Prenez ce train&nbsp;? Mesurez votre connexion en 1 clic →
+		</a>
 	{/if}
 </section>
 

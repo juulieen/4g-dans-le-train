@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { OPERATORS } from '$geo/lines';
 	import { OPERATOR_LABEL } from '$lib/usage';
-	import { describeOperator, buildVerdict, groupBlackspots, clip } from '$geo/coverage-copy';
+	import { describeOperator, buildVerdict, buildBlackspots, clip } from '$geo/coverage-copy';
 	import PageWrap from '$components/PageWrap.svelte';
 	import RouteProfile from '$components/RouteProfile.svelte';
 	import Verdict from '$components/Verdict.svelte';
@@ -17,14 +17,7 @@
 
 	// Verdict (réponse d'abord) + points noirs regroupés par gare ; fraîcheur.
 	const verdict = $derived(buildVerdict(line.from, line.to, stats ?? null, real));
-	const blackspots = $derived(
-		real.blackspots.length
-			? groupBlackspots(real.blackspots)
-			: (stats?.zonesBlanches.zones ?? []).map((z) => ({
-					head: `Après ${z.after} — aucun réseau annoncé`,
-					detail: `~${Math.round(z.lengthKm)} km`
-				}))
-	);
+	const blackspots = $derived(buildBlackspots(real, stats ?? null));
 	const freshness = $derived(data.freshness);
 
 	// --- SEO : titres / méta en langage usager, courts (différenciateur en tête) ---
@@ -33,7 +26,7 @@
 		clip(
 			verdict.measured
 				? `${verdict.lead}${verdict.cuts ? ' ' + verdict.cuts : ''}`
-				: `${verdict.lead} Comparez Orange, SFR, Free, Bouygues et les mesures réelles des voyageurs.`,
+				: `${verdict.lead} Couverture annoncée + mesures réelles des voyageurs.`,
 			158
 		)
 	);
@@ -51,9 +44,10 @@
 		},
 		{
 			q: `Quel opérateur capte le mieux entre ${line.from} et ${line.to} ?`,
-			a: real.bestOperator
-				? `D'après les mesures des voyageurs, ${OPERATOR_LABEL[real.bestOperator as keyof typeof OPERATOR_LABEL] ?? real.bestOperator}. Mais ça dépend des sections — comparez les opérateurs plus bas.`
-				: `Ça dépend des sections traversées. Comparez Orange, SFR, Free et Bouygues plus bas.`
+			a:
+				real.sufficient && real.bestOperator
+					? `D'après les mesures des voyageurs, ${OPERATOR_LABEL[real.bestOperator as keyof typeof OPERATOR_LABEL] ?? real.bestOperator}. Mais ça dépend des sections — comparez les opérateurs plus bas.`
+					: `Ça dépend des sections traversées. Comparez Orange, SFR, Free et Bouygues plus bas.`
 		},
 		{
 			q: `Pourquoi on ne capte pas dans le train ?`,
@@ -113,9 +107,8 @@
 	<p class="lede">
 		{#if isTroncon}Portion de la ligne
 			{#if parent}<a href="/ligne/{parent.slug}">{parent.name}</a>{:else}{line.service}{/if}.
-		{/if}
-		{#if stats}{Math.round(stats.lengthKm)}&nbsp;km{/if}{#if real.samples > 0}
-			·
+		{:else}Ligne {line.service} entre {line.from} et {line.to}.{/if}
+		{#if stats}{Math.round(stats.lengthKm)}&nbsp;km{/if}{#if real.samples > 0}&nbsp;·
 			{real.samples.toLocaleString('fr-FR')} mesures de voyageurs{/if}
 	</p>
 

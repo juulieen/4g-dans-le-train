@@ -3,6 +3,7 @@ import {
 	buildVerdict,
 	blackspotLabel,
 	groupBlackspots,
+	buildBlackspots,
 	freshnessLabel,
 	clip,
 	elideQue
@@ -99,6 +100,30 @@ describe('buildVerdict', () => {
 		expect(v.source).toContain('premier');
 	});
 
+	it('tonalité « bad » (goodPct faible) → PAS « capte bien »', () => {
+		const v = buildVerdict(
+			'A',
+			'B',
+			stats(),
+			real({ sufficient: true, goodPct: 25, samples: 500 })
+		);
+		expect(v.tone).toBe('bad');
+		expect(v.lead).toContain('ça capte mal');
+		expect(v.lead).not.toContain('capte bien');
+	});
+
+	it('tonalité « mixed » → « inégale »', () => {
+		const v = buildVerdict(
+			'A',
+			'B',
+			stats(),
+			real({ sufficient: true, goodPct: 55, samples: 500 })
+		);
+		expect(v.tone).toBe('mixed');
+		expect(v.lead).toContain('inégale');
+		expect(v.lead).not.toContain('capte bien');
+	});
+
 	it('variante opérateur (réel suffisant) → phrase « avec {op} », pas de « au mieux »', () => {
 		const v = buildVerdict(
 			'Bordeaux',
@@ -157,6 +182,25 @@ describe('groupBlackspots', () => {
 			spot({ afterStation: 'Libourne', durationS: 60 })
 		]);
 		expect(g).toHaveLength(2);
+	});
+});
+
+describe('buildBlackspots', () => {
+	it('réel mesuré → coupures regroupées', () => {
+		const r = buildBlackspots(
+			real({ blackspots: [spot({ durationS: 120 }), spot({ durationS: 40 })] }),
+			stats()
+		);
+		expect(r[0].head).toContain('Après Angoulême');
+	});
+	it('réel vide → repli zones blanches ARCEP', () => {
+		const r = buildBlackspots(
+			real({ blackspots: [] }),
+			stats({ zonesBlanches: { count: 1, zones: [{ after: 'Vierzon', lengthKm: 5 }] } })
+		);
+		expect(r).toHaveLength(1);
+		expect(r[0].head).toContain('Vierzon');
+		expect(r[0].head).toContain('aucun réseau annoncé');
 	});
 });
 

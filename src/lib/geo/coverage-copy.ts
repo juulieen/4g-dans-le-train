@@ -134,6 +134,21 @@ export function groupBlackspots(spots: Blackspot[]): { head: string; detail: str
 	});
 }
 
+/**
+ * Points noirs à afficher : les coupures mesurées (regroupées) si on en a, sinon les
+ * zones blanches ARCEP en repli. Mutualisé entre la page ligne et la page opérateur.
+ */
+export function buildBlackspots(
+	real: LineReal,
+	stats: LineStats | null
+): { head: string; detail: string }[] {
+	if (real.blackspots.length) return groupBlackspots(real.blackspots);
+	return (stats?.zonesBlanches.zones ?? []).map((z) => ({
+		head: `Après ${z.after} — aucun réseau annoncé`,
+		detail: `~${Math.round(z.lengthKm)} km`
+	}));
+}
+
 /** Fraîcheur lisible d'une mesure (epoch s), relativement à `nowSec`. Null si jamais mesuré. */
 export function freshnessLabel(lastSeenSec: number, nowSec: number): string | null {
 	if (!lastSeenSec) return null;
@@ -186,10 +201,17 @@ export function buildVerdict(
 	if (real.sufficient) {
 		const g = real.goodPct;
 		const tone: Verdict['tone'] = g >= 70 ? 'good' : g >= 40 ? 'mixed' : 'bad';
+		// Le libellé s'adapte à la tonalité (sinon « ça capte bien sur 25 % » serait faux).
+		const quality =
+			tone === 'good'
+				? `ça capte bien sur ${g}${NBSP}% du parcours — de quoi regarder une vidéo`
+				: tone === 'mixed'
+					? `ça capte sur ${g}${NBSP}% du parcours, mais la couverture est inégale`
+					: `ça capte mal — seulement ${g}${NBSP}% du parcours, le réseau est souvent absent`;
 		return {
 			lead: op
-				? `D'après les voyageurs, avec ${op} ça capte bien sur ${g}${NBSP}% du trajet ${from}–${to} — de quoi regarder une vidéo.`
-				: `D'après les voyageurs, entre ${from} et ${to} ça capte bien sur ${g}${NBSP}% du trajet — de quoi regarder une vidéo.`,
+				? `D'après les voyageurs, avec ${op} ${quality}.`
+				: `D'après les voyageurs, entre ${from} et ${to} ${quality}.`,
 			cuts: real.blackspots.length
 				? `${real.blackspots.length} zone${real.blackspots.length > 1 ? 's' : ''} où ça coupe, notamment après ${real.blackspots[0].afterStation}.`
 				: null,

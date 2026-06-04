@@ -4,7 +4,7 @@
 		describeOperator,
 		describeWhiteZones,
 		buildVerdict,
-		groupBlackspots,
+		buildBlackspots,
 		clip,
 		elideQue,
 		pct
@@ -29,14 +29,7 @@
 			arcepDist: dist ?? undefined
 		})
 	);
-	const blackspots = $derived(
-		real.blackspots.length
-			? groupBlackspots(real.blackspots)
-			: (stats?.zonesBlanches.zones ?? []).map((z) => ({
-					head: `Après ${z.after} — aucun réseau annoncé`,
-					detail: `~${Math.round(z.lengthKm)} km`
-				}))
-	);
+	const blackspots = $derived(buildBlackspots(real, stats ?? null));
 	const freshness = $derived(data.freshness);
 
 	// Autres opérateurs sur la même ligne (maillage interne).
@@ -130,8 +123,7 @@
 	<h1>Est-ce {elideQue(op.name)} capte dans le train entre {line.from} et {line.to}&nbsp;?</h1>
 	<p class="lede">
 		Le réseau <strong>{op.name}</strong> sur la ligne {line.service}
-		{line.from} – {line.to}{#if real.samples > 0}
-			·
+		{line.from} – {line.to}{#if real.samples > 0}&nbsp;·
 			{real.samples.toLocaleString('fr-FR')} mesures{/if}.
 	</p>
 
