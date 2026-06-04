@@ -92,6 +92,25 @@ décrit le profil pour les lecteurs d'écran. Le composant
 généré au build dans `static/data/route-profiles/<slug>.json` (cf. `docs/DATA.md` § 3) ;
 réel et coupures chargés à la volée via `/api/coverage?line=` et `/api/outages?line=`.
 
+## La page ligne `/ligne/[slug]` (« réponse d'abord », SSR)
+
+La page répond en deux secondes à « **est-ce que ça capte sur mon trajet ?** » avant le
+détail. Structure : H1 + **verdict** (`buildVerdict`, `coverage-copy.ts`) → **points
+noirs** (zones où ça coupe, nommées « après {gare} ») → frise → ARCEP par opérateur →
+FAQ → astuces. Le **vocabulaire est celui des gens** (« internet / réseau / ça capte / ça
+coupe » dans titre/H1/méta/FAQ ; « 4G/5G/ARCEP/opérateurs » dans le corps) — calé sur les
+requêtes Google réelles. Le verdict s'appuie sur le **réel mesuré** quand la couverture
+est **suffisante** (couverture _spatiale_ : ≥ 50 % du trajet observé par des cellules H3
+fiables ET ≥ 8 cellules, cf. `line-real.ts`) ; sinon il reste sur l'**ARCEP annoncé** et
+**invite à mesurer** (jamais présenter un réel partiel comme la vérité du trajet).
+
+**Archi** : contrairement aux autres pages SEO (prérendues), `/ligne/[slug]` est en **SSR**
+(`prerender = false`) — le verdict est calculé **côté serveur depuis la base vive** à chaque
+requête (`src/lib/server/line-real.ts`), donc **toujours frais ET indexable** (HTML SSR),
+avec un court `cache-control`. Pas de prérendu nocturne ni d'instantané committé. Le
+sous-arbre `[operateur]` est lui aussi en SSR (verdict par opérateur). Spec détaillée :
+`docs/spec-page-ligne.md`.
+
 ## Les trajets-tronçons (sous-relations ville↔ville)
 
 Les gens ne cherchent pas que les grandes relations terminus→terminus : ils cherchent

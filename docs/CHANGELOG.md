@@ -3,6 +3,60 @@
 > Ajoute ici une entrée (date + résumé) pour toute évolution fonctionnelle ou de
 > contenu notable. Le plus récent en haut. Voir `../CLAUDE.md`.
 
+## 2026-06-04
+
+- **Pages ligne/opérateur — passe SEO + UX (suite des revues)** : lot d'améliorations issu
+  de deux revues (SEO technique + UX/rédactionnelle). **Lisibilité** : les points noirs sont
+  **regroupés par gare** (« Après Angoulême — 5 coupures · la plus longue ~2 min » au lieu de
+  5 lignes identiques, `groupBlackspots`) ; **fraîcheur** affichée (« dernière mesure il y a
+  N jours », `freshnessLabel`) ; **biais opérateur** signalé (« principalement Orange » quand
+  les mesures viennent surtout d'un opérateur, via `LineReal.operatorMix`) ; **dé-jargon** du
+  verdict (« selon les déclarations des opérateurs » et « Sur le papier : X % ; dans le
+  train : Y % » au lieu de « couverture théorique ARCEP ») ; **CTA mesure** visible quand le
+  trajet n'est pas mesuré ; astuces et CTA carte **contextuels** ; section ARCEP fusionnée
+  avec un chapeau « chiffres déclarés, pas mesurés ». **SEO** : titres **raccourcis** (~58
+  car., « Internet dans le train X–Y : ça capte ? ») ; **FAQ dédoublée** (wifi de bord vs
+  réseau mobile, intents distincts) + **FAQ opérateur** enrichie de chiffres propres ;
+  **BreadcrumbList** JSON-LD + `og:type/og:url/twitter:card` ; **H2 « Où ça coupe entre X et
+  Y ? »** conservé même sans coupure ; règle **`noindex`** affinée (on indexe les
+  tronçons×ligne/opérateur riches en réel, `real.sufficient`) ; le hub `/operateur/[slug]` ne
+  **lie plus que des pages indexables**. **Mobile** : anti-débordement (H1/points noirs), nav
+  du bas qui ne masque plus le contenu, chevron sur la FAQ. Composant `Verdict.svelte`
+  partagé. Tests Vitest (regroupement, fraîcheur, biais). 98 tests verts.
+
+## 2026-06-03
+
+- **Socle données « verdict + points noirs » des pages ligne (SSR, base vive)** : première
+  brique de la refonte SEO de `/ligne/[slug]` (cf. `docs/spec-page-ligne.md`). Nouveau
+  module **pur** `src/lib/geo/line-real.ts` (`computeLineReal`) qui calcule, par ligne, un
+  **instantané du réel** : couverture **spatiale** (cellules H3 fiables ≥ 3 pings,
+  `coveragePct`, `nFiables`, `sufficient` si ≥ 50 % du trajet ET ≥ 8 cellules — PAS un total
+  de mesures), `goodPct`, `bestOperator` et les **points noirs** (zones « rien » mesurées
+  et coupures avec durée médiane, nommées « après {gare} »). **Décision d'archi** : ces
+  pages passent en **SSR** (`/ligne/[slug]` : `prerender = false`) plutôt que prérendues +
+  cron nocturne — le verdict est rendu **côté serveur depuis la base vive** à chaque requête
+  (`src/lib/server/line-real.ts` → `loadLineReal`), donc **toujours frais et indexable**,
+  avec un court `cache-control` (5 min) pour amortir. Plus de cron, plus d'instantané
+  committé. (Le sous-arbre `[operateur]` est aligné en SSR dans l'entrée suivante.) Helper
+  de nommage de gare factorisé (`src/lib/geo/station-name.ts`, partagé avec `build-line-stats`).
+  Tests Vitest.
+- **Page ligne — refonte « réponse d'abord » + virage vocabulaire** : `/ligne/[slug]`
+  s'ouvre désormais sur un **verdict** (`buildVerdict`, `coverage-copy.ts`) — _« D'après les
+  voyageurs, ça capte bien sur 94 % du trajet… 5 zones où ça coupe, notamment après
+  Angoulême. Au mieux : Orange. »_ — basé sur le réel quand la couverture est suffisante,
+  sinon sur l'ARCEP avec invite à mesurer (bloc teinté vert/orange/rouge/gris selon la
+  tonalité). Suivi d'une liste **« points noirs »** nommés par gare (`blackspotLabel`).
+  **Vocabulaire usager** dans le titre/H1/méta/FAQ (« internet / réseau / ça capte / ça
+  coupe » au lieu de « couverture mobile 4G »), d'après l'exploration Google Suggest ;
+  **FAQ** alimentée des vraies questions (wifi de bord, meilleur opérateur, pourquoi ça
+  coupe) + JSON-LD. La frise `RouteProfile` est reléguée en illustration secondaire. Le
+  verdict + les points noirs sont extraits dans un composant partagé `Verdict.svelte`.
+  Les **pages opérateur** (`/ligne/[slug]/[operateur]`) sont **alignées sur le même
+  verdict**, mais **par opérateur** : elles passent aussi en **SSR**, le réel est filtré
+  sur l'opérateur (`loadLineReal(fetch, slug, op)`), le verdict est phrasé « avec {op} » et
+  comparé à l'ARCEP de cet opérateur (`buildVerdict(..., { operatorName, arcepDist })`).
+  Tests Vitest (`coverage-copy.test.ts`, variantes opérateur incluses).
+
 ## 2026-06-02
 
 - **Nettoyage — factorisation des textes de la carte (DRY)** : les libellés d'usage de
