@@ -18,13 +18,14 @@
 	import { levelFromKbps, USAGE_TEXT, USAGE_COLORS, OPERATOR_LABEL, USAGE_OPS } from '$lib/usage';
 	import { pluralS } from '$lib/plural';
 	import { buildQrSvg } from '$lib/qr';
-	import { env } from '$env/dynamic/public';
+	import { ORIGIN } from '$lib/site';
+	import { pathBounds } from '$lib/coverage-segments';
+	import { page } from '$app/state';
+	import type maplibregl from 'maplibre-gl';
 	import type { PageData } from './$types';
 
 	// URL encodée dans le QR « mesure depuis ton téléphone » (affiché sur desktop).
-	// Fallback prod en dur si la variable n'est pas définie au build (cf. autres usages).
-	const SITE_URL = env.PUBLIC_SITE_URL || 'https://4g-dans-le-train.juulieen.fr';
-	const qrSvg = buildQrSvg(SITE_URL);
+	const qrSvg = buildQrSvg(ORIGIN);
 
 	let { data }: { data: PageData } = $props();
 
@@ -47,6 +48,61 @@
 	// Ligne sélectionnée pour afficher son « profil de trajet » (frise). Vide = aucune.
 	let selectedLine = $state<string>('');
 	const sortedLines = [...RAIL_LINES].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+
+	// Deep-link `/?line=<slug>` (depuis l'aperçu des pages ligne) : on cadre la carte sur la
+	// ligne et on pré-sélectionne sa frise. La carte démarre en vue nationale puis se recadre
+	// dès que la bbox (route-profile) arrive — bref flash accepté (cf. PRODUCT.md § Aperçu carte).
+	let focusBounds = $state<maplibregl.LngLatBoundsLike | null>(null);
+	$effect(() => {
+		const slug = page.url.searchParams.get('line');
+		if (!slug) {
+			focusBounds = null; // navigation (SPA) vers `/` sans `?line=` → on dé-cadre.
+			return;
+		}
+		if (sortedLines.some((l) => l.slug === slug)) selectedLine = slug;
+		let cancelled = false;
+		void (async () => {
+			try {
+				const res = await fetch(`/data/route-profiles/${slug}.json`);
+				if (!res.ok) return;
+				const profile = (await res.json()) as { path?: [number, number, number][] };
+				if (!cancelled && profile.path && profile.path.length >= 2) {
+					focusBounds = pathBounds(profile.path);
+				}
+			} catch {
+				/* pas de profil : on garde la vue nationale */
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	});
+
+	// --- Partage du trajet sélectionné (Web Share + repli presse-papier). ---
+	// La vignette sociale (`/og/<slug>.png`) fait l'accroche visuelle au moment du
+	// partage du lien `/ligne/<slug>`.
+	let shareMsg = $state('');
+	async function shareLine() {
+		const l = sortedLines.find((x) => x.slug === selectedLine);
+		if (!l) return;
+		const url = `${ORIGIN}/ligne/${l.slug}`;
+		const shareData = {
+			title: `Couverture mobile — ${l.name}`,
+			text: `Où ça capte dans le train sur ${l.from} ↔ ${l.to} ?`,
+			url
+		};
+		try {
+			if (navigator.share) {
+				await navigator.share(shareData);
+			} else {
+				await navigator.clipboard.writeText(url);
+				shareMsg = 'Lien copié !';
+				setTimeout(() => (shareMsg = ''), 2500);
+			}
+		} catch {
+			/* partage annulé par l'utilisateur : on ignore silencieusement */
+		}
+	}
 	let live = $state<LiveState | null>(null);
 	// État local initialisé une fois avec la couverture SSR, puis rafraîchi
 	// localement après chaque mesure (refreshCoverage) — lecture initiale voulue.
@@ -241,19 +297,18 @@
 		name="description"
 		content="Carte communautaire de la couverture mobile (4G/5G) dans le train en France. Voyez où ça capte sur votre trajet SNCF et contribuez vos mesures."
 	/>
-	<link rel="canonical" href="https://4g-dans-le-train.juulieen.fr/" />
+	<link rel="canonical" href={`${ORIGIN}/`} />
 	<meta property="og:title" content="4G dans le train — couverture mobile sur les lignes SNCF" />
 	<meta
 		property="og:description"
 		content="Voyez où ça capte (et où ça coupe) sur votre trajet en train. Données communautaires + ARCEP."
 	/>
-	<meta property="og:type" content="website" />
 </svelte:head>
 
 <section class="layout">
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div class="map-wrap" onpointerdown={onMapInteract}>
-		<Map {coverage} operator={viewOperator} {showArcep} {showCommunity} />
+		<Map {coverage} operator={viewOperator} {showArcep} {showCommunity} {focusBounds} />
 		<button
 			class="info-fab glass"
 			onpointerdown={(e) => e.stopPropagation()}
@@ -337,6 +392,12 @@
 			</label>
 			{#if selectedLine}
 				<RouteProfile slug={selectedLine} operator={viewOperator} />
+				<div class="share-row">
+					<button type="button" class="share-btn" onclick={shareLine}>
+						Partager ce trajet&nbsp;<span aria-hidden="true">↗</span>
+					</button>
+					{#if shareMsg}<span class="share-msg" role="status">{shareMsg}</span>{/if}
+				</div>
 			{/if}
 
 			<div class="measure">
@@ -906,5 +967,33 @@
 		.cta {
 			transition: none;
 		}
+	}
+
+	/* --- Partage du trajet sélectionné --- */
+	.share-row {
+		display: flex;
+		align-items: center;
+		gap: var(--sp-3);
+		margin-top: var(--sp-3);
+	}
+	.share-btn {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.5rem 0.9rem;
+		border: 1px solid var(--glass-border);
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--accent) 16%, transparent);
+		color: var(--text);
+		font-size: var(--fs-sm);
+		font-weight: 600;
+		cursor: pointer;
+		transition: background 0.18s;
+	}
+	.share-btn:hover {
+		background: color-mix(in srgb, var(--accent) 26%, transparent);
+	}
+	.share-msg {
+		font-size: var(--fs-sm);
+		color: var(--link);
 	}
 </style>

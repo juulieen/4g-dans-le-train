@@ -12,6 +12,8 @@
 	import PageWrap from '$components/PageWrap.svelte';
 	import RouteProfile from '$components/RouteProfile.svelte';
 	import Verdict from '$components/Verdict.svelte';
+	import MapPreview from '$components/MapPreview.svelte';
+	import { ORIGIN } from '$lib/site';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -39,7 +41,7 @@
 	const description = $derived(
 		clip(`${verdict.lead}${verdict.cuts ? ' ' + verdict.cuts : ''}`, 158)
 	);
-	const url = $derived(`https://4g-dans-le-train.juulieen.fr/ligne/${line.slug}/${op.slug}`);
+	const url = $derived(`${ORIGIN}/ligne/${line.slug}/${op.slug}`);
 
 	// FAQ propre à l'opérateur (factuel ARCEP de l'opérateur → contenu différencié).
 	const faqs = $derived([
@@ -81,13 +83,13 @@
 				'@type': 'ListItem',
 				position: 1,
 				name: 'Lignes',
-				item: 'https://4g-dans-le-train.juulieen.fr/lignes'
+				item: `${ORIGIN}/lignes`
 			},
 			{
 				'@type': 'ListItem',
 				position: 2,
 				name: line.name,
-				item: `https://4g-dans-le-train.juulieen.fr/ligne/${line.slug}`
+				item: `${ORIGIN}/ligne/${line.slug}`
 			},
 			{ '@type': 'ListItem', position: 3, name: op.name, item: url }
 		]
@@ -109,9 +111,7 @@
 	{/if}
 	<meta property="og:title" content={title} />
 	<meta property="og:description" content={description} />
-	<meta property="og:type" content="article" />
-	<meta property="og:url" content={url} />
-	<meta name="twitter:card" content="summary" />
+	<!-- og:image / og:url / og:type / twitter:card : fournis par +layout.svelte (vignette OG). -->
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 	{@html jsonLd}
 </svelte:head>
@@ -130,7 +130,7 @@
 	<!-- VERDICT (cet opérateur) + points noirs. -->
 	<Verdict {verdict} {blackspots} from={line.from} to={line.to} {freshness} />
 
-	<a class="cta" href="/">
+	<a class="cta" href={`/?line=${line.slug}`}>
 		{verdict.measured && blackspots.length
 			? `Voir où ${op.name} coupe sur la carte →`
 			: `Voir la couverture ${op.name} sur la carte →`}
@@ -139,6 +139,11 @@
 	<section class="profil">
 		<h2>Le détail {op.name} gare après gare</h2>
 		<RouteProfile slug={line.slug} operator={op.key} />
+	</section>
+
+	<section class="apercu-carte">
+		<h2>Le tracé de {line.from} à {line.to}, couverture {op.name}</h2>
+		<MapPreview slug={line.slug} operator={op.key} />
 	</section>
 
 	<section>

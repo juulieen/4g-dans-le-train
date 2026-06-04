@@ -5,6 +5,8 @@
 	import PageWrap from '$components/PageWrap.svelte';
 	import RouteProfile from '$components/RouteProfile.svelte';
 	import Verdict from '$components/Verdict.svelte';
+	import MapPreview from '$components/MapPreview.svelte';
+	import { ORIGIN } from '$lib/site';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -30,7 +32,7 @@
 			158
 		)
 	);
-	const url = $derived(`https://4g-dans-le-train.juulieen.fr/ligne/${line.slug}`);
+	const url = $derived(`${ORIGIN}/ligne/${line.slug}`);
 
 	// --- FAQ : wifi de bord ET réseau mobile dédoublés (intents distincts) --------
 	const faqs = $derived([
@@ -71,7 +73,7 @@
 				'@type': 'ListItem',
 				position: 1,
 				name: 'Lignes',
-				item: 'https://4g-dans-le-train.juulieen.fr/lignes'
+				item: `${ORIGIN}/lignes`
 			},
 			{ '@type': 'ListItem', position: 2, name: relationLabel, item: url }
 		]
@@ -94,9 +96,7 @@
 	{/if}
 	<meta property="og:title" content={title} />
 	<meta property="og:description" content={description} />
-	<meta property="og:type" content="article" />
-	<meta property="og:url" content={url} />
-	<meta name="twitter:card" content="summary" />
+	<!-- og:image / og:url / og:type / twitter:card : fournis par +layout.svelte (vignette OG). -->
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 	{@html jsonLd}
 </svelte:head>
@@ -115,7 +115,7 @@
 	<!-- VERDICT « réponse d'abord » + points noirs. -->
 	<Verdict {verdict} {blackspots} from={line.from} to={line.to} {freshness} />
 
-	<a class="cta" href="/">
+	<a class="cta" href={`/?line=${line.slug}`}>
 		{verdict.measured && blackspots.length
 			? 'Voir où ça coupe sur la carte →'
 			: 'Voir la couverture sur la carte →'}
@@ -125,6 +125,12 @@
 	<section class="profil">
 		<h2>Le détail gare après gare</h2>
 		<RouteProfile slug={line.slug} />
+	</section>
+
+	<section class="apercu-carte">
+		<h2>Où passe la ligne {isTroncon ? `${line.from} ↔ ${line.to}` : line.name}</h2>
+		<p>Le tracé de {line.from} à {line.to}, coloré par la couverture mobile attendue.</p>
+		<MapPreview slug={line.slug} />
 	</section>
 
 	{#if stats}
@@ -173,9 +179,6 @@
 				</li>
 			{/if}
 			<li>Le Wi-Fi de bord peut dépanner sur certains TGV INOUI — mais il rame souvent.</li>
-			<li>
-				Comparez les opérateurs&nbsp;: la couverture diffère selon Orange, SFR, Free et Bouygues.
-			</li>
 		</ul>
 	</section>
 </PageWrap>

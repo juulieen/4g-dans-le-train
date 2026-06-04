@@ -25,7 +25,12 @@
 		showArcep = true,
 		showCommunity = true,
 		railLinesUrl = '/data/rail-lines.geojson',
-		arcepLinesUrl = '/data/arcep-lines.geojson'
+		arcepLinesUrl = '/data/arcep-lines.geojson',
+		interactive = true,
+		focusBounds = null,
+		arcepLinesData = null,
+		showRail = true,
+		lineSlug = null
 	}: {
 		coverage?: GeoJSON.FeatureCollection | null;
 		/** Opérateur sélectionné : recolore les voies ARCEP. */
@@ -34,6 +39,16 @@
 		showCommunity?: boolean;
 		railLinesUrl?: string;
 		arcepLinesUrl?: string;
+		/** Carte non-interactive (aperçu statique) : pas de pan/zoom ni de contrôles. */
+		interactive?: boolean;
+		/** Si défini, cadre la carte sur ces bornes au lieu de la vue nationale. */
+		focusBounds?: maplibregl.LngLatBoundsLike | null;
+		/** Injecte la couche ARCEP (ligne seule) au lieu de fetcher le GeoJSON national. */
+		arcepLinesData?: GeoJSON.FeatureCollection | null;
+		/** Réseau ferré gris de contexte (désactivable pour un aperçu léger). */
+		showRail?: boolean;
+		/** Scope les rubans communautaires à une ligne (`&line=`). */
+		lineSlug?: string | null;
 	} = $props();
 
 	let mapContainer: HTMLDivElement;
@@ -194,9 +209,19 @@
 		return { type: 'FeatureCollection', features };
 	}
 
-	/** Récupère les segments « réel » le long des voies pour l'opérateur courant. */
-	async function fetchSegments(op: string): Promise<GeoJSON.FeatureCollection> {
-		const qs = isSpecificOp(op) ? `?operator=${encodeURIComponent(op)}` : '';
+	/**
+	 * Récupère les segments « réel » le long des voies pour l'opérateur courant, et —
+	 * pour un aperçu de ligne — restreints à cette ligne (`&line=`, géré côté serveur par
+	 * `resolveLineFilter`, tronçons inclus).
+	 */
+	async function fetchSegments(
+		op: string,
+		line?: string | null
+	): Promise<GeoJSON.FeatureCollection> {
+		const params = new URLSearchParams();
+		if (isSpecificOp(op)) params.set('operator', op);
+		if (line) params.set('line', line);
+		const qs = params.toString() ? `?${params}` : '';
 		try {
 			const res = await fetch(`/api/coverage/segments${qs}`);
 			if (res.ok) return (await res.json()) as GeoJSON.FeatureCollection;
@@ -207,7 +232,8 @@
 	}
 
 	async function ensureData() {
-		if (!railData && !railTried) {
+		// Réseau ferré de contexte : fetché seulement si demandé (désactivé en aperçu léger).
+		if (showRail && !railData && !railTried) {
 			railTried = true;
 			try {
 				const res = await fetch(railLinesUrl);
@@ -216,7 +242,12 @@
 				/* pas de tracés : on ignore */
 			}
 		}
-		if (!arcepData && !arcepTried) {
+		// ARCEP : données INJECTÉES (ligne seule, aperçu) en priorité — on NE fetch alors PAS
+		// le GeoJSON national (4,6 Mo). Sinon, fetch global comme la carte plein écran.
+		if (arcepLinesData) {
+			arcepData = arcepLinesData;
+			arcepTried = true;
+		} else if (!arcepData && !arcepTried) {
 			arcepTried = true;
 			try {
 				const res = await fetch(arcepLinesUrl);
@@ -357,16 +388,24 @@
 			style: basemapStyle(currentTheme()),
 			center: [2.6, 46.6],
 			zoom: 5.2,
-			attributionControl: { compact: true }
+			attributionControl: { compact: true },
+			// Aperçu statique : aucune interaction (ni pan/zoom, ni capture du scroll mobile).
+			interactive
 		});
 
-		map.addControl(new maplibregl.NavigationControl());
-		map.addControl(new maplibregl.GeolocateControl({ trackUserLocation: true }), 'top-right');
+		// Contrôles inutiles (et indésirables) en mode statique.
+		if (interactive) {
+			map.addControl(new maplibregl.NavigationControl());
+			map.addControl(new maplibregl.GeolocateControl({ trackUserLocation: true }), 'top-right');
+		}
 
 		map.on('load', async () => {
 			if (!map) return;
+			// Cadrage sur la ligne (aperçu / deep-link) plutôt que la vue nationale par défaut.
+			if (focusBounds) map.fitBounds(focusBounds, { padding: 24, animate: false });
 			await addOverlays();
-			bindInteractions();
+			// Popups/curseurs : seulement en mode interactif (en statique, aucun event).
+			if (interactive) bindInteractions();
 			loaded = true;
 		});
 
@@ -541,15 +580,16 @@
 	//   • ruban → re-fetch des segments (filtré/agrégé côté serveur).
 	$effect(() => {
 		if (!loaded || !map) return;
-		// Lecture explicite pour que l'effet se redéclenche sur ces deux dépendances.
+		// Lecture explicite pour que l'effet se redéclenche sur ces dépendances.
 		const cov = coverage;
 		const op = operator;
+		const line = lineSlug;
 		const hexSrc = map.getSource('community-hex') as maplibregl.GeoJSONSource | undefined;
 		hexSrc?.setData(buildHexFC(cov, op));
 
 		// Garde anti-course : une réponse périmée (opérateur changé) ne doit pas écraser.
 		let cancelled = false;
-		void fetchSegments(op).then((fc) => {
+		void fetchSegments(op, line).then((fc) => {
 			if (cancelled || !map) return;
 			lastSegments = fc;
 			const segSrc = map.getSource('community-segments') as maplibregl.GeoJSONSource | undefined;
@@ -577,10 +617,17 @@
 			map.setPaintProperty('arcep-lines', 'line-color', arcepColor(operator));
 		}
 	});
+
+	// Re-cadrage quand `focusBounds` arrive ou change après le chargement (cas du deep-link
+	// `/?line=` : la carte est créée centrée France, puis la bbox de la ligne arrive en async).
+	$effect(() => {
+		if (!loaded || !map || !focusBounds) return;
+		map.fitBounds(focusBounds, { padding: 24, animate: false });
+	});
 </script>
 
-<div class="map" bind:this={mapContainer}></div>
-{#if hasArcep}
+<div class="map" class:embedded={!interactive} bind:this={mapContainer}></div>
+{#if hasArcep && interactive}
 	<div class="legend-overlay glass">
 		<strong>Sur la voie, vous pourrez :</strong>
 		{#each LEGEND_LEVELS as lvl (lvl)}
@@ -597,6 +644,10 @@
 		width: 100%;
 		height: 100%;
 		min-height: 60vh;
+	}
+	/* Aperçu embarqué (pages ligne) : on remplit le conteneur parent à hauteur fixe. */
+	.map.embedded {
+		min-height: 0;
 	}
 	.legend-overlay {
 		position: absolute;

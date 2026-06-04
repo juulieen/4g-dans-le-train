@@ -3,6 +3,7 @@
 	import { setContext } from 'svelte';
 	import Onboarding from '$components/Onboarding/Onboarding.svelte';
 	import Icon from '$components/Icon.svelte';
+	import { ORIGIN } from '$lib/site';
 
 	let { children } = $props();
 
@@ -14,6 +15,17 @@
 	];
 
 	const isMapRoute = $derived(page.url.pathname === '/');
+
+	// --- Partage social (Open Graph / Twitter Card) ---
+	// Source UNIQUE de og:image / og:url, calculée depuis la route : les pages
+	// `/ligne/<slug>` (et `/ligne/<slug>/<operateur>`) reçoivent la vignette de leur
+	// trajet (endpoint `/og/<slug>.png`) ; toute autre page reçoit la carte générique.
+	// Les og:title / og:description restent gérés par chaque page (contenu propre).
+	const ogImage = $derived.by(() => {
+		const m = page.url.pathname.match(/^\/ligne\/([^/]+)/);
+		return `${ORIGIN}/og/${m ? m[1] : 'default'}.png`;
+	});
+	const ogUrl = $derived(`${ORIGIN}${page.url.pathname}`);
 
 	// --- Onboarding : exposé aux pages enfants via le contexte (ré-ouverture ℹ️) ---
 	let onboardingOpen = $state(false);
@@ -43,6 +55,18 @@
 		if (meta) meta.setAttribute('content', theme === 'dark' ? '#0b1220' : '#eef2f7');
 	}
 </script>
+
+<svelte:head>
+	<meta property="og:site_name" content="4G dans le train" />
+	<meta property="og:locale" content="fr_FR" />
+	<meta property="og:type" content="website" />
+	<meta property="og:url" content={ogUrl} />
+	<meta property="og:image" content={ogImage} />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:image" content={ogImage} />
+</svelte:head>
 
 <div class="app" class:map-route={isMapRoute}>
 	<header class="glass">

@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { segmentCoords, buildLineSegments, type SegmentCell } from './coverage-segments';
+import {
+	segmentCoords,
+	buildLineSegments,
+	buildArcepLineFeatures,
+	pathBounds,
+	type SegmentCell,
+	type ArcepProfileSegment
+} from './coverage-segments';
 import type { PathPoint } from './geo/interpolate';
 
 // Tracé droit (latitude constante) ; distKm explicite et croissant. Les longitudes
@@ -105,5 +112,71 @@ describe('buildLineSegments', () => {
 	it('reporte le lineSlug dans les propriétés', () => {
 		const feats = buildLineSegments(PATH, [cell({ lng: 0 })], 'paris-arcachon');
 		expect(feats[0].properties!.lineSlug).toBe('paris-arcachon');
+	});
+});
+
+describe('buildArcepLineFeatures', () => {
+	const seg = (over: Partial<ArcepProfileSegment>): ArcepProfileSegment => ({
+		fromKm: 0,
+		toKm: 4,
+		orange: 'TBC',
+		sfr: 'TBC',
+		free: 'TBC',
+		bouygues: 'TBC',
+		best: 'TBC',
+		...over
+	});
+
+	it('un segment ARCEP → une Feature LineString portant les niveaux par opérateur', () => {
+		const feats = buildArcepLineFeatures(PATH, [
+			seg({ fromKm: 0, toKm: 4, best: 'BC', orange: 'CL' })
+		]);
+		expect(feats).toHaveLength(1);
+		expect(feats[0].geometry.type).toBe('LineString');
+		const coords = (feats[0].geometry as GeoJSON.LineString).coordinates as [number, number][];
+		expect(coords.length).toBeGreaterThanOrEqual(2);
+		expect(noConsecutiveDups(coords)).toBe(true);
+		expect(feats[0].properties!.best).toBe('BC');
+		expect(feats[0].properties!.orange).toBe('CL');
+	});
+
+	it('plusieurs segments → autant de Features', () => {
+		const feats = buildArcepLineFeatures(PATH, [
+			seg({ fromKm: 0, toKm: 4, best: 'TBC' }),
+			seg({ fromKm: 4, toKm: 8, best: 'none' })
+		]);
+		expect(feats).toHaveLength(2);
+		expect(feats.map((f) => f.properties!.best)).toEqual(['TBC', 'none']);
+	});
+
+	it('segment dégénéré (longueur nulle) → ignoré', () => {
+		const feats = buildArcepLineFeatures(PATH, [seg({ fromKm: 2, toKm: 2 })]);
+		expect(feats).toEqual([]);
+	});
+
+	it('tracé < 2 points → aucune Feature', () => {
+		expect(buildArcepLineFeatures([[0, 45, 0]], [seg({})])).toEqual([]);
+	});
+});
+
+describe('pathBounds', () => {
+	it('renvoie [[minLng,minLat],[maxLng,maxLat]]', () => {
+		expect(
+			pathBounds([
+				[2, 48, 0],
+				[4, 45, 10],
+				[3, 46, 5]
+			])
+		).toEqual([
+			[2, 45],
+			[4, 48]
+		]);
+	});
+
+	it('tracé vide → [[0,0],[0,0]] (garde, pas d’Infinity)', () => {
+		expect(pathBounds([])).toEqual([
+			[0, 0],
+			[0, 0]
+		]);
 	});
 });

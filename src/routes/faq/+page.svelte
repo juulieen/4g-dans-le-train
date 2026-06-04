@@ -1,5 +1,6 @@
 <script lang="ts">
 	import PageWrap from '$components/PageWrap.svelte';
+	import { ORIGIN } from '$lib/site';
 
 	const faqs = [
 		{
@@ -44,7 +45,7 @@
 		name="description"
 		content="Pourquoi ça capte mal dans le TGV ? Comment avoir internet dans le train ? Réponses et conseils sur la couverture mobile 4G/5G en train."
 	/>
-	<link rel="canonical" href="https://4g-dans-le-train.juulieen.fr/faq" />
+	<link rel="canonical" href={`${ORIGIN}/faq`} />
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 	{@html jsonLd}
 </svelte:head>

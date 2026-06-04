@@ -5,6 +5,43 @@
 
 ## 2026-06-04
 
+- **Pages ligne — aperçu de carte zoomé sur la ligne (branche `feat/og-share-cards`)** : les
+  pages `/ligne/[slug]` (et croisées `…/[operateur]`) gagnent un **aperçu de carte statique et
+  cliquable**, calé sur le tracé de la ligne, sous la frise. Il **réutilise `Map.svelte`** (même
+  fond CARTO + voie colorée par usage) mais en lui **injectant des données légères** : la voie
+  ARCEP de la ligne seule, construite depuis son route-profile (`buildArcepLineFeatures` +
+  `segmentCoords`, ~dizaines de Ko) **au lieu de charger les GeoJSON nationaux** `arcep-lines`
+  (4,6 Mo) et `rail-lines` (1,7 Mo) ; rubans communautaires scopés à la ligne (`&line=`).
+  Nouvelles props additives sur `Map.svelte` : `interactive` (carte non-interactive en aperçu),
+  `focusBounds` (`fitBounds`), `arcepLinesData` (injection, court-circuite le fetch global),
+  `showRail`, `lineSlug`. Nouveau composant `MapPreview.svelte` : **init paresseuse**
+  (IntersectionObserver) + **import dynamique** de MapLibre → le chunk ne se charge qu'à l'entrée
+  dans le viewport (pas d'impact LCP sur les pages indexées). Le clic ouvre la carte interactive
+  **déjà focalisée** sur la ligne via un **deep-link `/?line=<slug>`** désormais lu par la home.
+  Helpers purs testés `buildArcepLineFeatures` / `pathBounds` (`src/lib/coverage-segments.ts`).
+  Ajustements tactiles mobiles au passage : pills opérateurs à 44 px, `touch-action: pan-y` sur
+  l'overlay de l'aperçu, garde `overflow-x: clip` sur `.prose`. _Non encore mergé sur `main`._
+
+- **Partage social — vignettes « frise de trajet » (branche `feat/og-share-cards`)** :
+  jusqu'ici, coller un lien `/ligne/<slug>` sur X / WhatsApp / Discord / Reddit n'affichait
+  **aucune vignette** (les pages n'avaient ni `og:image` ni `twitter:card`). Première
+  brique de la **boucle d'acquisition** : chaque page expose désormais une **carte sociale
+  1200×630 générée à la volée** (`GET /og/<slug>.png`) montrant le **trajet** (`A ↔ B`), la
+  **frise de couverture ARCEP colorée par usage** (le visuel signature), deux **stats
+  d'accroche** (« X % en streaming vidéo » + « Y % de zones blanches ») et le branding. Rendu
+  serveur **satori → resvg** (fonte DejaVu vendue dans `src/lib/server/og/fonts/`, fournie
+  aux deux étages pour un rendu déterministe sans fontes système). Stratégie **« ARCEP →
+  réel progressif »** : la carte montre la couverture théorique tant qu'une ligne a peu de
+  mesures, puis **superpose un résumé du réel communautaire** dès qu'il y en a (seuil
+  ≥ 3 cellules) — **sans rebuild** : endpoint runtime avec **cache 24 h** (en-tête HTTP +
+  mémo en process invalidé chaque jour). `/og/default.png` sert la carte générique. Câblage
+  des balises `og:image`/`twitter:image`/`og:url` **centralisé dans `+layout.svelte`**
+  (dérivées de la route, source unique, zéro doublon). Nouveau **bouton « Partager ce
+  trajet »** dans le panneau carte (`navigator.share` + repli presse-papier). Au passage,
+  **toutes les URLs absolues en dur** (canonical, `sitemap.xml`, `og:url`) passent par
+  `src/lib/site.ts` (`PUBLIC_SITE_URL` + repli prod). Aucune migration, aucune donnée
+  committée (l'image est dérivée à la demande). _Non encore mergé sur `main`._
+
 - **Pages ligne/opérateur — passe SEO + UX (suite des revues)** : lot d'améliorations issu
   de deux revues (SEO technique + UX/rédactionnelle). **Lisibilité** : les points noirs sont
   **regroupés par gare** (« Après Angoulême — 5 coupures · la plus longue ~2 min » au lieu de
