@@ -95,7 +95,7 @@
 	<meta name="description" content={description} />
 	<link rel="canonical" href={url} />
 	{#if data.noindex}
-		<!-- Tronçon mince (sans stats ARCEP fiables et sans réel) : exclu de l'index. -->
+		<!-- Tronçon mince (ni stats ARCEP fiables ni réel mesuré suffisant) : exclu de l'index. -->
 		<meta name="robots" content="noindex,follow" />
 	{/if}
 	<meta property="og:title" content={title} />

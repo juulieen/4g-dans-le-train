@@ -108,7 +108,8 @@ fiables ET ≥ 8 cellules, cf. `line-real.ts`) ; sinon il reste sur l'**ARCEP an
 (`prerender = false`) — le verdict est calculé **côté serveur depuis la base vive** à chaque
 requête (`src/lib/server/line-real.ts`), donc **toujours frais ET indexable** (HTML SSR),
 avec un court `cache-control`. Pas de prérendu nocturne ni d'instantané committé. Le
-sous-arbre `[operateur]` reste prérendu. Spec détaillée : `docs/spec-page-ligne.md`.
+sous-arbre `[operateur]` est lui aussi en SSR (verdict par opérateur). Spec détaillée :
+`docs/spec-page-ligne.md`.
 
 ## Les trajets-tronçons (sous-relations ville↔ville)
 

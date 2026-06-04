@@ -12,8 +12,8 @@ import type { PageServerLoad } from './$types';
  * (cf. docs/spec-page-ligne.md). Court `cache-control` : le réel bouge lentement, le
  * cache CDN/navigateur encaisse l'essentiel du trafic.
  *
- * Le sous-arbre `[operateur]` reste prérendu (sa propre page). Les stats ARCEP, elles,
- * restent figées au build (`line-stats.json`).
+ * Le sous-arbre `[operateur]` est lui aussi en SSR (verdict par opérateur). Les stats
+ * ARCEP, elles, restent figées au build (`line-stats.json`).
  */
 export const prerender = false;
 

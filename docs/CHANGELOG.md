@@ -37,8 +37,9 @@
   cron nocturne — le verdict est rendu **côté serveur depuis la base vive** à chaque requête
   (`src/lib/server/line-real.ts` → `loadLineReal`), donc **toujours frais et indexable**,
   avec un court `cache-control` (5 min) pour amortir. Plus de cron, plus d'instantané
-  committé. Le sous-arbre `[operateur]` reste prérendu. Helper de nommage de gare factorisé
-  (`src/lib/geo/station-name.ts`, partagé avec `build-line-stats`). Tests Vitest.
+  committé. (Le sous-arbre `[operateur]` est aligné en SSR dans l'entrée suivante.) Helper
+  de nommage de gare factorisé (`src/lib/geo/station-name.ts`, partagé avec `build-line-stats`).
+  Tests Vitest.
 - **Page ligne — refonte « réponse d'abord » + virage vocabulaire** : `/ligne/[slug]`
   s'ouvre désormais sur un **verdict** (`buildVerdict`, `coverage-copy.ts`) — _« D'après les
   voyageurs, ça capte bien sur 94 % du trajet… 5 zones où ça coupe, notamment après

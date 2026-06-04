@@ -1,6 +1,6 @@
 # Spec — Refonte de la page ligne (`/ligne/[slug]`)
 
-> Statut : **spec de travail** (pas encore implémentée). Objectif : rendre la page
+> Statut : **livré** (socle données + UI SSR, cf. § « ✅ Implémenté »). Objectif : rendre la page
 > `/ligne/[slug]` à la fois **utile** (réponse en 2 s) et **bonne pour le SEO**, en
 > accord avec le projet (théorie ARCEP vs réel communautaire). À replier dans
 > `PRODUCT.md` une fois livrée. Voir l'idéation et l'exploration Google Suggest qui la
@@ -70,7 +70,9 @@ Juste sous le H1, encadré léger, 2–3 phrases, **gros chiffre saillant**. Lis
 
 - `goodVerb` = verbe d'usage du **niveau dominant** (longueur) : `TBC`→« regarder une
   vidéo », `BC`→« naviguer tranquillement », `CL`→« envoyer un message », `none`→« rien ».
-- `goodPct` = part « confortable » = `(TBC+BC)/total`.
+- `goodPct` (réel) = part « **ça capte bien** » = niveau **TBC** sur la portion mesurée
+  (le réel n'a pas de palier BC : ping binaire → TBC/CL/none). Pour l'ARCEP, la part
+  « utilisable » de référence reste `TBC+BC`.
 - Si **le réel couvre assez le trajet** (critère de **couverture spatiale**, cf. ci-dessous —
   PAS un total de mesures sur la ligne) → verdict basé sur le **réel**, avec mention « d'après
   les voyageurs ». Sinon → verdict **annoncé (ARCEP)**, réel montré comme complément partiel,
@@ -207,7 +209,7 @@ Forme calculée (type `LineReal`, jamais stockée) :
 	"coveragePct": 63, // part du trajet couverte par des cellules fiables
 	"sufficient": true, // coveragePct ≥ SEUIL_COVERAGE ET nFiables ≥ MIN_CELLS
 	"lastSeen": 1780300000,
-	"goodPct": 78, // (TBC+BC) pondéré mesures, sur la portion mesurée
+	"goodPct": 78, // « ça capte bien » (niveau TBC), pondéré mesures, sur la portion mesurée
 	"bestOperator": "orange",
 	"blackspots": [
 		{ "afterStation": "Angoulême", "durationS": 120, "lengthM": 4800, "source": "measured" }
@@ -225,7 +227,7 @@ invite à mesurer.
 - Helper serveur `src/lib/server/line-real.ts` (`loadLineReal(fetch, slug)`) : lit
   `cell_aggregates` + dérive les coupures (`aggregateOutages`, durées incluses) + calcule.
 - Page **SSR** : `src/routes/ligne/[slug]/+page.server.ts` (`prerender = false`) → expose
-  `data.real`, court `cache-control`. Le sous-arbre `[operateur]` reste prérendu.
+  `data.real`, court `cache-control`. Le sous-arbre `[operateur]` est lui aussi en SSR.
 - Helper de nommage de gare `src/lib/geo/station-name.ts` (factorisé avec `build-line-stats`).
 - **Reste** : l'UI de la page (rendu du verdict + points noirs, virage vocabulaire §2–6).
 

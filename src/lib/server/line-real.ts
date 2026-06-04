@@ -8,7 +8,7 @@
  * au `cache-control` de la page (quelques minutes) et au volume actuel, c'est borné.
  * Si ça grossit : matérialiser un agrégat de coupures (cf. note dans `outages.ts`).
  */
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, ne, inArray } from 'drizzle-orm';
 import { db } from './db/client';
 import { cellAggregates } from './db/schema';
 import { aggregateOutages } from './outages';
@@ -35,20 +35,28 @@ export async function loadLineReal(
 		lengthKm: number;
 	};
 
-	// Cellules mesurées de la ligne (hors wifi de bord). Tronçon : filtre par cellules.
+	// Cellules mesurées de la ligne (hors wifi de bord).
+	// Ligne normale → filtre SQL par `lineSlug`. Tronçon → filtre SQL par `cellId IN (…)`
+	// (le `lineSlug` d'une cellule est son slug PRIMAIRE local, pas la parente du tronçon —
+	// on ne peut donc pas filtrer par `lineSlug` ; on cible les cellules de la portion via
+	// l'index `cellId`, plutôt qu'un scan complet + filtre mémoire). Les jeux de cellules
+	// d'un tronçon sont bornés (une portion de ligne) → bien sous la limite de variables SQLite.
 	const lineFilter = resolveLineFilter(slug);
 	const filters = [
 		// Opérateur précis → filtre exact ; sinon tous, hors wifi de bord.
 		operator
 			? eq(cellAggregates.operator, operator)
 			: ne(cellAggregates.operator, WIFI_TRAIN_OPERATOR),
-		lineFilter && !lineFilter.cells ? eq(cellAggregates.lineSlug, lineFilter.lineSlug) : undefined
+		lineFilter?.cells
+			? inArray(cellAggregates.cellId, [...lineFilter.cells])
+			: lineFilter
+				? eq(cellAggregates.lineSlug, lineFilter.lineSlug)
+				: undefined
 	].filter((f) => f !== undefined);
-	const allRows = await db
+	const rows = await db
 		.select()
 		.from(cellAggregates)
 		.where(filters.length === 1 ? filters[0] : and(...filters));
-	const rows = lineFilter?.cells ? allRows.filter((r) => lineFilter.cells!.has(r.cellId)) : allRows;
 
 	const cells: RealCell[] = rows.map((r) => ({
 		cellId: r.cellId,
