@@ -30,7 +30,9 @@
 		focusBounds = null,
 		arcepLinesData = null,
 		showRail = true,
-		lineSlug = null
+		lineSlug = null,
+		livePos = null,
+		trail = null
 	}: {
 		coverage?: GeoJSON.FeatureCollection | null;
 		/** Opérateur sélectionné : recolore les voies ARCEP. */
@@ -49,6 +51,10 @@
 		showRail?: boolean;
 		/** Scope les rubans communautaires à une ligne (`&line=`). */
 		lineSlug?: string | null;
+		/** Position live du mode mesure : marqueur « vous êtes ici » coloré par statut. */
+		livePos?: { lat: number; lng: number; status: string } | null;
+		/** Sillage de la session de mesure (points locaux éphémères, posés au fil du trajet). */
+		trail?: GeoJSON.FeatureCollection | null;
 	} = $props();
 
 	let mapContainer: HTMLDivElement;
@@ -61,6 +67,20 @@
 	// un setStyle (bascule de thème), qui repart d'un style vierge et ne re-déclenche pas
 	// le $effect de fetch (lui ne dépend que de coverage/operator, pas du thème).
 	let lastSegments: GeoJSON.FeatureCollection = EMPTY;
+
+	// --- Mode mesure : marqueur « vous êtes ici » + suivi caméra ------------------
+	// Élément DOM custom (pulse CSS + couleur de statut) : plus simple et plus fluide
+	// qu'une couche MapLibre pour un point unique, et toujours au-dessus des couches.
+	let liveMarker: maplibregl.Marker | null = null;
+	let liveMarkerEl: HTMLDivElement | null = null;
+	// Suivi caméra : actif au démarrage de la mesure, débrayé par un drag utilisateur,
+	// réactivable par le bouton « Recentrer ».
+	let follow = $state(true);
+	const LIVE_COLORS: Record<string, string> = {
+		ok: USAGE_COLORS.TBC,
+		degraded: USAGE_COLORS.CL,
+		none: USAGE_COLORS.none
+	};
 
 	// Données géo mises en cache (fetch une seule fois ; ré-utilisées après un
 	// changement de fond de carte qui réinitialise les couches).
@@ -380,6 +400,33 @@
 				}
 			});
 		}
+
+		// Sillage du mode mesure (100 % local, éphémère) : les points de la session
+		// courante, par-dessus toutes les couches — on voit sa contribution se dessiner.
+		if (!map.getSource('session-trail')) {
+			map.addSource('session-trail', { type: 'geojson', data: trail ?? EMPTY });
+			map.addLayer({
+				id: 'session-trail',
+				type: 'circle',
+				source: 'session-trail',
+				paint: {
+					'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 2.5, 13, 6],
+					'circle-color': [
+						'match',
+						['get', 'status'],
+						'ok',
+						USAGE_COLORS.TBC,
+						'degraded',
+						USAGE_COLORS.CL,
+						USAGE_COLORS.none
+					] as unknown as maplibregl.ExpressionSpecification,
+					'circle-stroke-color': realEdgeColor(),
+					'circle-stroke-width': 1,
+					// Les points interpolés (tunnel) sont plus discrets : position reconstruite.
+					'circle-opacity': ['case', ['==', ['get', 'posSource'], 'interpolated'], 0.6, 0.95]
+				}
+			});
+		}
 	}
 
 	onMount(() => {
@@ -436,6 +483,12 @@
 	/** Handlers de clic/curseur (liés une fois ; persistent à travers setStyle). */
 	function bindInteractions() {
 		if (!map) return;
+
+		// Un pan/zoom de l'utilisateur débraye le suivi caméra du mode mesure
+		// (le bouton « Recentrer » le réactive). Les easeTo programmés n'émettent
+		// pas ces events « *start » avec geste utilisateur.
+		map.on('dragstart', () => (follow = false));
+		map.on('wheel', () => (follow = false));
 
 		// Popup ARCEP : ce qu'on peut faire ici (théorique) + lignes qui passent ici.
 		map.on('click', 'arcep-lines', (e) => {
@@ -624,9 +677,56 @@
 		if (!loaded || !map || !focusBounds) return;
 		map.fitBounds(focusBounds, { padding: 24, animate: false });
 	});
+
+	// --- Mode mesure : sillage + marqueur + suivi caméra -------------------------
+
+	// Sillage : repousse les données à chaque nouveau point (setData à ~1 Hz, indolore).
+	$effect(() => {
+		if (!loaded || !map) return;
+		const src = map.getSource('session-trail') as maplibregl.GeoJSONSource | undefined;
+		src?.setData(trail ?? EMPTY);
+	});
+
+	// Marqueur « vous êtes ici » : créé au premier fix, suit la position et prend la
+	// couleur du statut courant (vert/orange/rouge — rouge pendant une coupure).
+	$effect(() => {
+		if (!loaded || !map) return;
+		if (!livePos) {
+			liveMarker?.remove();
+			liveMarker = null;
+			liveMarkerEl = null;
+			return;
+		}
+		if (!liveMarker) {
+			liveMarkerEl = document.createElement('div');
+			liveMarkerEl.className = 'live-marker';
+			liveMarker = new maplibregl.Marker({ element: liveMarkerEl })
+				.setLngLat([livePos.lng, livePos.lat])
+				.addTo(map);
+			// Premier fix : on quitte la vue nationale pour cadrer le train.
+			follow = true;
+			map.easeTo({ center: [livePos.lng, livePos.lat], zoom: Math.max(map.getZoom(), 11.5) });
+		} else {
+			liveMarker.setLngLat([livePos.lng, livePos.lat]);
+			if (follow) map.easeTo({ center: [livePos.lng, livePos.lat], duration: 900 });
+		}
+		liveMarkerEl?.style.setProperty('--live-color', LIVE_COLORS[livePos.status] ?? USAGE_COLORS.CL);
+	});
+
+	/** Réactive le suivi caméra et recadre sur la position courante. */
+	function recenter() {
+		if (!map || !livePos) return;
+		follow = true;
+		map.easeTo({ center: [livePos.lng, livePos.lat], zoom: Math.max(map.getZoom(), 11.5) });
+	}
 </script>
 
 <div class="map" class:embedded={!interactive} bind:this={mapContainer}></div>
+{#if livePos && !follow}
+	<button class="recenter glass" onclick={recenter}>
+		<span class="recenter-dot" aria-hidden="true"></span> Recentrer
+	</button>
+{/if}
 {#if hasArcep && interactive}
 	<div class="legend-overlay glass">
 		<strong>Sur la voie, vous pourrez :</strong>
@@ -697,6 +797,65 @@
 		margin-top: 2px;
 		border-top: 1px solid var(--glass-border);
 		padding-top: 3px;
+	}
+
+	/* Marqueur « vous êtes ici » du mode mesure (élément créé en JS → :global).
+	   La couleur suit le statut réseau via --live-color (posée par le composant). */
+	:global(.live-marker) {
+		width: 18px;
+		height: 18px;
+		border-radius: 50%;
+		background: var(--live-color, #f59e0b);
+		border: 3px solid #fff;
+		box-shadow: 0 0 0 2px rgb(0 0 0 / 25%);
+		position: relative;
+	}
+	:global(.live-marker)::after {
+		content: '';
+		position: absolute;
+		inset: -3px;
+		border-radius: 50%;
+		border: 3px solid var(--live-color, #f59e0b);
+		animation: live-pulse 1.6s ease-out infinite;
+	}
+	@keyframes live-pulse {
+		0% {
+			transform: scale(1);
+			opacity: 0.8;
+		}
+		100% {
+			transform: scale(2.2);
+			opacity: 0;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		:global(.live-marker)::after {
+			animation: none;
+		}
+	}
+
+	/* Bouton « Recentrer » : réactive le suivi caméra du mode mesure. */
+	.recenter {
+		position: absolute;
+		top: 150px;
+		right: 10px;
+		z-index: 5;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.45rem 0.7rem;
+		border-radius: 999px;
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: var(--text);
+		cursor: pointer;
+	}
+	.recenter-dot {
+		width: 0.55rem;
+		height: 0.55rem;
+		border-radius: 50%;
+		background: var(--accent);
+		flex: none;
 	}
 
 	/* Popups MapLibre (injectées hors du composant → :global) : look glass lisible.

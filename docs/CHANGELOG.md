@@ -5,6 +5,21 @@
 
 ## 2026-06-12
 
+- **Mode mesure — tableau de bord live (carte + HUD honnête)** : pendant la mesure, la
+  carte passe au premier plan. **Marqueur « vous êtes ici »** pulsant coloré par statut
+  (rouge en coupure), **suivi caméra** débrayable (drag/molette → bouton « Recentrer »),
+  **sillage de session** (une pastille colorée par tick ; les points de tunnel
+  apparaissent en lot à la sortie, recalés sur le tracé, plus discrets) — sillage 100 %
+  local et éphémère, rien de brut n'est envoyé. Sur mobile, la sheet se replie en
+  **mini-HUD** sticky (statut + compteur + débit + synchro + Arrêter). L'UI dit enfin le
+  **temps réel** : la **coupure en cours** porte un chrono (« pas de réseau depuis
+  47 s », `OutageDetector.currentOutageStart`) au lieu de n'afficher que la dernière
+  coupure close, et le **débit est daté** (« il y a 40 s », « mesure en cours… ») avec
+  une **sparkline** de la session. Nouveau **ticker « derniers points envoyés »**
+  (transparence sur ce qui part au serveur). Code : `LiveState` gagne `currentOutage`,
+  `downlinkAt`, `throughputMeasuring`, `downlinkHistory`, `lastSamples` ; nouveau
+  callback `onPoint` (sillage) ; props `livePos`/`trail` sur `Map.svelte`.
+
 - **Mesure — robustesse GPS (retour de terrain TGV : session entière perdue faute de
   fix assez précis)** : quatre durcissements de la chaîne de capture.
   1. **Seuil de précision GPS assoupli 100 m → 300 m** (`geolocation.ts`) : dans un
