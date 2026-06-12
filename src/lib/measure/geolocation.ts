@@ -15,8 +15,17 @@ export interface GeoSample {
 	timestamp: number;
 }
 
-/** Précision minimale acceptée (m). Au-delà, le point est rejeté. */
-const MAX_ACCURACY_M = 100;
+/**
+ * Précision minimale acceptée (m). Au-delà, le point est rejeté.
+ *
+ * 300 m (et non 100) : dans un TGV (vitres athermiques, vitesse), la précision
+ * dépasse souvent 100 m pendant tout le trajet — un seuil trop strict faisait
+ * perdre des sessions entières. Un point à 300 m reste exploitable : la position
+ * est arrondie à la cellule H3 (~150 m) avant stockage, et les ancres
+ * d'interpolation sont de toute façon validées à ≤ 1 km du tracé (SNAP_MAX_M).
+ * La précision réelle est conservée dans la mesure (`gpsAccuracy`).
+ */
+const MAX_ACCURACY_M = 300;
 
 /**
  * Ancienneté maximale acceptée pour le PREMIER fix (ms). `watchPosition` avec

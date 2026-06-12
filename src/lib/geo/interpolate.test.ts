@@ -81,7 +81,20 @@ describe('reconstructAlongPath', () => {
 		// t = 50 s → moitié du trajet → distKm 5 → lng 2.05.
 		const out = reconstructAlongPath(PATH, entry, exit, [50_000], OPTS);
 		expect(out).not.toBeNull();
-		expect(out![0]!.lng).toBeCloseTo(2.05, 4);
+		expect(out!.positions[0]!.lng).toBeCloseTo(2.05, 4);
+	});
+
+	it('renvoie la vitesse moyenne le long du tracé entre les deux ancres', () => {
+		// 10 km parcourus en 100 s → 360 km/h (un TGV lancé, plausible).
+		const out = reconstructAlongPath(PATH, entry, exit, [50_000], OPTS);
+		expect(out!.speedKmh).toBeCloseTo(360, 1);
+	});
+
+	it('la vitesse est positive même pour un trajet en sens inverse', () => {
+		const revEntry = { lat: 48.0, lng: 2.1, t: 0 };
+		const revExit = { lat: 48.0, lng: 2.0, t: 100_000 };
+		const out = reconstructAlongPath(PATH, revEntry, revExit, [50_000], OPTS);
+		expect(out!.speedKmh).toBeCloseTo(360, 1);
 	});
 
 	it('EXTRAPOLE en arrière un instant antérieur à l’entrée (cas cold-start)', () => {
@@ -89,7 +102,7 @@ describe('reconstructAlongPath', () => {
 		// → distKm = 0 + (10/100s) × (−50s) = −5 km → clampé au début du tracé (lng 2.0).
 		const out = reconstructAlongPath(PATH, entry, exit, [-50_000], OPTS);
 		expect(out).not.toBeNull();
-		expect(out![0]!.lng).toBeCloseTo(2.0, 6); // borné au 1er sommet
+		expect(out!.positions[0]!.lng).toBeCloseTo(2.0, 6); // borné au 1er sommet
 	});
 
 	it('respecte le SENS du trajet pour l’extrapolation arrière', () => {
@@ -98,7 +111,7 @@ describe('reconstructAlongPath', () => {
 		const revExit = { lat: 48.0, lng: 2.0, t: 100_000 };
 		// t = −20 s → distKm = 10 + (−10/100s)(−20s) = 12 → clampé à la fin (lng 2.1).
 		const out = reconstructAlongPath(PATH, revEntry, revExit, [-20_000], OPTS);
-		expect(out![0]!.lng).toBeCloseTo(2.1, 6);
+		expect(out!.positions[0]!.lng).toBeCloseTo(2.1, 6);
 	});
 
 	it('rejette (null) si les ancres sont espacées de plus de maxSpanMs', () => {
@@ -114,7 +127,7 @@ describe('reconstructAlongPath', () => {
 	it('ignore (null) un instant à plus de maxSpanMs de l’entrée mais place les autres', () => {
 		const out = reconstructAlongPath(PATH, entry, exit, [-6 * 60_000, 50_000], OPTS);
 		expect(out).not.toBeNull();
-		expect(out![0]).toBeNull(); // trop lointain
-		expect(out![1]).not.toBeNull(); // placé
+		expect(out!.positions[0]).toBeNull(); // trop lointain
+		expect(out!.positions[1]).not.toBeNull(); // placé
 	});
 });

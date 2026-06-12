@@ -11,6 +11,8 @@ const SESSION_KEY = '4gdt.session';
 const CONSENT_KEY = '4gdt.consent';
 const ONBOARDED_KEY = '4gdt.onboarded';
 const THROUGHPUT_OPT_KEY = '4gdt.opt.throughput';
+const MEASURE_ALIVE_KEY = '4gdt.measure.alive';
+const OPERATOR_KEY = '4gdt.operator';
 
 export function getSessionId(): string {
 	if (typeof localStorage === 'undefined') return 'ssr';
@@ -79,6 +81,67 @@ export function setThroughputOptIn(on: boolean): void {
 	try {
 		if (on) localStorage.setItem(THROUGHPUT_OPT_KEY, 'on');
 		else localStorage.removeItem(THROUGHPUT_OPT_KEY);
+	} catch {
+		/* stockage bloqué : best-effort, on ignore */
+	}
+}
+
+/**
+ * Heartbeat du mode mesure, pour la reprise auto après un refresh.
+ *
+ * Le contrôleur le rafraîchit à chaque tick (1/s) et l'efface à l'arrêt VOLONTAIRE.
+ * Si la page recharge alors qu'une mesure tournait (onglet déchargé en arrière-plan,
+ * rotation, refresh accidentel — fréquent sur mobile dans le train), le heartbeat
+ * survit : la page peut alors redémarrer la mesure sans intervention, au lieu de
+ * laisser croire qu'elle tourne encore.
+ */
+export function markMeasureAlive(): void {
+	if (typeof localStorage === 'undefined') return;
+	try {
+		localStorage.setItem(MEASURE_ALIVE_KEY, String(Date.now()));
+	} catch {
+		/* stockage bloqué : best-effort, on ignore */
+	}
+}
+
+export function clearMeasureAlive(): void {
+	if (typeof localStorage === 'undefined') return;
+	try {
+		localStorage.removeItem(MEASURE_ALIVE_KEY);
+	} catch {
+		/* stockage bloqué : best-effort, on ignore */
+	}
+}
+
+/** Une mesure tournait-elle il y a moins de `maxAgeMs` (défaut 2 min) ? */
+export function wasMeasuringRecently(maxAgeMs = 2 * 60_000): boolean {
+	if (typeof localStorage === 'undefined') return false;
+	try {
+		const ts = Number(localStorage.getItem(MEASURE_ALIVE_KEY));
+		return Number.isFinite(ts) && ts > 0 && Date.now() - ts <= maxAgeMs;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Opérateur choisi, persisté pour survivre au refresh (indispensable à la reprise
+ * auto : sans lui, une session reprise enverrait « inconnu »). Stocké brut ; c'est
+ * à l'appelant de valider la valeur contre sa liste d'opérateurs.
+ */
+export function getSavedOperator(): string | null {
+	if (typeof localStorage === 'undefined') return null;
+	try {
+		return localStorage.getItem(OPERATOR_KEY);
+	} catch {
+		return null;
+	}
+}
+
+export function setSavedOperator(operator: string): void {
+	if (typeof localStorage === 'undefined') return;
+	try {
+		localStorage.setItem(OPERATOR_KEY, operator);
 	} catch {
 		/* stockage bloqué : best-effort, on ignore */
 	}
