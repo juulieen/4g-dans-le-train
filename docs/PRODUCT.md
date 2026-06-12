@@ -190,8 +190,7 @@ Conventions produit :
     constante que la reconstruction des positions).
   - Côté acquisition, le **premier fix** réutilise une position récente du téléphone
     (`getCurrentPosition`, `maximumAge` relâché) au lieu de la jeter — décisif au
-    redémarrage d'une mesure. Le **seuil de précision accepté est de 300 m** (et non
-    100) : dans un TGV la précision dépasse souvent 100 m en continu et un seuil trop
+    redémarrage d'une mesure. Le **seuil de précision accepté est de 300 m** (et non 100) : dans un TGV la précision dépasse souvent 100 m en continu et un seuil trop
     strict faisait perdre des sessions entières ; un point à 300 m reste exploitable
     (position arrondie à la cellule H3 ~150 m, ancres validées à ≤ 1 km du tracé), et
     la précision réelle est conservée dans la mesure (`gpsAccuracy`).

@@ -93,7 +93,11 @@ describe('GapStore', () => {
 	it("normalise onWifi à false pour un buffer persisté avant l'ajout du champ", () => {
 		const legacy = state();
 		// Simule l'ancien format : pings sans la propriété onWifi.
-		const pings = legacy.pings.map(({ onWifi: _ignored, ...rest }) => rest);
+		const pings = legacy.pings.map((p) => {
+			const { onWifi, ...rest } = p;
+			void onWifi;
+			return rest;
+		});
 		store.setItem('4gdt.gap', JSON.stringify({ ...legacy, pings }));
 		const restored = gap.load(NOW, MAX_AGE);
 		expect(restored!.pings).toHaveLength(2);
