@@ -26,7 +26,8 @@ export interface ImuSample {
 	ax: number | null;
 	ay: number | null;
 	az: number | null;
-	/** Taux de rotation (deg/s) — alpha/beta/gamma, null si non fournis. */
+	/** Taux de rotation (deg/s) : rax = alpha (axe z de l'appareil), ray = beta
+	 *  (axe x), raz = gamma (axe y) — convention DeviceMotion. null si non fournis. */
 	rax: number | null;
 	ray: number | null;
 	raz: number | null;
@@ -128,6 +129,8 @@ export class MotionRecorder {
 	/** Instant (epoch ms) du dernier échantillon décimé conservé. */
 	private lastKeptAt = 0;
 	private window: WindowAcc | null = null;
+	/** Callback fenêtres, gardé pour émettre la fenêtre en cours au stop(). */
+	private onWindowCb: ((w: ImuWindow) => void) | null = null;
 
 	static support(): MotionSupport {
 		const exists = typeof window !== 'undefined' && typeof DeviceMotionEvent !== 'undefined';
@@ -166,13 +169,17 @@ export class MotionRecorder {
 	 */
 	start(onSample: (s: ImuSample) => void, onWindow: (w: ImuWindow) => void): boolean {
 		if (!MotionRecorder.support().devicemotion || this.handler) return false;
+		this.onWindowCb = onWindow;
 		// `event.timeStamp` est relatif à l'origine du document : on le ramène en
 		// epoch ms pour pouvoir joindre IMU et GPS par timestamp à l'analyse.
 		const epochBase = performance.timeOrigin;
 		const keepEveryMs = 1000 / IMU_TARGET_HZ;
 
 		this.handler = (ev: DeviceMotionEvent) => {
-			const t = epochBase + ev.timeStamp;
+			// Garde : d'anciens WebKit horodataient les événements capteurs en epoch
+			// ABSOLU. Un timeStamp > ~30 ans de ms ne peut pas être relatif → on le
+			// prend tel quel plutôt que de produire un instant aberrant (~2× l'epoch).
+			const t = ev.timeStamp > 1e12 ? ev.timeStamp : epochBase + ev.timeStamp;
 			const g = ev.accelerationIncludingGravity;
 			const r = ev.rotationRate;
 			const accNorm = g ? vectorNorm(g.x, g.y, g.z) : null;
@@ -209,7 +216,14 @@ export class MotionRecorder {
 			window.removeEventListener('devicemotion', this.handler);
 			this.handler = null;
 		}
+		// Clôt la fenêtre en cours (jusqu'à ~1 s de données) au lieu de la jeter :
+		// la dernière seconde de la session compte aussi.
+		if (this.window && this.onWindowCb) {
+			const w = finalizeWindow(this.window);
+			if (w) this.onWindowCb(w);
+		}
 		this.window = null;
+		this.onWindowCb = null;
 		this.lastKeptAt = 0;
 	}
 }

@@ -42,6 +42,12 @@ export interface TraceRecorderStatus {
  * (IMU décimé) mais on garde fenêtres 1 Hz et GPS, qui restent exploitables.
  */
 const MAX_TRACE_BYTES = 12 * 1024 * 1024;
+/**
+ * Plafond ABSOLU (octets) : au-delà, plus aucune écriture du tout (les flux légers
+ * fenêtres/GPS, qui continuent après MAX_TRACE_BYTES, finiraient sinon par croître
+ * sans limite sur une session oubliée plusieurs jours).
+ */
+const MAX_TRACE_HARD_BYTES = 16 * 1024 * 1024;
 /** Cadence de vidage des buffers mémoire vers IndexedDB (ms). */
 const TRACE_FLUSH_MS = 15_000;
 
@@ -58,6 +64,14 @@ export class SensorTraceRecorder {
 	private lineSlug: string | null = null;
 	/** Évite les vidages concurrents (flush périodique vs flush d'arrêt). */
 	private flushing = false;
+	/**
+	 * File de sérialisation start/stop : un stop() pendant un start() encore suspendu
+	 * sur ses await IndexedDB attendrait sinon un `recording` pas encore posé, ne
+	 * ferait rien, et laisserait le listener devicemotion + l'interval de flush
+	 * tourner indéfiniment après l'arrêt de la mesure. Chaîner les opérations rend
+	 * l'entrelacement impossible (un double start est aussi neutralisé).
+	 */
+	private lifecycle: Promise<void> = Promise.resolve();
 
 	constructor(private onStatus?: (s: TraceRecorderStatus) => void) {}
 
@@ -65,8 +79,23 @@ export class SensorTraceRecorder {
 		return MotionRecorder.support().devicemotion && TraceStore.isSupported();
 	}
 
+	/** Enchaîne une opération de cycle de vie après celles déjà en vol. */
+	private enqueue(op: () => Promise<void>): Promise<void> {
+		this.lifecycle = this.lifecycle.then(op, op);
+		return this.lifecycle;
+	}
+
 	/** Démarre (ou reprend) l'enregistrement. Sans effet si non supporté. */
-	async start(info: { operator: string; lineSlug: string | null }): Promise<void> {
+	start(info: { operator: string; lineSlug: string | null }): Promise<void> {
+		return this.enqueue(() => this.doStart(info));
+	}
+
+	/** Arrêt volontaire : solde les buffers, garde la trace, efface le pointeur. */
+	stop(): Promise<void> {
+		return this.enqueue(() => this.doStop());
+	}
+
+	private async doStart(info: { operator: string; lineSlug: string | null }): Promise<void> {
 		if (this.recording || !this.isSupported) return;
 		this.lineSlug = info.lineSlug;
 
@@ -87,7 +116,9 @@ export class SensorTraceRecorder {
 				accelField: 'accelerationIncludingGravity',
 				schemaVersion: 1
 			};
-			await this.store.begin(meta);
+			// On ne pose le pointeur que si la trace existe réellement en base —
+			// sinon il désignerait une trace fantôme (IndexedDB indisponible…).
+			if (!(await this.store.begin(meta))) return;
 			setActiveTraceId(meta.id);
 			this.evBuf.push({ type: 'start', t: Date.now() });
 		}
@@ -105,10 +136,11 @@ export class SensorTraceRecorder {
 		this.emitStatus();
 	}
 
-	/** Arrêt volontaire : solde les buffers, garde la trace, efface le pointeur. */
-	async stop(): Promise<void> {
+	private async doStop(): Promise<void> {
 		if (!this.recording) return;
 		this.recording = false;
+		// motion.stop() clôt la fenêtre d'agrégation en cours (callback → winBuf) :
+		// la dernière seconde de capteurs part avec le flush final.
 		this.motion.stop();
 		if (this.flushTimer !== null) {
 			clearInterval(this.flushTimer);
@@ -133,8 +165,8 @@ export class SensorTraceRecorder {
 	}
 
 	/** Ligne identifiée en cours de session (réponse API) : complète les métadonnées. */
-	setLineSlug(slug: string | null): void {
-		if (!slug || slug === this.lineSlug) return;
+	setLineSlug(slug: string): void {
+		if (slug === this.lineSlug) return;
 		this.lineSlug = slug;
 		if (this.recording) void this.store.updateMeta({ lineSlug: slug });
 	}
@@ -144,6 +176,14 @@ export class SensorTraceRecorder {
 		if (this.flushing) return;
 		this.flushing = true;
 		try {
+			// Plafond absolu : on jette tout (cf. MAX_TRACE_HARD_BYTES).
+			if (this.store.sizeBytes >= MAX_TRACE_HARD_BYTES) {
+				this.imuBuf = [];
+				this.winBuf = [];
+				this.gpsBuf = [];
+				this.evBuf = [];
+				return;
+			}
 			const imu = this.imuBuf.length > 0 ? [encodeImuChunk(this.imuBuf)] : [];
 			const windows = this.winBuf;
 			const gps = this.gpsBuf;

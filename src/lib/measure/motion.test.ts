@@ -21,7 +21,7 @@ describe('agrégation de fenêtre', () => {
 		expect(finalizeWindow(emptyWindow(T0))).toBeNull();
 	});
 
-	it('moyenne et écart-type sur une série constante (train à l arrêt)', () => {
+	it("moyenne et écart-type sur une série constante (train à l'arrêt)", () => {
 		// À l'arrêt en gare : ‖acc‖ ≈ gravité constante, rotation nulle → écarts-types ~0.
 		const acc = emptyWindow(T0);
 		for (let i = 0; i < 60; i++) pushToWindow(acc, T0 + i * 16, 9.81, 0);

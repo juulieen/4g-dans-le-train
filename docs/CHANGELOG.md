@@ -12,7 +12,7 @@
   avec `accuracy`), horodatés en epoch ms. **But** : données jumelées IMU + GPS pour
   valider hors-ligne le map-matching par courbure et la détection d'arrêts en gare
   (pistes de localisation sans GPS, cf. PRODUCT.md). Stockage **IndexedDB**
-  (`4gdt-trace`, plafond 12 Mo), **jamais envoyé au serveur** — export JSON colonnaire
+  (`4gdt-trace`, plafonds 12 Mo IMU / 16 Mo absolu), **jamais envoyé au serveur** — export JSON colonnaire
   manuel (+ bouton Effacer) après l'arrêt. Permission iOS demandée au clic
   « Démarrer » ; refus → opt-in désactivé, mesure normale intacte. Survit au refresh
   (pointeur `4gdt.trace.active`, événement `resume`). Code : `motion.ts`,

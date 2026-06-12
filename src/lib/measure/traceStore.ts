@@ -42,25 +42,35 @@ function openDb(): Promise<IDBDatabase> {
 			if (!db.objectStoreNames.contains('events'))
 				db.createObjectStore('events', { autoIncrement: true });
 		};
-		req.onsuccess = () => resolve(req.result);
+		req.onsuccess = () => {
+			const db = req.result;
+			// Si une autre connexion demande une montée de version (schéma futur), on
+			// libère la nôtre au lieu de bloquer la migration indéfiniment.
+			db.onversionchange = () => db.close();
+			resolve(db);
+		};
 		req.onerror = () => reject(req.error);
 	});
 }
 
-/** Attend la fin d'une transaction (resolve même sur abort : best-effort). */
-function txDone(tx: IDBTransaction): Promise<void> {
+/** Attend la fin d'une transaction. true si commitée, false sur erreur/abort. */
+function txDone(tx: IDBTransaction): Promise<boolean> {
 	return new Promise((resolve) => {
-		tx.oncomplete = () => resolve();
-		tx.onerror = () => resolve();
-		tx.onabort = () => resolve();
+		tx.oncomplete = () => resolve(true);
+		tx.onerror = () => resolve(false);
+		tx.onabort = () => resolve(false);
 	});
 }
 
 function readAll<T>(db: IDBDatabase, storeName: string): Promise<T[]> {
 	return new Promise((resolve) => {
-		const req = db.transaction(storeName, 'readonly').objectStore(storeName).getAll();
-		req.onsuccess = () => resolve((req.result as T[]) ?? []);
-		req.onerror = () => resolve([]);
+		try {
+			const req = db.transaction(storeName, 'readonly').objectStore(storeName).getAll();
+			req.onsuccess = () => resolve((req.result as T[]) ?? []);
+			req.onerror = () => resolve([]);
+		} catch {
+			resolve([]); // db fermée entre-temps : best-effort
+		}
 	});
 }
 
@@ -69,6 +79,9 @@ export class TraceStore {
 	/** Compteur d'octets approximatif (longueur JSON des écritures), tenu en mémoire
 	 *  et persisté dans `meta` à chaque écriture — restauré à la reprise. */
 	private approxBytes = 0;
+	/** Métadonnées de la trace courante, en cache mémoire : évite un get IndexedDB
+	 *  imbriqué dans la transaction d'append (fragile vis-à-vis de l'auto-commit). */
+	private metaCache: TraceMeta | null = null;
 
 	static isSupported(): boolean {
 		return typeof indexedDB !== 'undefined';
@@ -86,10 +99,14 @@ export class TraceStore {
 		return this.db;
 	}
 
-	/** Démarre une NOUVELLE trace : purge l'éventuelle trace précédente. */
-	async begin(meta: TraceMeta): Promise<void> {
+	/**
+	 * Démarre une NOUVELLE trace : purge l'éventuelle trace précédente.
+	 * Retourne false si la trace n'a pas pu être créée (l'appelant ne doit alors
+	 * pas poser de pointeur vers une trace fantôme).
+	 */
+	async begin(meta: TraceMeta): Promise<boolean> {
 		const db = await this.ensureDb();
-		if (!db) return;
+		if (!db) return false;
 		try {
 			const tx = db.transaction(['meta', 'imu', 'windows', 'gps', 'events'], 'readwrite');
 			for (const name of ['imu', 'windows', 'gps', 'events']) tx.objectStore(name).clear();
@@ -98,9 +115,11 @@ export class TraceStore {
 				{ meta, approxBytes: this.approxBytes } satisfies MetaRecord,
 				META_KEY
 			);
-			await txDone(tx);
+			const ok = await txDone(tx);
+			if (ok) this.metaCache = meta;
+			return ok;
 		} catch {
-			/* best-effort */
+			return false;
 		}
 	}
 
@@ -116,6 +135,7 @@ export class TraceStore {
 			});
 			if (!rec) return null;
 			this.approxBytes = rec.approxBytes ?? 0;
+			this.metaCache = rec.meta;
 			return rec.meta;
 		} catch {
 			return null;
@@ -126,15 +146,16 @@ export class TraceStore {
 	async updateMeta(patch: Partial<TraceMeta>): Promise<void> {
 		const db = await this.ensureDb();
 		if (!db) return;
-		const current = await this.resume();
+		const current = this.metaCache ?? (await this.resume());
 		if (!current) return;
+		const merged = { ...current, ...patch };
 		try {
 			const tx = db.transaction('meta', 'readwrite');
 			tx.objectStore('meta').put(
-				{ meta: { ...current, ...patch }, approxBytes: this.approxBytes } satisfies MetaRecord,
+				{ meta: merged, approxBytes: this.approxBytes } satisfies MetaRecord,
 				META_KEY
 			);
-			await txDone(tx);
+			if (await txDone(tx)) this.metaCache = merged;
 		} catch {
 			/* best-effort */
 		}
@@ -171,11 +192,14 @@ export class TraceStore {
 			if (added > 0) {
 				this.approxBytes += added;
 				// Persiste le compteur avec le lot (même transaction) pour la reprise.
-				const req = tx.objectStore('meta').get(META_KEY);
-				req.onsuccess = () => {
-					const rec = req.result as MetaRecord | undefined;
-					if (rec) tx.objectStore('meta').put({ ...rec, approxBytes: this.approxBytes }, META_KEY);
-				};
+				// Écriture directe depuis le cache mémoire : un get imbriqué dont le
+				// callback poste un put serait fragile vis-à-vis de l'auto-commit IDB.
+				if (this.metaCache) {
+					tx.objectStore('meta').put(
+						{ meta: this.metaCache, approxBytes: this.approxBytes } satisfies MetaRecord,
+						META_KEY
+					);
+				}
 			}
 			await txDone(tx);
 		} catch {
@@ -191,7 +215,7 @@ export class TraceStore {
 	/** Assemble la trace complète pour l'export. null si aucune trace. */
 	async exportBundle(): Promise<TraceBundle | null> {
 		const meta = await this.resume();
-		const db = this.db;
+		const db = await this.ensureDb();
 		if (!meta || !db) return null;
 		const [imu, windows, gps, events] = await Promise.all([
 			readAll<ImuChunk>(db, 'imu'),
@@ -210,6 +234,7 @@ export class TraceStore {
 			const tx = db.transaction(['meta', 'imu', 'windows', 'gps', 'events'], 'readwrite');
 			for (const name of ['meta', 'imu', 'windows', 'gps', 'events']) tx.objectStore(name).clear();
 			this.approxBytes = 0;
+			this.metaCache = null;
 			await txDone(tx);
 		} catch {
 			/* best-effort */

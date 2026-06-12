@@ -40,7 +40,8 @@ export interface TraceMeta {
 	schemaVersion: 1;
 }
 
-/** Chunk IMU colonnaire : timestamps delta-encodés depuis `t0` (ms entiers). */
+/** Chunk IMU colonnaire : `t0` = timestamp du premier échantillon, `dt` = deltas
+ *  CONSÉCUTIFS en ms entiers (reconstruction : t = t0 + cumul des dt). */
 export interface ImuChunk {
 	t0: number;
 	dt: number[];
@@ -117,12 +118,12 @@ export function traceFilename(meta: TraceMeta): string {
 export function downloadTrace(b: TraceBundle): void {
 	const blob = new Blob([bundleToJson(b)], { type: 'application/json' });
 	const url = URL.createObjectURL(blob);
-	try {
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = traceFilename(b.meta);
-		a.click();
-	} finally {
-		URL.revokeObjectURL(url);
-	}
+	const a = document.createElement('a');
+	a.href = url;
+	a.download = traceFilename(b.meta);
+	a.click();
+	// Révocation DIFFÉRÉE : sur certains navigateurs (Safari mobile notamment), le
+	// téléchargement d'un blob de plusieurs Mo démarre après le click() — révoquer
+	// immédiatement peut l'interrompre. 60 s laissent toute la marge nécessaire.
+	setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

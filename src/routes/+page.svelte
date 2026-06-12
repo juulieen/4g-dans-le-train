@@ -221,6 +221,7 @@
 	}
 
 	function toggleSensors() {
+		if (!sensorsSupported) return; // la checkbox est masquée, ceinture en plus
 		recordSensors = !recordSensors;
 		sensorPermDenied = false;
 		setSensorsOptIn(recordSensors);
@@ -1220,6 +1221,7 @@
 		color: var(--muted);
 		line-height: 1.4;
 	}
+	/* Ligne d'opt-in à checkbox — partagée par les cases « débit » et « capteurs ». */
 	.throughput-opt {
 		display: flex;
 		align-items: center;

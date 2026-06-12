@@ -271,14 +271,16 @@ Conventions produit :
   **map-matching par courbure** (le taux de rotation suit ω = v·κ le long du tracé)
   et la **détection d'arrêts en gare** (la variance d'accélération s'effondre à
   l'arrêt ; les gares sont des ancres connues). Cf. `src/lib/measure/motion.ts`,
-  `traceStore.ts`, `traceRecorder.ts`, `exportTrace.ts`.
+  `src/lib/measure/traceStore.ts`, `src/lib/measure/traceRecorder.ts`,
+  `src/lib/measure/exportTrace.ts`.
   - **Deux flux IMU** : échantillons décimés à **10 Hz** (dynamique d'un train =
     lente ; le 60 Hz brut serait 6× plus lourd pour rien) + **fenêtres agrégées
     1 s** (moyenne/écart-type des **normes** des vecteurs — invariantes à
     l'orientation du téléphone — calculées sur TOUS les événements bruts).
   - **Stockage IndexedDB** (`4gdt-trace`), pas localStorage : ~1 Mo/h sur 1-4 h de
-    session ne tient pas dans le quota localStorage déjà partagé. **Plafond dur
-    12 Mo** : au-delà, le flux IMU décimé est coupé (fenêtres + GPS continuent).
+    session ne tient pas dans le quota localStorage déjà partagé. **Deux plafonds** :
+    à 12 Mo le flux IMU décimé est coupé (fenêtres + GPS, légers, continuent) ; à
+    16 Mo plus rien n'est écrit du tout (garde-fou absolu, session oubliée).
   - **Vie privée** : la trace (qui contient des positions brutes !) ne quitte
     **JAMAIS** l'appareil — aucun envoi serveur, aucun champ en base. L'utilisateur
     l'**exporte lui-même** en JSON (bouton après l'arrêt) pour la partager
