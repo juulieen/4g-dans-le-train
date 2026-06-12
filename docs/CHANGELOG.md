@@ -3,6 +3,30 @@
 > Ajoute ici une entrée (date + résumé) pour toute évolution fonctionnelle ou de
 > contenu notable. Le plus récent en haut. Voir `../CLAUDE.md`.
 
+## 2026-06-12
+
+- **Mesure — robustesse GPS (retour de terrain TGV : session entière perdue faute de
+  fix assez précis)** : quatre durcissements de la chaîne de capture.
+  1. **Seuil de précision GPS assoupli 100 m → 300 m** (`geolocation.ts`) : dans un
+     TGV la précision dépasse souvent 100 m en continu ; un point à 300 m reste
+     exploitable (position arrondie à la cellule H3 ~150 m, ancres d'interpolation
+     validées à ≤ 1 km du tracé). La précision réelle reste stockée (`gpsAccuracy`).
+  2. **Correction d'une course au recalage** : au retour du GPS, si le tracé de la
+     ligne n'était pas encore chargé (il arrive par la réponse API de la 1re mesure
+     positionnée), tout le buffer de trou était **jeté silencieusement**. On le
+     conserve désormais (ancre d'entrée figée) et on retente au fix suivant, dans la
+     limite du garde-fou de 5 min.
+  3. **Buffer de trou GPS persistant** (`gapStore.ts`, clé `4gdt.gap`) : sauvé en
+     `localStorage` à chaque ping bufferisé → survit au **refresh de la page** et à
+     l'**arrêt de la session** (il était jeté). Restauré au démarrage suivant, élagué
+     de ce qui est devenu irrécupérable (> 5 min). La **reprise auto** complète le
+     tableau : si une mesure tournait il y a < 2 min (heartbeat `4gdt.measure.alive`
+     rafraîchi à chaque tick, effacé à l'arrêt volontaire), la page relance le mode
+     mesure toute seule au chargement, avec l'**opérateur persisté** (`4gdt.operator`).
+  4. **Vitesse des points recalés** : les mesures interpolées portent désormais la
+     **vitesse moyenne le long du tracé** entre les deux ancres (au lieu de `null`) —
+     même hypothèse de vitesse constante que la reconstruction des positions.
+
 ## 2026-06-04
 
 - **Pages ligne — aperçu de carte zoomé sur la ligne (branche `feat/og-share-cards`)** : les

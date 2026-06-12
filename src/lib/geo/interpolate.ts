@@ -94,9 +94,11 @@ export interface ReconstructOptions {
  *   - EXTRAPOLATION (cold-start) : `t` antérieur à l'entrée → `dt < 0`.
  *
  * Renvoie `null` si les garde-fous ne tiennent pas (tracé vide, ancres trop espacées
- * dans le temps, ou une ancre trop loin du tracé). Sinon un tableau aligné sur `times` :
- * chaque élément est la position reconstruite, ou `null` si l'instant est à plus de
- * `maxSpanMs` de l'entrée (reconstruction jugée trop lointaine).
+ * dans le temps, ou une ancre trop loin du tracé). Sinon les positions alignées sur
+ * `times` (chaque élément est la position reconstruite, ou `null` si l'instant est à
+ * plus de `maxSpanMs` de l'entrée — reconstruction jugée trop lointaine), accompagnées
+ * de la vitesse moyenne le long du tracé entre les deux ancres (km/h) : c'est la
+ * vitesse la plus honnête qu'on puisse attacher aux points reconstruits.
  */
 export function reconstructAlongPath(
 	path: PathPoint[],
@@ -104,8 +106,10 @@ export function reconstructAlongPath(
 	exit: Anchor,
 	times: number[],
 	opts: ReconstructOptions
-): Array<{ lat: number; lng: number } | null> | null {
-	if (path.length === 0) return null;
+): { positions: Array<{ lat: number; lng: number } | null>; speedKmh: number } | null {
+	// < 2 points : pas de tracé le long duquel interpoler (un point unique projetterait
+	// tout au même endroit avec une vitesse nulle, dégénéré).
+	if (path.length < 2) return null;
 	const span = exit.t - entry.t;
 	if (span <= 0 || span > opts.maxSpanMs) return null;
 
@@ -114,11 +118,13 @@ export function reconstructAlongPath(
 	if (a.offsetM > opts.snapMaxM || b.offsetM > opts.snapMaxM) return null;
 
 	const ratePerMs = (b.distKm - a.distKm) / span;
-	return times.map((t) => {
+	const positions = times.map((t) => {
 		const dt = t - entry.t;
 		if (Math.abs(dt) > opts.maxSpanMs) return null; // reconstruction trop lointaine
 		return positionAtDist(path, a.distKm + ratePerMs * dt);
 	});
+	// km/ms → km/h ; valeur absolue : le signe ne porte que le sens du parcours.
+	return { positions, speedKmh: Math.abs(ratePerMs) * 3_600_000 };
 }
 
 /**

@@ -18,8 +18,9 @@ import { measureDownlink } from './throughput';
 import { GeoTracker, type GeoSample } from './geolocation';
 import { ScreenWakeLock } from './wakeLock';
 import { readNetworkType, isOnWifi } from './netinfo';
-import { getSessionId, hasConsent } from './session';
+import { getSessionId, hasConsent, markMeasureAlive, clearMeasureAlive } from './session';
 import { MeasurementQueue, type QueuedMeasurement } from './queue';
+import { GapStore, type GapPing } from './gapStore';
 import { OutageDetector } from './outage';
 import { reconstructAlongPath, type PathPoint } from '$geo/interpolate';
 import { WIFI_TRAIN_OPERATOR } from '$lib/operators';
@@ -70,6 +71,9 @@ export interface LiveState {
 	gpsStale: boolean;
 	/** Nombre de coupures réseau détectées pendant la session (live, éphémère). */
 	outages: number;
+	/** Coupure EN COURS (réseau toujours perdu) : durée écoulée, rafraîchie à chaque
+	 *  tick (1 s) → l'UI affiche un chrono « pas de réseau depuis X s ». */
+	currentOutage: { sinceS: number } | null;
 	/** Dernière coupure clôturée, pour le retour « coupure de 1 min 40 s ». */
 	lastOutage: { durationS: number; lengthM: number } | null;
 	wakeLockActive: boolean;
@@ -101,6 +105,7 @@ const initialState: LiveState = {
 	queued: 0,
 	buffered: 0,
 	outages: 0,
+	currentOutage: null,
 	lastOutage: null,
 	gpsStale: false,
 	wakeLockActive: false,
@@ -138,20 +143,12 @@ const SNAP_MAX_M = 1_000;
 /** Plafond du buffer de trou (≈ MAX_GAP_MS / TICK_MS, avec un peu de marge). */
 const MAX_GAP_PINGS = 320;
 
-/** Ping bufferisé pendant un trou GPS (position reconstruite plus tard). */
-interface GapPing {
-	measuredAt: number;
-	status: PingStatus;
-	rttMs: number | null;
-	netType: string | null;
-	/** Connexion en wifi à l'instant du ping (tag `wifi-train` au recalage). */
-	onWifi: boolean;
-}
-
 export class MeasurementController {
 	private geo = new GeoTracker();
 	private wake = new ScreenWakeLock();
 	private queue = new MeasurementQueue();
+	/** Persistance du buffer de trou GPS : survit au refresh de la page et à l'arrêt. */
+	private gapStore = new GapStore();
 	/** Détection live des coupures (éphémère : alimente seulement l'UI, rien n'est
 	 *  persisté ici — la vérité stockée est dérivée côté serveur des mesures brutes). */
 	private detector = new OutageDetector();
@@ -231,9 +228,14 @@ export class MeasurementController {
 		}
 		// On conserve la file existante (mesures d'une session précédente non envoyées).
 		this.detector.reset();
-		// Réinitialise le suivi de trou GPS (le tracé chargé, lui, reste en cache).
-		this.gapEntry = null;
-		this.gapBuffer = [];
+		// Restaure un éventuel buffer de trou persisté (refresh de page, session arrêtée
+		// en/après tunnel) : ce qui est encore recalable (≤ 5 min) est repris, le reste
+		// élagué. Le slug persisté permet de re-précharger le tracé sans attendre la
+		// première mesure positionnée.
+		const restored = this.gapStore.load(Date.now(), MAX_GAP_MS);
+		this.gapEntry = restored?.entry ?? null;
+		this.gapBuffer = restored?.pings ?? [];
+		if (restored?.profileSlug) this.ensureProfile(restored.profileSlug);
 		this.lastGpsAt = 0;
 		this.gapStartedAt = null;
 		this.currentSample = null;
@@ -243,7 +245,12 @@ export class MeasurementController {
 		this.pendingDownlinkKbps = null;
 		this.throughputInFlight = false;
 		this.generation++;
-		this.patch({ ...initialState, running: true, queued: this.queue.size });
+		this.patch({
+			...initialState,
+			running: true,
+			queued: this.queue.size,
+			buffered: this.gapBuffer.length
+		});
 
 		const ok = this.geo.start(
 			(sample) => this.handleSample(sample),
@@ -286,9 +293,14 @@ export class MeasurementController {
 			clearInterval(this.tickTimer);
 			this.tickTimer = null;
 		}
-		// Trou GPS non refermé à l'arrêt (session finie en/après tunnel) : on JETTE le
-		// buffer. Sans reprise GPS « sur les rails », on ne peut ni placer ces pings ni
-		// confirmer que la personne n'a pas quitté le train.
+		// Arrêt volontaire : on efface le heartbeat pour que la page ne relance pas la
+		// mesure au prochain chargement.
+		clearMeasureAlive();
+		// Trou GPS non refermé à l'arrêt (session finie en/après tunnel) : le buffer est
+		// PERSISTÉ au lieu d'être jeté — la prochaine session le restaurera et pourra le
+		// recaler si une reprise GPS « sur les rails » arrive à temps (garde-fou ≤ 5 min,
+		// qui élague aussi ce qui aurait trop vieilli entre-temps).
+		this.persistGap();
 		this.gapBuffer = [];
 		this.gapEntry = null;
 		// Clôt proprement une coupure encore en cours (arrêt en zone blanche).
@@ -301,7 +313,13 @@ export class MeasurementController {
 		}
 		// Ultime tentative d'envoi de ce qui reste avant l'arrêt.
 		await this.flush();
-		this.patch({ running: false, status: 'idle', wakeLockActive: false, buffered: 0 });
+		this.patch({
+			running: false,
+			status: 'idle',
+			wakeLockActive: false,
+			buffered: 0,
+			currentOutage: null
+		});
 	}
 
 	private onOnline = () => void this.flush();
@@ -336,16 +354,31 @@ export class MeasurementController {
 		});
 
 		// Retour du GPS : si des pings ont été bufferisés (trou en trajet OU cold-start),
-		// on les place dès qu'on a un point d'ancrage `gapEntry`. Cas particulier du
-		// cold-start : au TOUT premier fix il n'y a pas encore d'ancre → on GARDE le
-		// buffer (sinon on perdrait la connectivité de départ) et on attend le 2e fix,
-		// qui donnera le sens du trajet pour extrapoler ces pings en arrière (commitGap).
+		// on les place dès qu'on a un point d'ancrage `gapEntry`. Cas particuliers où on
+		// GARDE le buffer (et on fige l'ancre d'entrée) au lieu de le jeter :
+		//  - cold-start : au TOUT premier fix il n'y a pas encore d'ancre → on attend le
+		//    fix suivant, qui donnera le sens du trajet pour extrapoler en arrière ;
+		//  - tracé pas encore chargé : il arrive par la réponse API de la 1re mesure
+		//    positionnée (+ un fetch), souvent APRÈS le fix qui referme le trou → on
+		//    retente au fix suivant plutôt que de perdre le buffer dans la course ;
+		//  - recalage refusé (reprise « hors-rails », fréquente au ré-accrochage GPS en
+		//    sortie de tunnel) : un fix on-rails peut suivre 1-2 s plus tard → on retente.
+		// L'attente est bornée : au-delà de MAX_GAP_MS depuis l'ancre, l'interpolation
+		// rejetterait tout de toute façon → on jette.
 		if (this.gapBuffer.length > 0 && this.gapEntry) {
-			this.commitGap(this.gapEntry, sample);
-			this.gapBuffer = [];
-			this.patch({ buffered: 0 });
+			const expired = sample.timestamp - this.gapEntry.timestamp > MAX_GAP_MS;
+			if (expired || (this.profilePath && this.commitGap(this.gapEntry, sample))) {
+				this.dropGap(sample);
+			}
+			// sinon : buffer + ancre conservés, nouvelle tentative au prochain fix.
+		} else if (this.gapBuffer.length > 0) {
+			// Cold-start : ce 1er fix devient l'ancre d'entrée, buffer conservé.
+			this.gapEntry = sample;
+			this.persistGap();
+		} else {
+			// Pas de trou en cours : ce fix est l'ancre d'entrée d'un éventuel futur trou.
+			this.gapEntry = sample;
 		}
-		this.gapEntry = sample;
 		this.lastGpsAt = sample.timestamp;
 		this.currentSample = sample;
 	}
@@ -361,6 +394,8 @@ export class MeasurementController {
 		this.busy = true;
 		try {
 			const now = Date.now();
+			// Heartbeat de reprise : prouve qu'une mesure tournait si la page recharge.
+			markMeasureAlive();
 			const { status, rttMs } = await ping(this.opts.endpoint);
 			const netType = readNetworkType();
 			const onWifi = isOnWifi();
@@ -452,11 +487,23 @@ export class MeasurementController {
 					});
 				}
 				// Bufferise pour rejeu ultérieur (consentement requis, comme le mode normal).
+				// Persisté à chaque ping : un refresh de page ne perd rien.
 				if (hasConsent() && this.gapBuffer.length < MAX_GAP_PINGS) {
 					this.gapBuffer.push({ measuredAt: now, status, rttMs, netType, onWifi });
+					this.persistGap();
 					this.patch({ buffered: this.gapBuffer.length });
 				}
 			}
+
+			// Chrono de la coupure EN COURS (épisode encore ouvert dans le détecteur) :
+			// rafraîchi à chaque tick → « pas de réseau depuis X s » dans l'UI.
+			const outageStart = this.detector.currentOutageStart();
+			this.patch({
+				currentOutage:
+					outageStart != null
+						? { sinceS: Math.max(0, Math.round((now - outageStart) / 1000)) }
+						: null
+			});
 
 			// Envoi en tâche de fond : ne bloque pas le tick suivant.
 			void this.flush();
@@ -477,19 +524,24 @@ export class MeasurementController {
 	 * N'enfile RIEN sans garde-fous : profil chargé, ancres ≤ 5 min d'écart, entrée ET
 	 * sortie « sur les rails » (preuve de non-sortie du train). Chaque ping reconstruit
 	 * à plus de 5 min de l'ancre est ignoré (extrapolation trop lointaine).
+	 *
+	 * Retourne true si la reconstruction a abouti (le buffer est soldé) ; false si un
+	 * garde-fou a refusé — l'appelant garde alors le buffer et retentera avec un fix
+	 * ultérieur (cas typique : sortie de tunnel avec un 1er fix encore hors-rails).
 	 */
-	private commitGap(entry: GeoSample, exit: GeoSample): void {
+	private commitGap(entry: GeoSample, exit: GeoSample): boolean {
 		const path = this.profilePath;
-		if (!path || this.gapBuffer.length === 0) return;
+		if (!path || this.gapBuffer.length === 0) return false;
 
-		const positions = reconstructAlongPath(
+		const reconstructed = reconstructAlongPath(
 			path,
 			{ lat: entry.lat, lng: entry.lng, t: entry.timestamp },
 			{ lat: exit.lat, lng: exit.lng, t: exit.timestamp },
 			this.gapBuffer.map((g) => g.measuredAt),
 			{ maxSpanMs: MAX_GAP_MS, snapMaxM: SNAP_MAX_M }
 		);
-		if (!positions) return; // garde-fous non réunis → buffer jeté par l'appelant
+		if (!reconstructed) return false; // garde-fous non réunis → l'appelant retentera
+		const { positions, speedKmh } = reconstructed;
 
 		const sessionId = getSessionId();
 		let placed = 0;
@@ -505,7 +557,9 @@ export class MeasurementController {
 				downlinkKbps: null,
 				operator: this.effectiveOperator(g.onWifi),
 				netType: g.netType,
-				speedKmh: null,
+				// Vitesse moyenne le long du tracé entre les deux ancres : c'est la même
+				// hypothèse (vitesse constante) que la reconstruction des positions.
+				speedKmh,
 				gpsAccuracy: null,
 				measuredAt: g.measuredAt,
 				sessionId,
@@ -517,6 +571,24 @@ export class MeasurementController {
 			this.patch({ queued: this.queue.size });
 			void this.flush();
 		}
+		return true;
+	}
+
+	/** Persiste l'état du trou en cours (survit au refresh et à l'arrêt). */
+	private persistGap(): void {
+		this.gapStore.save({
+			entry: this.gapEntry,
+			pings: this.gapBuffer,
+			profileSlug: this.profileSlug
+		});
+	}
+
+	/** Solde le trou en cours (recalé ou abandonné) : le fix courant redevient l'ancre. */
+	private dropGap(sample: GeoSample): void {
+		this.gapBuffer = [];
+		this.gapEntry = sample;
+		this.gapStore.clear();
+		this.patch({ buffered: 0 });
 	}
 
 	/**

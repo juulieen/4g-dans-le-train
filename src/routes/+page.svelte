@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy, getContext } from 'svelte';
+	import { onMount, onDestroy, getContext } from 'svelte';
 	import Map from '$components/Map.svelte';
 	import Icon from '$components/Icon.svelte';
 	import RouteProfile from '$components/RouteProfile.svelte';
@@ -13,7 +13,10 @@
 		hasOnboarded,
 		markOnboarded,
 		getThroughputOptIn,
-		setThroughputOptIn
+		setThroughputOptIn,
+		wasMeasuringRecently,
+		getSavedOperator,
+		setSavedOperator
 	} from '$measure/session';
 	import { levelFromKbps, USAGE_TEXT, USAGE_COLORS, OPERATOR_LABEL, USAGE_OPS } from '$lib/usage';
 	import { pluralS } from '$lib/plural';
@@ -37,7 +40,13 @@
 		{ value: 'inconnu', label: 'Je ne sais pas' }
 	];
 
-	let operator = $state<Operator>('inconnu');
+	// Opérateur restauré depuis le storage (survit au refresh — indispensable à la
+	// reprise auto, sinon une session reprise enverrait « inconnu »). En SSR, le
+	// helper renvoie null → 'inconnu' ; l'hydratation rétablit la valeur sauvée.
+	const savedOperator = getSavedOperator();
+	let operator = $state<Operator>(
+		OPERATORS.some((o) => o.value === savedOperator) ? (savedOperator as Operator) : 'inconnu'
+	);
 	let consent = $state(false);
 	// Opt-in débit (OFF par défaut ; consomme la data mobile de l'utilisateur).
 	let measureThroughput = $state(false);
@@ -114,6 +123,26 @@
 	$effect(() => {
 		consent = hasConsent();
 		measureThroughput = getThroughputOptIn();
+	});
+
+	// Persiste le choix d'opérateur à chaque changement (premier passage : réécrit la
+	// valeur qui vient d'être restaurée du storage — idempotent).
+	$effect(() => {
+		setSavedOperator(operator);
+	});
+
+	// Reprise auto après un refresh : si une mesure tournait il y a moins de 2 min
+	// (heartbeat rafraîchi à chaque tick, effacé à l'arrêt volontaire), la page a
+	// rechargé en cours de mesure (onglet déchargé, rotation, refresh accidentel) →
+	// on redémarre sans intervention. Le buffer de trou GPS et la file d'envoi sont
+	// eux aussi persistés : rien n'est perdu.
+	onMount(() => {
+		if (hasConsent() && wasMeasuringRecently()) {
+			consent = true;
+			// Lu directement (l'$effect ci-dessus n'a pas forcément encore tourné).
+			measureThroughput = getThroughputOptIn();
+			void ensureController().start();
+		}
 	});
 
 	function ensureController(): MeasurementController {
@@ -474,6 +503,9 @@
 						<div class="big {live.status}">
 							<span class="rec" aria-hidden="true"></span>
 							{statusLabel[live.status] ?? live.status}
+							{#if live.currentOutage}
+								<span class="since">· depuis {formatDuree(live.currentOutage.sinceS)}</span>
+							{/if}
 						</div>
 
 						{#if live.gpsStale}
@@ -808,6 +840,13 @@
 	}
 	.big.none {
 		color: var(--usage-none);
+	}
+	/* Chrono de la coupure en cours — chiffres tabulaires pour éviter le tremblement. */
+	.big .since {
+		font-size: 0.85rem;
+		font-weight: 600;
+		opacity: 0.85;
+		font-variant-numeric: tabular-nums;
 	}
 	.big {
 		display: flex;

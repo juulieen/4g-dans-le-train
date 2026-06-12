@@ -42,6 +42,8 @@ export interface QueuedMeasurement {
 export interface KeyValueStore {
 	getItem(key: string): string | null;
 	setItem(key: string, value: string): void;
+	/** Optionnel (web Storage l'a) : permet un vrai effacement de clé. */
+	removeItem?(key: string): void;
 }
 
 const QUEUE_KEY = '4gdt.queue';
