@@ -22,6 +22,7 @@ import { getSessionId, hasConsent, markMeasureAlive, clearMeasureAlive } from '.
 import { MeasurementQueue, type QueuedMeasurement } from './queue';
 import { GapStore, type GapPing } from './gapStore';
 import { OutageDetector } from './outage';
+import { SensorTraceRecorder } from './traceRecorder';
 import { reconstructAlongPath, type PathPoint } from '$geo/interpolate';
 import { WIFI_TRAIN_OPERATOR } from '$lib/operators';
 
@@ -85,6 +86,12 @@ export interface LiveState {
 	lastOutage: { durationS: number; lengthM: number } | null;
 	/** Derniers points enfilés (chronologique), pour le ticker « ce qu'on envoie ». */
 	lastSamples: SessionPoint[];
+	/** Trace capteurs expérimentale (opt-in) : enregistrement en cours. */
+	sensorRecording: boolean;
+	/** Taille approximative de la trace capteurs (octets), null tant qu'inconnue. */
+	sensorTraceBytes: number | null;
+	/** Plafond de la trace atteint : flux IMU coupé (fenêtres + GPS continuent). */
+	sensorTraceCapped: boolean;
 	wakeLockActive: boolean;
 	error: string | null;
 }
@@ -113,6 +120,8 @@ export interface ControllerOptions {
 	endpoint?: string;
 	/** Active la mesure de débit (opt-in : consomme la data mobile). Défaut false. */
 	measureThroughput?: boolean;
+	/** Active la trace capteurs expérimentale (opt-in, 100 % locale). Défaut false. */
+	recordSensors?: boolean;
 }
 
 const initialState: LiveState = {
@@ -138,6 +147,9 @@ const initialState: LiveState = {
 	currentOutage: null,
 	lastOutage: null,
 	lastSamples: [],
+	sensorRecording: false,
+	sensorTraceBytes: null,
+	sensorTraceCapped: false,
 	gpsStale: false,
 	wakeLockActive: false,
 	error: null
@@ -187,6 +199,14 @@ export class MeasurementController {
 	/** Détection live des coupures (éphémère : alimente seulement l'UI, rien n'est
 	 *  persisté ici — la vérité stockée est dérivée côté serveur des mesures brutes). */
 	private detector = new OutageDetector();
+	/** Trace capteurs expérimentale (opt-in) : IMU + GPS bruts, 100 % locale. */
+	private trace = new SensorTraceRecorder((s) =>
+		this.patch({
+			sensorRecording: s.recording,
+			sensorTraceBytes: s.bytes,
+			sensorTraceCapped: s.capped
+		})
+	);
 	private state: LiveState = { ...initialState };
 	private opts: ControllerOptions;
 	/** Évite les ticks concurrents si un ping traîne au-delà de la cadence. */
@@ -255,6 +275,11 @@ export class MeasurementController {
 		this.opts.measureThroughput = on;
 	}
 
+	/** Active/désactive la trace capteurs (opt-in). Pris en compte au prochain start. */
+	setRecordSensors(on: boolean) {
+		this.opts.recordSensors = on;
+	}
+
 	async start(): Promise<void> {
 		if (this.state.running) return;
 		if (!this.geo.isSupported) {
@@ -289,11 +314,20 @@ export class MeasurementController {
 
 		const ok = this.geo.start(
 			(sample) => this.handleSample(sample),
-			(err) => this.handleGeoError(err)
+			(err) => this.handleGeoError(err),
+			// Fixes BRUTS (avant filtre de précision) → trace capteurs expérimentale
+			// uniquement. No-op si l'enregistreur ne tourne pas.
+			(raw) => this.trace.recordRawGps(raw)
 		);
 		if (!ok) {
 			this.patch({ running: false, error: 'Impossible de démarrer le GPS.' });
 			return;
+		}
+
+		// Trace capteurs (opt-in) : démarrage en tâche de fond — l'enregistreur est
+		// best-effort et ne doit jamais retarder ni faire échouer la mesure.
+		if (this.opts.recordSensors) {
+			void this.trace.start({ operator: this.opts.operator, lineSlug: this.profileSlug });
 		}
 
 		const wakeOk = await this.wake.acquire();
@@ -318,6 +352,9 @@ export class MeasurementController {
 
 	async stop(): Promise<void> {
 		this.geo.stop();
+		// Solde la trace capteurs (flush final + pointeur effacé). La trace RESTE
+		// stockée localement : l'UI propose ensuite l'export ou l'effacement.
+		await this.trace.stop();
 		await this.wake.release();
 		if (typeof window !== 'undefined') window.removeEventListener('online', this.onOnline);
 		if (this.flushTimer !== null) {
@@ -653,6 +690,8 @@ export class MeasurementController {
 		if (!slug || slug === this.profileSlug) return;
 		this.profileSlug = slug;
 		this.profilePath = null;
+		// La trace capteurs note la ligne identifiée (métadonnées d'analyse).
+		this.trace.setLineSlug(slug);
 		void (async () => {
 			try {
 				const res = await fetch(`/data/route-profiles/${slug}.json`);

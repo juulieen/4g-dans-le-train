@@ -10,3 +10,4 @@ src/lib/geo/line-stats.json
 src/lib/geo/troncon-cells.json
 .claude/
 data/
+.mcp.json

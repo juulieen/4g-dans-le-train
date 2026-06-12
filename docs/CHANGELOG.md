@@ -5,6 +5,21 @@
 
 ## 2026-06-12
 
+- **Mesure — enregistreur de traces capteurs (expérimental, opt-in, 100 % local)** :
+  nouvelle case « Enregistrer les capteurs » dans le panneau mesure. Pendant la
+  session, capture **DeviceMotion** (accéléromètre + gyroscope : flux décimé 10 Hz +
+  fenêtres agrégées 1 s sur les normes) et **fixes GPS bruts** (avant filtre 300 m,
+  avec `accuracy`), horodatés en epoch ms. **But** : données jumelées IMU + GPS pour
+  valider hors-ligne le map-matching par courbure et la détection d'arrêts en gare
+  (pistes de localisation sans GPS, cf. PRODUCT.md). Stockage **IndexedDB**
+  (`4gdt-trace`, plafond 12 Mo), **jamais envoyé au serveur** — export JSON colonnaire
+  manuel (+ bouton Effacer) après l'arrêt. Permission iOS demandée au clic
+  « Démarrer » ; refus → opt-in désactivé, mesure normale intacte. Survit au refresh
+  (pointeur `4gdt.trace.active`, événement `resume`). Code : `motion.ts`,
+  `traceStore.ts`, `traceRecorder.ts`, `exportTrace.ts` (+ tests), callback GPS brut
+  `onRawSample` sur `GeoTracker.start`, `LiveState` gagne `sensorRecording` /
+  `sensorTraceBytes` / `sensorTraceCapped`.
+
 - **Mode mesure — tableau de bord live (carte + HUD honnête)** : pendant la mesure, la
   carte passe au premier plan. **Marqueur « vous êtes ici »** pulsant coloré par statut
   (rouge en coupure), **suivi caméra** débrayable (drag/molette → bouton « Recentrer »),

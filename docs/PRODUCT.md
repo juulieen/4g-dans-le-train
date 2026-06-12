@@ -262,6 +262,37 @@ Conventions produit :
     au-delà duquel le débit se met **en pause** (les pings, eux, continuent). L'UI
     affiche les **Mo consommés** par le test en direct. Le statut réseau (ok/dégradé/
     coupure) reste à 1/s et ne dépend pas du débit.
+- **Enregistreur de traces capteurs (expérimental, opt-in, 100 % local)** : case
+  « Enregistrer les capteurs » dans le panneau mesure. Pendant la session, l'app
+  capture **DeviceMotion** (accéléromètre avec gravité + gyroscope) et les **fixes
+  GPS bruts** (avant le filtre de précision 300 m, avec leur `accuracy`), le tout
+  horodaté en epoch ms. **But** : collecter des données réelles jumelées IMU + GPS
+  pour valider hors-ligne deux pistes de localisation **sans GPS** — le
+  **map-matching par courbure** (le taux de rotation suit ω = v·κ le long du tracé)
+  et la **détection d'arrêts en gare** (la variance d'accélération s'effondre à
+  l'arrêt ; les gares sont des ancres connues). Cf. `src/lib/measure/motion.ts`,
+  `traceStore.ts`, `traceRecorder.ts`, `exportTrace.ts`.
+  - **Deux flux IMU** : échantillons décimés à **10 Hz** (dynamique d'un train =
+    lente ; le 60 Hz brut serait 6× plus lourd pour rien) + **fenêtres agrégées
+    1 s** (moyenne/écart-type des **normes** des vecteurs — invariantes à
+    l'orientation du téléphone — calculées sur TOUS les événements bruts).
+  - **Stockage IndexedDB** (`4gdt-trace`), pas localStorage : ~1 Mo/h sur 1-4 h de
+    session ne tient pas dans le quota localStorage déjà partagé. **Plafond dur
+    12 Mo** : au-delà, le flux IMU décimé est coupé (fenêtres + GPS continuent).
+  - **Vie privée** : la trace (qui contient des positions brutes !) ne quitte
+    **JAMAIS** l'appareil — aucun envoi serveur, aucun champ en base. L'utilisateur
+    l'**exporte lui-même** en JSON (bouton après l'arrêt) pour la partager
+    volontairement, ou l'efface. Une seule trace stockée à la fois : la prochaine
+    session avec capteurs remplace la précédente.
+  - **Permission iOS 13+** : `DeviceMotionEvent.requestPermission()` est demandée
+    dans le geste « Démarrer la mesure » (exigence navigateur) ; un refus désactive
+    l'opt-in proprement, la mesure normale démarre quand même. Survit au refresh
+    comme la mesure (pointeur `4gdt.trace.active`, événement `resume` dans la
+    trace ; opt-in persisté en `4gdt.opt.sensors`).
+  - **Format d'export** : JSON colonnaire (tableaux parallèles, chargeable
+    directement en pandas/Observable) — `meta` (opérateur, ligne, userAgent,
+    timeOrigin), `imu` (chunks delta-encodés), `windows`, `gps`, `events`
+    (start/stop/resume). Tout en epoch ms → jointure IMU ↔ GPS triviale.
 - **Vie privée (non négociable)** : la position est **arrondie au centre de sa
   cellule H3 (~150 m)** AVANT envoi ; aucune donnée personnelle ; session =
   jeton anonyme jetable ; pas de trace continue ré-identifiable. Consentement

@@ -19,10 +19,15 @@
 		markOnboarded,
 		getThroughputOptIn,
 		setThroughputOptIn,
+		getSensorsOptIn,
+		setSensorsOptIn,
 		wasMeasuringRecently,
 		getSavedOperator,
 		setSavedOperator
 	} from '$measure/session';
+	import { MotionRecorder } from '$measure/motion';
+	import { storedTraceBytes, loadStoredTrace, clearStoredTrace } from '$measure/traceRecorder';
+	import { downloadTrace } from '$measure/exportTrace';
 	import { levelFromKbps, USAGE_TEXT, USAGE_COLORS, OPERATOR_LABEL, USAGE_OPS } from '$lib/usage';
 	import { pluralS } from '$lib/plural';
 	import { buildQrSvg } from '$lib/qr';
@@ -55,6 +60,14 @@
 	let consent = $state(false);
 	// Opt-in débit (OFF par défaut ; consomme la data mobile de l'utilisateur).
 	let measureThroughput = $state(false);
+	// Opt-in trace capteurs (expérimental, 100 % local — cf. $measure/traceRecorder).
+	let recordSensors = $state(false);
+	// Permission iOS des capteurs refusée : l'opt-in a été désactivé, on l'explique.
+	let sensorPermDenied = $state(false);
+	// DeviceMotion disponible (évalué côté client uniquement ; false en SSR).
+	let sensorsSupported = $state(false);
+	// Taille (octets) de la trace capteurs stockée, pour proposer export/effacement.
+	let storedTrace = $state(0);
 	let showArcep = $state(true);
 	let showCommunity = $state(true);
 	// Filtre d'AFFICHAGE de la carte (distinct de l'opérateur du mode mesure).
@@ -157,6 +170,9 @@
 	$effect(() => {
 		consent = hasConsent();
 		measureThroughput = getThroughputOptIn();
+		recordSensors = getSensorsOptIn();
+		sensorsSupported = MotionRecorder.support().devicemotion;
+		void storedTraceBytes().then((b) => (storedTrace = b));
 	});
 
 	// Persiste le choix d'opérateur à chaque changement (premier passage : réécrit la
@@ -175,6 +191,9 @@
 			consent = true;
 			// Lu directement (l'$effect ci-dessus n'a pas forcément encore tourné).
 			measureThroughput = getThroughputOptIn();
+			// Reprise auto : pas de geste utilisateur → pas de requestPermission possible.
+			// Si iOS a oublié la permission au refresh, la trace continue en GPS seul.
+			recordSensors = getSensorsOptIn();
 			void ensureController().start();
 		}
 	});
@@ -185,11 +204,13 @@
 				operator,
 				onState: (s) => (live = s),
 				onPoint: pushTrailPoint,
-				measureThroughput
+				measureThroughput,
+				recordSensors
 			});
 		}
 		controller.setOperator(operator);
 		controller.setMeasureThroughput(measureThroughput);
+		controller.setRecordSensors(recordSensors);
 		return controller;
 	}
 
@@ -199,15 +220,36 @@
 		controller?.setMeasureThroughput(measureThroughput);
 	}
 
+	function toggleSensors() {
+		recordSensors = !recordSensors;
+		sensorPermDenied = false;
+		setSensorsOptIn(recordSensors);
+		controller?.setRecordSensors(recordSensors);
+	}
+
 	async function toggleMeasure() {
 		const c = ensureController();
 		if (live?.running) {
 			await c.stop();
 			await refreshCoverage();
+			// La session vient de finir : propose l'export de la trace capteurs s'il y en a une.
+			storedTrace = await storedTraceBytes();
 		} else {
 			if (!consent) {
 				grantConsent();
 				consent = true;
+			}
+			// Permission capteurs iOS 13+ : à demander ICI, dans le geste utilisateur du
+			// clic « Démarrer ». Un refus désactive proprement l'opt-in (la mesure
+			// normale, elle, démarre quand même).
+			if (recordSensors && sensorsSupported) {
+				const perm = await MotionRecorder.requestPermission();
+				if (perm !== 'granted') {
+					recordSensors = false;
+					setSensorsOptIn(false);
+					c.setRecordSensors(false);
+					sensorPermDenied = true;
+				}
 			}
 			// Nouvelle session : sillage remis à zéro, et la carte passe au premier plan
 			// (sheet repliée en mini-HUD) — c'est elle le tableau de bord du trajet.
@@ -215,6 +257,16 @@
 			sheetExpanded = false;
 			await c.start();
 		}
+	}
+
+	async function exportSensorTrace() {
+		const bundle = await loadStoredTrace();
+		if (bundle) downloadTrace(bundle);
+	}
+
+	async function clearSensorTrace() {
+		await clearStoredTrace();
+		storedTrace = 0;
 	}
 
 	function toggleConsent() {
@@ -282,6 +334,13 @@
 	/** Longueur lisible : « 300 m », « 1,2 km ». */
 	function formatLongueur(m: number): string {
 		return m >= 1000 ? `${(m / 1000).toFixed(1).replace('.', ',')} km` : `${Math.round(m)} m`;
+	}
+
+	/** Taille lisible : « 42 Ko », « 1,3 Mo » (plancher 1 Ko pour rester non nul). */
+	function formatOctets(b: number): string {
+		return b >= 1024 * 1024
+			? `${(b / 1024 / 1024).toFixed(1).replace('.', ',')} Mo`
+			: `${Math.max(1, Math.round(b / 1024))} Ko`;
 	}
 
 	// Âge de la dernière mesure de débit (« il y a 40 s ») : un instantané d'1 min
@@ -579,6 +638,35 @@
 					</p>
 				{/if}
 
+				{#if sensorsSupported}
+					<label class="throughput-opt">
+						<input
+							type="checkbox"
+							name="record-sensors"
+							checked={recordSensors}
+							onchange={toggleSensors}
+							disabled={live?.running}
+						/>
+						Enregistrer les capteurs
+						<span class="data-warn"
+							>(expérimental — accéléromètre + gyroscope, 100&nbsp;% local)</span
+						>
+					</label>
+					{#if sensorPermDenied}
+						<p class="data-used">
+							Accès aux capteurs de mouvement refusé — enregistrement désactivé (la mesure
+							fonctionne normalement).
+						</p>
+					{/if}
+					{#if live?.running && live.sensorRecording}
+						<p class="data-used">
+							Trace capteurs : <strong>{formatOctets(live.sensorTraceBytes ?? 0)}</strong
+							>{#if live.sensorTraceCapped}
+								· plafond atteint, capteurs en pause{/if}
+						</p>
+					{/if}
+				{/if}
+
 				<button class="cta" class:running={live?.running} onclick={toggleMeasure}>
 					{live?.running ? 'Arrêter la mesure' : 'Démarrer la mesure'}
 				</button>
@@ -698,6 +786,23 @@
 								</ul>
 							</details>
 						{/if}
+					</div>
+				{/if}
+
+				{#if !live?.running && storedTrace > 0}
+					<!-- Trace capteurs de la session précédente : 100 % locale, à exporter
+					     soi-même (rien ne part au serveur). Remplacée à la prochaine session. -->
+					<div class="trace-box">
+						<p class="trace-note">
+							Trace capteurs enregistrée (<strong>{formatOctets(storedTrace)}</strong>), stockée
+							uniquement sur cet appareil. Elle sera remplacée à la prochaine session avec capteurs.
+						</p>
+						<div class="trace-actions">
+							<button type="button" class="share-btn" onclick={exportSensorTrace}>
+								Exporter la trace (JSON)
+							</button>
+							<button type="button" class="trace-clear" onclick={clearSensorTrace}>Effacer</button>
+						</div>
 					</div>
 				{/if}
 
@@ -1137,6 +1242,39 @@
 	.usage-tag {
 		font-size: 0.7rem;
 		font-weight: 400;
+	}
+
+	/* --- Trace capteurs (expérimental) : encart export/effacement après session --- */
+	.trace-box {
+		margin-top: 1rem;
+		padding: 0.6rem 0.75rem;
+		border: 1px solid var(--border);
+		border-radius: var(--r-md);
+		background: color-mix(in srgb, var(--panel) 60%, transparent);
+	}
+	.trace-note {
+		margin: 0 0 0.5rem;
+		font-size: 0.78rem;
+		color: var(--muted);
+		line-height: 1.4;
+	}
+	.trace-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--sp-3);
+	}
+	.trace-clear {
+		padding: 0.5rem 0.9rem;
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		background: transparent;
+		color: var(--muted);
+		font-size: var(--fs-sm);
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.trace-clear:hover {
+		color: var(--text);
 	}
 
 	/* --- Desktop : panneau latéral glass (pas de sheet) --- */
