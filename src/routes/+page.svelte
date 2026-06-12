@@ -5,7 +5,12 @@
 	import RouteProfile from '$components/RouteProfile.svelte';
 	import HintChip from '$components/Onboarding/HintChip.svelte';
 	import { RAIL_LINES } from '$geo/lines';
-	import { MeasurementController, type LiveState, type Operator } from '$measure/controller';
+	import {
+		MeasurementController,
+		type LiveState,
+		type Operator,
+		type SessionPoint
+	} from '$measure/controller';
 	import {
 		hasConsent,
 		grantConsent,
@@ -120,6 +125,35 @@
 
 	let controller: MeasurementController | null = null;
 
+	// --- Sillage de session (carte) : points 100 % locaux et éphémères -----------
+	// Jusqu'à plusieurs milliers de points à 1/s : tableau simple hors réactivité
+	// profonde ($state.raw), la carte est notifiée par réaffectation (setData ~1 Hz).
+	const MAX_TRAIL_POINTS = 7_200; // ~2 h à 1 point/s
+	let trailFeatures: GeoJSON.Feature[] = [];
+	let trail = $state.raw<GeoJSON.FeatureCollection>({ type: 'FeatureCollection', features: [] });
+	function pushTrailPoint(p: SessionPoint) {
+		trailFeatures.push({
+			type: 'Feature',
+			geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+			properties: { status: p.status, posSource: p.posSource }
+		});
+		if (trailFeatures.length > MAX_TRAIL_POINTS) {
+			trailFeatures.splice(0, trailFeatures.length - MAX_TRAIL_POINTS);
+		}
+		trail = { type: 'FeatureCollection', features: trailFeatures };
+	}
+	function resetTrail() {
+		trailFeatures = [];
+		trail = { type: 'FeatureCollection', features: trailFeatures };
+	}
+
+	// Marqueur « vous êtes ici » : position GPS courante + statut réseau du moment.
+	const livePos = $derived(
+		live?.running && live.lat != null && live.lng != null
+			? { lat: live.lat, lng: live.lng, status: live.status }
+			: null
+	);
+
 	$effect(() => {
 		consent = hasConsent();
 		measureThroughput = getThroughputOptIn();
@@ -150,6 +184,7 @@
 			controller = new MeasurementController({
 				operator,
 				onState: (s) => (live = s),
+				onPoint: pushTrailPoint,
 				measureThroughput
 			});
 		}
@@ -174,6 +209,10 @@
 				grantConsent();
 				consent = true;
 			}
+			// Nouvelle session : sillage remis à zéro, et la carte passe au premier plan
+			// (sheet repliée en mini-HUD) — c'est elle le tableau de bord du trajet.
+			resetTrail();
+			sheetExpanded = false;
 			await c.start();
 		}
 	}
@@ -244,6 +283,28 @@
 	function formatLongueur(m: number): string {
 		return m >= 1000 ? `${(m / 1000).toFixed(1).replace('.', ',')} km` : `${Math.round(m)} m`;
 	}
+
+	// Âge de la dernière mesure de débit (« il y a 40 s ») : un instantané d'1 min
+	// d'âge ne doit pas se faire passer pour du temps réel. Recalculé à chaque tick
+	// (l'objet `live` change toutes les secondes).
+	const downlinkAge = $derived.by(() => {
+		if (!live?.downlinkAt) return '';
+		const s = Math.max(0, Math.round((Date.now() - live.downlinkAt) / 1000));
+		return s < 5 ? "à l'instant" : `il y a ${formatDuree(s)}`;
+	});
+
+	/** Sparkline des débits de la session : polyline en viewBox 60×16. */
+	function sparkPoints(hist: number[]): string {
+		const recent = hist.slice(-30);
+		const max = Math.max(...recent, 1);
+		const n = Math.max(recent.length - 1, 1);
+		return recent
+			.map((v, i) => `${((i / n) * 60).toFixed(1)},${(15 - (v / max) * 13).toFixed(1)}`)
+			.join(' ');
+	}
+
+	/** Pastille du ticker des derniers envois. */
+	const STATUS_DOT: Record<string, string> = { ok: '✅', degraded: '⚠️', none: '❌' };
 
 	// --- Présentation : bottom-sheet + onboarding (aucune logique métier) ---
 	const ui = getContext<{ openOnboarding: () => void }>('ui');
@@ -337,7 +398,15 @@
 <section class="layout">
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div class="map-wrap" onpointerdown={onMapInteract}>
-		<Map {coverage} operator={viewOperator} {showArcep} {showCommunity} {focusBounds} />
+		<Map
+			{coverage}
+			operator={viewOperator}
+			{showArcep}
+			{showCommunity}
+			{focusBounds}
+			{livePos}
+			{trail}
+		/>
 		<button
 			class="info-fab glass"
 			onpointerdown={(e) => e.stopPropagation()}
@@ -373,6 +442,34 @@
 		</button>
 
 		<aside class="panel">
+			{#if live?.running}
+				<!-- Mini-HUD du mode mesure : visible dans la zone « peek » de la sheet repliée
+				     et collant en haut du panneau ouvert. Le détail reste plus bas (section mesure). -->
+				<div class="hud" aria-live="polite">
+					<div class="hud-status {live.status}">
+						<span class="rec" aria-hidden="true"></span>
+						<span class="hud-label">{statusLabel[live.status] ?? live.status}</span>
+						{#if live.currentOutage}
+							<span class="since">· depuis {formatDuree(live.currentOutage.sinceS)}</span>
+						{/if}
+						<button class="hud-stop" onclick={toggleMeasure}>Arrêter</button>
+					</div>
+					<p class="hud-row">
+						<strong>{captured}</strong>&nbsp;point{pluralS(captured)}
+						{#if measureThroughput}
+							{#if live.downlinkKbps != null}
+								· {(live.downlinkKbps / 1000).toFixed(1)} Mb/s
+								<span class="hud-age"
+									>{live.throughputMeasuring ? '(mesure…)' : `(${downlinkAge})`}</span
+								>
+							{:else if live.throughputMeasuring}
+								· débit&nbsp;: mesure…
+							{/if}
+						{/if}
+					</p>
+					<p class="hud-sync {syncInfo.cls}">{syncInfo.text}</p>
+				</div>
+			{/if}
 			<h1>Où ça capte dans le train&nbsp;?</h1>
 			<p class="lede">
 				Carte communautaire de la couverture mobile le long des lignes SNCF.
@@ -500,14 +597,8 @@
 
 				{#if live?.running}
 					<div class="live">
-						<div class="big {live.status}">
-							<span class="rec" aria-hidden="true"></span>
-							{statusLabel[live.status] ?? live.status}
-							{#if live.currentOutage}
-								<span class="since">· depuis {formatDuree(live.currentOutage.sinceS)}</span>
-							{/if}
-						</div>
-
+						<!-- Le statut, le compteur et la synchro vivent dans le mini-HUD en tête de
+						     panneau (visible sheet repliée) ; ici, le détail seulement. -->
 						{#if live.gpsStale}
 							<p class="warn" aria-live="polite">
 								<strong>En attente d'une position GPS précise…</strong> La mesure continue&nbsp;: si le
@@ -515,20 +606,13 @@
 							</p>
 						{/if}
 
-						<div class="captured" aria-live="polite">
-							<span class="count">{captured}</span>
-							<span class="unit">point{pluralS(captured)} enregistré{pluralS(captured)}</span>
-						</div>
-						<!-- Toujours rendue (hauteur réservée) → pas de saut de mise en page. -->
-						<p class="sync {syncInfo.cls}">{syncInfo.text}</p>
-
 						<dl>
 							<div>
 								<dt>Latence</dt>
 								<dd>{live.rttMs != null ? `${live.rttMs} ms` : '—'}</dd>
 							</div>
 							{#if measureThroughput}
-								<div>
+								<div class="debit-cell">
 									<dt>Débit</dt>
 									<dd>
 										{#if live.downlinkKbps != null}
@@ -538,8 +622,28 @@
 												style="color:{USAGE_COLORS[levelFromKbps(live.downlinkKbps)]}"
 												>· {USAGE_TEXT[levelFromKbps(live.downlinkKbps)]}</span
 											>
+											<span class="dd-age"
+												>{live.throughputMeasuring ? 'mesure en cours…' : downlinkAge}</span
+											>
+										{:else if live.throughputMeasuring}
+											<span class="dd-age">mesure en cours…</span>
 										{:else}
 											—
+										{/if}
+										{#if live.downlinkHistory.length > 1}
+											<svg
+												class="spark"
+												viewBox="0 0 60 16"
+												preserveAspectRatio="none"
+												aria-hidden="true"
+											>
+												<polyline
+													points={sparkPoints(live.downlinkHistory)}
+													fill="none"
+													stroke="currentColor"
+													stroke-width="1.5"
+												/>
+											</svg>
 										{/if}
 									</dd>
 								</div>
@@ -571,6 +675,28 @@
 								>{#if live.lastOutage.lengthM > 0}
 									· {formatLongueur(live.lastOutage.lengthM)}{/if}.
 							</p>
+						{/if}
+
+						{#if live.lastSamples.length > 0}
+							<!-- Transparence : ce qui part réellement au serveur (du plus récent au plus ancien). -->
+							<details class="ticker">
+								<summary>Derniers points envoyés</summary>
+								<ul>
+									{#each [...live.lastSamples].reverse() as s (s.measuredAt)}
+										<li>
+											<span class="tick-time"
+												>{new Date(s.measuredAt).toLocaleTimeString('fr-FR')}</span
+											>
+											{STATUS_DOT[s.status] ?? '·'}
+											{s.rttMs != null ? `${s.rttMs} ms` : '—'}
+											{#if s.downlinkKbps != null}
+												· {(s.downlinkKbps / 1000).toFixed(1)} Mb/s{/if}
+											{#if s.posSource === 'interpolated'}
+												· <em>recalé (tunnel)</em>{/if}
+										</li>
+									{/each}
+								</ul>
+							</details>
 						{/if}
 					</div>
 				{/if}
@@ -824,36 +950,80 @@
 	.live {
 		margin-top: 1rem;
 	}
-	.big {
-		font-size: 1.2rem;
-		font-weight: 700;
-		text-align: center;
-		padding: 0.6rem;
+
+	/* --- Mini-HUD du mode mesure (tête de panneau, visible sheet repliée) --- */
+	.hud {
+		position: sticky;
+		top: 0;
+		z-index: 2;
+		margin: 0 -0.25rem 0.75rem;
+		padding: 0.6rem 0.75rem;
 		border-radius: var(--r-md);
-		background: color-mix(in srgb, var(--panel) 60%, transparent);
+		background: color-mix(in srgb, var(--panel) 82%, transparent);
+		border: 1px solid var(--border);
 	}
-	.big.ok {
+	.hud-status {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 1.05rem;
+		font-weight: 700;
+	}
+	.hud-status.ok {
 		color: var(--usage-tbc);
 	}
-	.big.degraded {
+	.hud-status.degraded {
 		color: var(--usage-cl);
 	}
-	.big.none {
+	.hud-status.none {
 		color: var(--usage-none);
 	}
 	/* Chrono de la coupure en cours — chiffres tabulaires pour éviter le tremblement. */
-	.big .since {
+	.since {
 		font-size: 0.85rem;
 		font-weight: 600;
 		opacity: 0.85;
 		font-variant-numeric: tabular-nums;
 	}
-	.big {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
+	.hud-stop {
+		margin-left: auto;
+		padding: 0.3rem 0.7rem;
+		font-size: 0.78rem;
+		font-weight: 700;
+		border: none;
+		border-radius: 999px;
+		background: var(--usage-none);
+		color: #fff;
+		cursor: pointer;
 	}
+	.hud-row {
+		margin: 0.35rem 0 0;
+		font-size: 0.85rem;
+		color: var(--text);
+	}
+	.hud-row strong {
+		font-size: 1.05rem;
+		font-variant-numeric: tabular-nums;
+	}
+	.hud-age {
+		color: var(--muted);
+		font-size: 0.75rem;
+	}
+	/* Ligne d'état de synchro : hauteur réservée pour éviter tout saut de mise en page. */
+	.hud-sync {
+		min-height: 1.3em;
+		margin: 0.2rem 0 0;
+		font-size: 0.74rem;
+		color: var(--muted);
+		transition: color 0.2s;
+	}
+	.hud-sync.synced {
+		color: var(--usage-tbc);
+	}
+	.hud-sync.buffering {
+		color: var(--usage-cl);
+	}
+
 	/* Pastille « enregistrement en cours » qui pulse — repère visuel d'activité. */
 	.rec {
 		width: 0.6rem;
@@ -861,6 +1031,7 @@
 		border-radius: 50%;
 		background: currentColor;
 		animation: rec-pulse 1.4s ease-in-out infinite;
+		flex: none;
 	}
 	@keyframes rec-pulse {
 		0%,
@@ -878,39 +1049,45 @@
 			animation: none;
 		}
 	}
-	/* Compteur héro : « N points enregistrés ». Ne décroît jamais → rassurant. */
-	.captured {
-		display: flex;
-		align-items: baseline;
-		justify-content: center;
-		gap: 0.4rem;
-		margin-top: 0.6rem;
-	}
-	.captured .count {
-		font-size: 2rem;
-		font-weight: 800;
-		line-height: 1;
-		font-variant-numeric: tabular-nums;
-		color: var(--text);
-	}
-	.captured .unit {
-		font-size: var(--fs-sm);
+
+	/* Âge de la mesure de débit + sparkline de la session. */
+	.dd-age {
+		display: block;
 		color: var(--muted);
+		font-size: 0.7rem;
+		font-weight: 400;
 	}
-	/* Ligne d'état de synchro : hauteur réservée pour éviter tout saut de mise en page. */
-	.sync {
-		min-height: 1.4em;
-		margin: 0.35rem 0 0;
-		text-align: center;
+	.spark {
+		display: block;
+		width: 100%;
+		height: 16px;
+		margin-top: 0.25rem;
+		color: var(--accent);
+		opacity: 0.8;
+	}
+
+	/* Ticker « derniers points envoyés » (transparence sur ce qui part au serveur). */
+	.ticker {
+		margin-top: 0.6rem;
 		font-size: 0.78rem;
 		color: var(--muted);
-		transition: color 0.2s;
 	}
-	.sync.synced {
-		color: var(--usage-tbc);
+	.ticker summary {
+		cursor: pointer;
+		font-weight: 600;
 	}
-	.sync.buffering {
-		color: var(--usage-cl);
+	.ticker ul {
+		list-style: none;
+		margin: 0.35rem 0 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		font-variant-numeric: tabular-nums;
+	}
+	.tick-time {
+		color: var(--text);
+		font-weight: 600;
 	}
 	dl {
 		display: grid;

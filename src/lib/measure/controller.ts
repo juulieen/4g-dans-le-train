@@ -41,6 +41,13 @@ export interface LiveState {
 	rttMs: number | null;
 	/** Débit descendant (kbps) de la dernière mesure de débit. null si non mesuré. */
 	downlinkKbps: number | null;
+	/** Époch ms de la dernière mesure de débit réussie — l'UI affiche son âge
+	 *  (« il y a 40 s ») pour ne pas faire passer un instantané périmé pour du live. */
+	downlinkAt: number | null;
+	/** Une mesure de débit est en cours de téléchargement (← « mesure en cours… »). */
+	throughputMeasuring: boolean;
+	/** Débits (kbps) de la session dans l'ordre, pour la sparkline. Borné. */
+	downlinkHistory: number[];
 	/** Données consommées par les mesures de débit cette session (octets). */
 	dataUsedBytes: number;
 	/** Débit en pause car le plafond de données/session est atteint (pings continuent). */
@@ -76,13 +83,33 @@ export interface LiveState {
 	currentOutage: { sinceS: number } | null;
 	/** Dernière coupure clôturée, pour le retour « coupure de 1 min 40 s ». */
 	lastOutage: { durationS: number; lengthM: number } | null;
+	/** Derniers points enfilés (chronologique), pour le ticker « ce qu'on envoie ». */
+	lastSamples: SessionPoint[];
 	wakeLockActive: boolean;
 	error: string | null;
+}
+
+/**
+ * Un point de mesure positionné de la session courante, tel qu'enfilé pour envoi.
+ * Sert au sillage sur la carte et au ticker « derniers envois » — données 100 %
+ * locales et éphémères (la position brute n'est jamais persistée côté client).
+ */
+export interface SessionPoint {
+	lat: number;
+	lng: number;
+	status: PingStatus;
+	rttMs: number | null;
+	downlinkKbps: number | null;
+	measuredAt: number;
+	posSource: 'gps' | 'interpolated';
 }
 
 export interface ControllerOptions {
 	operator: Operator;
 	onState: (s: LiveState) => void;
+	/** Appelé pour chaque point positionné enfilé (sillage live sur la carte).
+	 *  Les points interpolés d'un tunnel arrivent en lot à la reprise du GPS. */
+	onPoint?: (p: SessionPoint) => void;
 	endpoint?: string;
 	/** Active la mesure de débit (opt-in : consomme la data mobile). Défaut false. */
 	measureThroughput?: boolean;
@@ -93,6 +120,9 @@ const initialState: LiveState = {
 	status: 'idle',
 	rttMs: null,
 	downlinkKbps: null,
+	downlinkAt: null,
+	throughputMeasuring: false,
+	downlinkHistory: [],
 	dataUsedBytes: 0,
 	throughputCapped: false,
 	lat: null,
@@ -107,6 +137,7 @@ const initialState: LiveState = {
 	outages: 0,
 	currentOutage: null,
 	lastOutage: null,
+	lastSamples: [],
 	gpsStale: false,
 	wakeLockActive: false,
 	error: null
@@ -128,6 +159,10 @@ const THROUGHPUT_INTERVAL_MS = 60_000;
 const PROBE_SIZE_BYTES = 128 * 1024;
 /** Plafond de données/session pour le débit (octets) — ~20 Mo, soit ~2,5 h à 7,5 Mo/h. */
 const THROUGHPUT_CAP_BYTES = 20 * 1024 * 1024;
+/** Taille max de l'historique des débits (sparkline) — 240 ≈ 4 h à 1 mesure/min. */
+const MAX_DOWNLINK_HISTORY = 240;
+/** Nombre de points gardés dans le ticker « derniers envois ». */
+const MAX_LAST_SAMPLES = 6;
 
 /**
  * Interpolation « depuis les rails » pendant un trou GPS (tunnel, tranchée).
@@ -468,6 +503,15 @@ export class MeasurementController {
 						sessionId: getSessionId()
 					});
 					this.patch({ queued: this.queue.size });
+					this.emitPoint({
+						lat: sample.lat,
+						lng: sample.lng,
+						status,
+						rttMs,
+						downlinkKbps,
+						measuredAt: now,
+						posSource: 'gps'
+					});
 				}
 			} else {
 				// --- Trou GPS / cold-start : ping bufferisé sans position ---
@@ -565,6 +609,16 @@ export class MeasurementController {
 				sessionId,
 				posSource: 'interpolated'
 			});
+			// Sillage : les points du tunnel apparaissent en lot, replacés sur le tracé.
+			this.emitPoint({
+				lat: pos.lat,
+				lng: pos.lng,
+				status: g.status,
+				rttMs: g.rttMs,
+				downlinkKbps: null,
+				measuredAt: g.measuredAt,
+				posSource: 'interpolated'
+			});
 			placed++;
 		});
 		if (placed > 0) {
@@ -622,6 +676,7 @@ export class MeasurementController {
 	private measureThroughputDetached(): void {
 		const gen = this.generation;
 		this.throughputInFlight = true;
+		this.patch({ throughputMeasuring: true });
 		void measureDownlink('/api/probe', PROBE_SIZE_BYTES)
 			.then((t) => {
 				if (gen !== this.generation || !this.state.running) return;
@@ -634,13 +689,29 @@ export class MeasurementController {
 				});
 				if (t.downlinkKbps != null) {
 					this.pendingDownlinkKbps = t.downlinkKbps;
-					this.patch({ downlinkKbps: t.downlinkKbps });
+					this.patch({
+						downlinkKbps: t.downlinkKbps,
+						downlinkAt: Date.now(),
+						// Historique borné : à 1 mesure/min, 240 entrées couvrent 4 h.
+						downlinkHistory: [...this.state.downlinkHistory, t.downlinkKbps].slice(
+							-MAX_DOWNLINK_HISTORY
+						)
+					});
 				}
 			})
 			.finally(() => {
 				// Ne libère le verrou que s'il s'agit toujours de la même session.
-				if (gen === this.generation) this.throughputInFlight = false;
+				if (gen === this.generation) {
+					this.throughputInFlight = false;
+					this.patch({ throughputMeasuring: false });
+				}
 			});
+	}
+
+	/** Alimente le ticker « derniers envois » et le sillage carte (local, éphémère). */
+	private emitPoint(p: SessionPoint): void {
+		this.patch({ lastSamples: [...this.state.lastSamples, p].slice(-MAX_LAST_SAMPLES) });
+		this.opts.onPoint?.(p);
 	}
 
 	/** Récupère le dernier débit mesuré et le consomme (ne le rattache qu'une fois). */

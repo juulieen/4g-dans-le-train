@@ -210,6 +210,25 @@ Conventions produit :
   de **relancer le mode mesure sans intervention**, avec l'opérateur persisté
   (`4gdt.operator`). Combiné à la file d'envoi et au buffer de trou persistants :
   un refresh ne perd rien.
+- **Tableau de bord live (la carte au premier plan pendant la mesure)** : au
+  démarrage, la sheet mobile se replie en **mini-HUD** (statut réseau + chrono de
+  coupure, compteur de points, débit daté, état de synchro, bouton Arrêter) et la
+  carte devient le tableau de bord :
+  - **marqueur « vous êtes ici »** pulsant, coloré selon le statut courant
+    (vert/orange/**rouge en coupure**), avec **suivi caméra** — débrayé au premier
+    geste sur la carte, réactivable par le bouton « Recentrer » ;
+  - **sillage de session** : une pastille colorée par tick positionné ; les points
+    de tunnel apparaissent **en lot à la sortie**, recalés sur le tracé et rendus
+    plus discrets (`posSource = 'interpolated'`). Les pastilles communautaires déjà
+    affichées devant soi servent à **anticiper les coupures**. **Vie privée** : le
+    sillage est construit côté client à partir des positions brutes, **éphémère et
+    jamais envoyé** — ce qui part au serveur reste arrondi à la cellule H3.
+  - **Honnêteté du temps réel** : la **coupure en cours** affiche un chrono
+    (« pas de réseau depuis 47 s », via `OutageDetector.currentOutageStart`) au lieu
+    de n'afficher que la dernière coupure close ; le **débit est daté** (« il y a
+    40 s », « mesure en cours… ») avec une **sparkline** de la session — un
+    instantané à 1/min ne doit pas se faire passer pour du courant. Un **ticker
+    « derniers points envoyés »** montre ce qui part réellement au serveur.
 - État dérivé : `ok` (ça capte) / `degraded` (lent) / `none` (ça coupe).
 - **Wi-Fi de bord (ne pas polluer la couverture mobile)** : si l'utilisateur reste
   branché sur le **Wi-Fi du train** tout en mesurant, le ping mesure ce Wi-Fi (et son
