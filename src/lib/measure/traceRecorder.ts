@@ -1,10 +1,12 @@
 /**
- * Façade de l'enregistreur de traces capteurs (outil expérimental, 100 % local).
+ * Façade de l'enregistreur de traces capteurs (outil expérimental, opt-in).
  *
  * Orchestre la capture DeviceMotion (motion.ts), la persistance IndexedDB
  * (traceStore.ts) et les fixes GPS bruts relayés par le contrôleur. Tient le
  * contrôleur à l'écart des détails : il ne voit que start/stop/recordRawGps et
- * un statut (enregistrement, taille, plafond).
+ * un statut (enregistrement, taille, plafond). L'ENVOI de la trace au serveur
+ * (uploadStoredTrace, en bas de fichier) est piloté par la page, pas par le
+ * contrôleur, et couvert par le consentement explicite de l'opt-in capteurs.
  *
  * Cycle de vie calqué sur la session de mesure :
  *  - `start()` reprend la trace existante si le pointeur local la désigne encore
@@ -20,6 +22,7 @@ import { MotionRecorder, IMU_TARGET_HZ, type ImuSample, type ImuWindow } from '.
 import { TraceStore } from './traceStore';
 import {
 	encodeImuChunk,
+	bundleToJson,
 	type RawGpsFix,
 	type TraceEvent,
 	type TraceBundle,
@@ -213,17 +216,53 @@ export class SensorTraceRecorder {
 
 // --- Accès à la trace STOCKÉE (page, hors session de mesure) -----------------
 
-/** Taille de la trace stockée (0 si aucune). */
-export async function storedTraceBytes(): Promise<number> {
-	if (!TraceStore.isSupported()) return 0;
+export interface StoredTraceInfo {
+	bytes: number;
+	/** Époch ms de l'envoi serveur réussi, null si la trace n'est pas (encore) partie. */
+	uploadedAt: number | null;
+}
+
+/** État de la trace stockée (null si aucune). */
+export async function storedTraceInfo(): Promise<StoredTraceInfo | null> {
+	if (!TraceStore.isSupported()) return null;
 	const store = new TraceStore();
-	return (await store.resume()) ? store.sizeBytes : 0;
+	const meta = await store.resume();
+	if (!meta) return null;
+	return { bytes: store.sizeBytes, uploadedAt: meta.uploadedAt ?? null };
 }
 
 /** Charge la trace stockée pour l'export. null si aucune. */
 export async function loadStoredTrace(): Promise<TraceBundle | null> {
 	if (!TraceStore.isSupported()) return null;
 	return new TraceStore().exportBundle();
+}
+
+/**
+ * Envoie la trace stockée au serveur (POST /api/traces). Le consentement est
+ * porté par l'opt-in capteurs lui-même, dont le libellé annonce explicitement
+ * l'envoi — l'appelant ne doit appeler ceci que si l'opt-in est actif.
+ * Idempotent : marque `uploadedAt` en cas de succès et ne renvoie pas deux fois.
+ * Retourne true si la trace est (déjà) sur le serveur, false sinon (l'appelant
+ * peut retenter plus tard — la trace reste stockée localement).
+ */
+export async function uploadStoredTrace(endpoint = '/api/traces'): Promise<boolean> {
+	if (!TraceStore.isSupported()) return false;
+	const store = new TraceStore();
+	const bundle = await store.exportBundle();
+	if (!bundle) return false;
+	if (bundle.meta.uploadedAt) return true; // déjà envoyée (refresh, retentative…)
+	try {
+		const res = await fetch(endpoint, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: bundleToJson(bundle)
+		});
+		if (!res.ok) return false;
+		await store.updateMeta({ uploadedAt: Date.now() });
+		return true;
+	} catch {
+		return false; // hors-ligne (fin de trajet en zone blanche) : on retentera
+	}
 }
 
 /** Efface la trace stockée (action explicite de l'utilisateur). */

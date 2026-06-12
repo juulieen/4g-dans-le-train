@@ -5,6 +5,18 @@
 
 ## 2026-06-12
 
+- **Traces capteurs — envoi serveur sur consentement explicite** : la case opt-in
+  devient « Enregistrer les capteurs **et partager la trace** » (le libellé annonce
+  l'envoi des positions GPS précises — consentement séparé, détaillé sur
+  `/confidentialite`, section dédiée ajoutée). À l'arrêt de la session, la trace est
+  envoyée automatiquement à `POST /api/traces` (nouveau endpoint : zod, rate-limit
+  5/h/IP, 16 Mo max, 500 traces max, stockage **fichiers** `data/traces/` gitignoré,
+  jamais en base) ; échec réseau → la trace reste locale, bouton « Envoyer la
+  trace » + reprise auto au prochain chargement (marqueur idempotent
+  `meta.uploadedAt`). Minimisation : pas de jeton de session, id aléatoire par
+  trace. ⚠️ Déploiement : `BODY_SIZE_LIMIT=20M` requis (posé dans
+  `docker-compose.yml`, documenté dans DEPLOY.md).
+
 - **Mesure — enregistreur de traces capteurs (expérimental, opt-in, 100 % local)** :
   nouvelle case « Enregistrer les capteurs » dans le panneau mesure. Pendant la
   session, capture **DeviceMotion** (accéléromètre + gyroscope : flux décimé 10 Hz +

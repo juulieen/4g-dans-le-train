@@ -16,3 +16,6 @@ services:
       - DATABASE_URL=file:/app/data/local.db
       # URL publique, utilisée pour les balises SEO / sitemap.
       - PUBLIC_SITE_URL=https://4g-dans-le-train.juulieen.fr
+      # Les traces capteurs (POST /api/traces, ~12-16 Mo) dépassent la limite de
+      # corps par défaut de l'adapter-node (512 Ko). Stockées dans data/traces/.
+      - BODY_SIZE_LIMIT=20M

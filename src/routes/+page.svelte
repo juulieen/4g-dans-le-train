@@ -26,7 +26,13 @@
 		setSavedOperator
 	} from '$measure/session';
 	import { MotionRecorder } from '$measure/motion';
-	import { storedTraceBytes, loadStoredTrace, clearStoredTrace } from '$measure/traceRecorder';
+	import {
+		storedTraceInfo,
+		loadStoredTrace,
+		clearStoredTrace,
+		uploadStoredTrace,
+		type StoredTraceInfo
+	} from '$measure/traceRecorder';
 	import { downloadTrace } from '$measure/exportTrace';
 	import { levelFromKbps, USAGE_TEXT, USAGE_COLORS, OPERATOR_LABEL, USAGE_OPS } from '$lib/usage';
 	import { pluralS } from '$lib/plural';
@@ -60,14 +66,18 @@
 	let consent = $state(false);
 	// Opt-in débit (OFF par défaut ; consomme la data mobile de l'utilisateur).
 	let measureThroughput = $state(false);
-	// Opt-in trace capteurs (expérimental, 100 % local — cf. $measure/traceRecorder).
+	// Opt-in trace capteurs (expérimental) : vaut consentement d'ENVOI de la trace
+	// en fin de session — le libellé de la case l'annonce (cf. /confidentialite).
 	let recordSensors = $state(false);
 	// Permission iOS des capteurs refusée : l'opt-in a été désactivé, on l'explique.
 	let sensorPermDenied = $state(false);
 	// DeviceMotion disponible (évalué côté client uniquement ; false en SSR).
 	let sensorsSupported = $state(false);
-	// Taille (octets) de la trace capteurs stockée, pour proposer export/effacement.
-	let storedTrace = $state(0);
+	// Trace capteurs stockée (taille + état d'envoi), pour l'encart post-session.
+	let storedTrace = $state<StoredTraceInfo | null>(null);
+	// Envoi de la trace au serveur en cours / dernier envoi échoué (retentable).
+	let traceUploading = $state(false);
+	let traceSendFailed = $state(false);
 	let showArcep = $state(true);
 	let showCommunity = $state(true);
 	// Filtre d'AFFICHAGE de la carte (distinct de l'opérateur du mode mesure).
@@ -172,7 +182,12 @@
 		measureThroughput = getThroughputOptIn();
 		recordSensors = getSensorsOptIn();
 		sensorsSupported = MotionRecorder.support().devicemotion;
-		void storedTraceBytes().then((b) => (storedTrace = b));
+		void storedTraceInfo().then((t) => {
+			storedTrace = t;
+			// Envoi resté en attente (fin de trajet hors réseau, page fermée trop tôt) :
+			// on retente à l'arrivée — sauf si une mesure va reprendre (elle s'en charge).
+			if (t && !t.uploadedAt && getSensorsOptIn() && !wasMeasuringRecently()) void sendTrace();
+		});
 	});
 
 	// Persiste le choix d'opérateur à chaque changement (premier passage : réécrit la
@@ -233,8 +248,10 @@
 		if (live?.running) {
 			await c.stop();
 			await refreshCoverage();
-			// La session vient de finir : propose l'export de la trace capteurs s'il y en a une.
-			storedTrace = await storedTraceBytes();
+			// La session vient de finir : envoi automatique de la trace capteurs (le
+			// consentement est porté par l'opt-in, dont le libellé annonce l'envoi).
+			storedTrace = await storedTraceInfo();
+			if (recordSensors && storedTrace && !storedTrace.uploadedAt) void sendTrace();
 		} else {
 			if (!consent) {
 				grantConsent();
@@ -267,7 +284,18 @@
 
 	async function clearSensorTrace() {
 		await clearStoredTrace();
-		storedTrace = 0;
+		storedTrace = null;
+		traceSendFailed = false;
+	}
+
+	/** Envoie la trace au serveur ; en cas d'échec elle reste locale et retentable. */
+	async function sendTrace() {
+		if (traceUploading) return;
+		traceUploading = true;
+		const ok = await uploadStoredTrace();
+		traceUploading = false;
+		traceSendFailed = !ok;
+		storedTrace = await storedTraceInfo();
 	}
 
 	function toggleConsent() {
@@ -648,9 +676,11 @@
 							onchange={toggleSensors}
 							disabled={live?.running}
 						/>
-						Enregistrer les capteurs
+						Enregistrer les capteurs et partager la trace
 						<span class="data-warn"
-							>(expérimental — accéléromètre + gyroscope, 100&nbsp;% local)</span
+							>(expérimental — accéléromètre, gyroscope et positions GPS précises du trajet, envoyés
+							anonymement en fin de session&nbsp;; quelques Mo.
+							<a href="/confidentialite">Détails</a>)</span
 						>
 					</label>
 					{#if sensorPermDenied}
@@ -790,17 +820,31 @@
 					</div>
 				{/if}
 
-				{#if !live?.running && storedTrace > 0}
-					<!-- Trace capteurs de la session précédente : 100 % locale, à exporter
-					     soi-même (rien ne part au serveur). Remplacée à la prochaine session. -->
+				{#if !live?.running && storedTrace}
+					<!-- Trace capteurs de la session précédente : envoyée automatiquement si
+					     l'opt-in (= consentement explicite) est actif ; sinon export manuel.
+					     En cas d'échec réseau elle reste locale et retentable. -->
 					<div class="trace-box">
 						<p class="trace-note">
-							Trace capteurs enregistrée (<strong>{formatOctets(storedTrace)}</strong>), stockée
-							uniquement sur cet appareil. Elle sera remplacée à la prochaine session avec capteurs.
+							Trace capteurs enregistrée (<strong>{formatOctets(storedTrace.bytes)}</strong>)&nbsp;—
+							{#if traceUploading}
+								envoi en cours…
+							{:else if storedTrace.uploadedAt}
+								envoyée, merci&nbsp;! Elle sera remplacée à la prochaine session avec capteurs.
+							{:else if traceSendFailed}
+								l'envoi a échoué (pas de réseau&nbsp;?), elle reste sur cet appareil.
+							{:else}
+								stockée sur cet appareil.
+							{/if}
 						</p>
 						<div class="trace-actions">
-							<button type="button" class="share-btn" onclick={exportSensorTrace}>
-								Exporter la trace (JSON)
+							{#if !storedTrace.uploadedAt && !traceUploading}
+								<button type="button" class="share-btn" onclick={sendTrace}>
+									Envoyer la trace
+								</button>
+							{/if}
+							<button type="button" class="trace-clear" onclick={exportSensorTrace}>
+								Exporter (JSON)
 							</button>
 							<button type="button" class="trace-clear" onclick={clearSensorTrace}>Effacer</button>
 						</div>

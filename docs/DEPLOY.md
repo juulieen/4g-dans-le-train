@@ -57,6 +57,14 @@ docker compose exec 4g-dans-le-train bun run scripts/migrate.ts
 > utilisez un runner CI avec `actions/checkout`, mettez `clean: false` pour ne
 > pas effacer la base gitignorée.
 
+Le bind-mount `./data` héberge aussi `data/traces/` : les **traces capteurs**
+envoyées par les volontaires (`POST /api/traces`, fichiers JSON de ~12-16 Mo,
+données de localisation précises — gitignorées, à ne jamais committer ni
+publier). L'endpoint exige `BODY_SIZE_LIMIT=20M` (posé dans
+`docker-compose.yml` ; l'adapter-node limite sinon le corps des requêtes à
+512 Ko). Sans cette variable, l'envoi des traces échoue en 413, le reste de
+l'app fonctionne normalement.
+
 ## 3. Reverse proxy Caddy
 
 Ajouter le bloc de `Caddyfile.example` au `Caddyfile` de l'hôte :

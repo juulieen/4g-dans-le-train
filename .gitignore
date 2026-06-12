@@ -28,3 +28,10 @@ vite.config.ts.timestamp-*
 !/static/data/arcep-coverage.geojson
 
 .DS_Store
+
+# Traces capteurs reçues (POST /api/traces) : données de localisation précises
+# de volontaires — ne JAMAIS committer.
+/data/traces/
+
+# Outillage local Claude Code (worktrees, état de session)
+/.claude/

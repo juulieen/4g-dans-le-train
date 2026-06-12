@@ -38,9 +38,41 @@
 	<h2>Ce que nous ne collectons pas</h2>
 	<ul>
 		<li>Aucune donnée personnelle (nom, e-mail, numéro, identifiant d'appareil).</li>
-		<li>Aucune trace GPS continue ré-identifiable.</li>
+		<li>
+			Aucune trace GPS continue ré-identifiable — sauf si vous activez explicitement la trace
+			capteurs expérimentale ci-dessous, qui fait l'objet d'un consentement séparé.
+		</li>
 		<li>Aucun cookie publicitaire, aucun tracker tiers.</li>
 	</ul>
+
+	<h2>Trace capteurs expérimentale (consentement séparé)</h2>
+	<p>
+		La case «&nbsp;<strong>Enregistrer les capteurs et partager la trace</strong>&nbsp;» du mode
+		mesure est un programme expérimental, <strong>désactivé par défaut</strong>, qui sert à
+		rechercher comment localiser les mesures sans GPS (tunnels). En la cochant, vous acceptez qu'à
+		la fin de la session une <strong>trace technique du trajet</strong> soit envoyée aux développeurs.
+		Elle contient&nbsp;:
+	</p>
+	<ul>
+		<li>
+			les <strong>positions GPS précises</strong> (non arrondies) relevées pendant la session — c'est
+			l'exception à la règle d'arrondi ci-dessus, et la raison du consentement séparé&nbsp;;
+		</li>
+		<li>les mesures d'<strong>accéléromètre et de gyroscope</strong> du téléphone&nbsp;;</li>
+		<li>
+			le <strong>modèle de navigateur</strong> (user-agent) et l'opérateur déclaré — aucun nom,
+			aucun identifiant de compte, et <strong>pas</strong> le jeton de session des mesures.
+		</li>
+	</ul>
+	<p>
+		Chaque trace porte un identifiant aléatoire indépendant&nbsp;: deux traces d'une même personne
+		ne sont pas reliables entre elles. Les traces servent uniquement à l'analyse du projet (open
+		source), ne sont jamais publiées telles quelles et peuvent être supprimées sur simple demande
+		(issue GitHub, en indiquant la date du trajet). Tant que la case n'est pas cochée, rien de tout
+		cela n'est ni enregistré ni envoyé. Après la session, le bouton «&nbsp;Exporter&nbsp;» vous
+		permet de télécharger votre propre trace pour voir exactement ce qu'elle contient, et
+		«&nbsp;Effacer&nbsp;» la supprime de votre appareil.
+	</p>
 
 	<h2>Vos droits</h2>
 	<p>

@@ -262,11 +262,11 @@ Conventions produit :
     au-delà duquel le débit se met **en pause** (les pings, eux, continuent). L'UI
     affiche les **Mo consommés** par le test en direct. Le statut réseau (ok/dégradé/
     coupure) reste à 1/s et ne dépend pas du débit.
-- **Enregistreur de traces capteurs (expérimental, opt-in, 100 % local)** : case
-  « Enregistrer les capteurs » dans le panneau mesure. Pendant la session, l'app
-  capture **DeviceMotion** (accéléromètre avec gravité + gyroscope) et les **fixes
-  GPS bruts** (avant le filtre de précision 300 m, avec leur `accuracy`), le tout
-  horodaté en epoch ms. **But** : collecter des données réelles jumelées IMU + GPS
+- **Enregistreur de traces capteurs (expérimental, opt-in, consentement séparé)** :
+  case « Enregistrer les capteurs et partager la trace » dans le panneau mesure.
+  Pendant la session, l'app capture **DeviceMotion** (accéléromètre avec gravité +
+  gyroscope) et les **fixes GPS bruts** (avant le filtre de précision 300 m, avec
+  leur `accuracy`), le tout horodaté en epoch ms. **But** : collecter des données réelles jumelées IMU + GPS
   pour valider hors-ligne deux pistes de localisation **sans GPS** — le
   **map-matching par courbure** (le taux de rotation suit ω = v·κ le long du tracé)
   et la **détection d'arrêts en gare** (la variance d'accélération s'effondre à
@@ -281,11 +281,26 @@ Conventions produit :
     session ne tient pas dans le quota localStorage déjà partagé. **Deux plafonds** :
     à 12 Mo le flux IMU décimé est coupé (fenêtres + GPS, légers, continuent) ; à
     16 Mo plus rien n'est écrit du tout (garde-fou absolu, session oubliée).
-  - **Vie privée** : la trace (qui contient des positions brutes !) ne quitte
-    **JAMAIS** l'appareil — aucun envoi serveur, aucun champ en base. L'utilisateur
-    l'**exporte lui-même** en JSON (bouton après l'arrêt) pour la partager
-    volontairement, ou l'efface. Une seule trace stockée à la fois : la prochaine
-    session avec capteurs remplace la précédente.
+  - **Vie privée (consentement SÉPARÉ — exception encadrée à la règle d'arrondi)** :
+    la trace contient des **positions brutes**, donc elle ne relève pas du
+    consentement « mesures anonymisées ». L'opt-in capteurs est un consentement
+    distinct dont le **libellé annonce explicitement l'envoi** (« positions GPS
+    précises du trajet, envoyés anonymement en fin de session »), détaillé sur
+    `/confidentialite`. À l'arrêt de la session, la trace est **envoyée
+    automatiquement** à `POST /api/traces` ; en cas d'échec (fin de trajet hors
+    réseau) elle reste locale et est **retentée** (bouton « Envoyer la trace » +
+    reprise auto au prochain chargement si l'opt-in est actif). Marqueur
+    `meta.uploadedAt` → l'envoi est idempotent. **Minimisation** : pas de jeton de
+    session joint, id de trace aléatoire par trace (deux traces d'une même personne
+    ne sont pas reliables), suppression sur demande. L'utilisateur peut aussi
+    **exporter** sa trace en JSON ou l'**effacer**. Une seule trace stockée à la
+    fois : la prochaine session avec capteurs remplace la précédente.
+  - **Côté serveur** (`src/routes/api/traces/+server.ts`) : validation zod légère,
+    rate-limit 5/h par IP, plafond 16 Mo par trace et 500 traces stockées ; les
+    traces sont écrites en **fichiers** dans `data/traces/` (bind-mount persistant,
+    JAMAIS en base, JAMAIS commité — cf. `.gitignore`), analyse manuelle. ⚠️
+    Nécessite `BODY_SIZE_LIMIT=20M` (adapter-node limite à 512 Ko par défaut),
+    posé dans `docker-compose.yml`.
   - **Permission iOS 13+** : `DeviceMotionEvent.requestPermission()` est demandée
     dans le geste « Démarrer la mesure » (exigence navigateur) ; un refus désactive
     l'opt-in proprement, la mesure normale démarre quand même. Survit au refresh

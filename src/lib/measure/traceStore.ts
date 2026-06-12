@@ -3,9 +3,10 @@
  *
  * POURQUOI IndexedDB et pas localStorage (contrairement à gapStore/queue) : une
  * session de train dure 1 à 4 h et la trace pèse ~1 Mo/h — le quota localStorage
- * (~5 Mo, déjà partagé avec la file d'envoi) ne tient pas. Les données restent
- * 100 % LOCALES : rien de ce store ne part jamais au serveur (vie privée projet) ;
- * l'utilisateur exporte lui-même le JSON.
+ * (~5 Mo, déjà partagé avec la file d'envoi) ne tient pas. Ce store est purement
+ * local ; la trace n'en sort que par deux chemins explicites : l'export JSON
+ * manuel, et l'envoi serveur couvert par le consentement dédié de l'opt-in
+ * capteurs (cf. traceRecorder.uploadStoredTrace et /confidentialite).
  *
  * Modèle simple : une seule trace vivante. `begin()` repart de zéro (la trace
  * précédente, conservée après l'arrêt pour l'export, est alors remplacée) ;

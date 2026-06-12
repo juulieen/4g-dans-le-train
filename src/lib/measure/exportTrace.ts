@@ -38,6 +38,8 @@ export interface TraceMeta {
 	imuHz: number;
 	accelField: 'accelerationIncludingGravity';
 	schemaVersion: 1;
+	/** Époch ms de l'envoi serveur réussi (absent tant que la trace n'est pas partie). */
+	uploadedAt?: number;
 }
 
 /** Chunk IMU colonnaire : `t0` = timestamp du premier échantillon, `dt` = deltas
