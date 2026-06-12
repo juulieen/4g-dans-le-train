@@ -17,14 +17,23 @@ import { ping, type PingStatus } from './ping';
 import { measureDownlink } from './throughput';
 import { GeoTracker, type GeoSample } from './geolocation';
 import { ScreenWakeLock } from './wakeLock';
-import { readNetworkType } from './netinfo';
+import { readNetworkType, isOnWifi } from './netinfo';
 import { getSessionId, hasConsent, markMeasureAlive, clearMeasureAlive } from './session';
 import { MeasurementQueue, type QueuedMeasurement } from './queue';
 import { GapStore, type GapPing } from './gapStore';
 import { OutageDetector } from './outage';
 import { reconstructAlongPath, type PathPoint } from '$geo/interpolate';
+import { WIFI_TRAIN_OPERATOR } from '$lib/operators';
 
 export type Operator = 'orange' | 'sfr' | 'free' | 'bouygues' | 'autre' | 'inconnu';
+
+/**
+ * Opérateur effectif d'UNE mesure : si la connexion est détectée en wifi (wifi de
+ * bord), on tague `wifi-train` au lieu de l'opérateur mobile choisi, pour ne pas
+ * polluer la couverture mobile. C'est une valeur de la couche mesure UNIQUEMENT —
+ * exclue du référentiel SEO `OPERATORS` et de la couche ARCEP.
+ */
+export type MeasuredOperator = Operator | typeof WIFI_TRAIN_OPERATOR;
 
 export interface LiveState {
 	running: boolean;
@@ -41,12 +50,25 @@ export interface LiveState {
 	speedKmh: number | null;
 	accuracy: number | null;
 	netType: string | null;
+	/**
+	 * Connexion détectée en wifi (wifi de bord) : la mesure est alors taguée
+	 * `wifi-train` et non l'opérateur mobile. `false` si l'info est indisponible
+	 * (iOS/Firefox) — on ne peut pas conclure, d'où le rappel statique côté UI.
+	 */
+	onWifi: boolean;
 	/** Mesures confirmées côté serveur. */
 	sent: number;
 	/** Mesures en attente d'envoi (hors-ligne / tunnel). */
 	queued: number;
 	/** Pings capturés sans position (trou GPS), en attente de recalage sur le tracé. */
 	buffered: number;
+	/**
+	 * Aucune position GPS précise depuis plus de MAX_GAP_MS (5 min) : la fenêtre
+	 * d'interpolation est dépassée, les pings bufferisés ne pourront plus être recalés.
+	 * Cas typique : ordinateur sans vrai GPS. La mesure CONTINUE (si le GPS finit par
+	 * accrocher, on enregistre) — ce drapeau ne sert qu'à informer l'UI.
+	 */
+	gpsStale: boolean;
 	/** Nombre de coupures réseau détectées pendant la session (live, éphémère). */
 	outages: number;
 	/** Coupure EN COURS (réseau toujours perdu) : durée écoulée, rafraîchie à chaque
@@ -78,12 +100,14 @@ const initialState: LiveState = {
 	speedKmh: null,
 	accuracy: null,
 	netType: null,
+	onWifi: false,
 	sent: 0,
 	queued: 0,
 	buffered: 0,
 	outages: 0,
 	currentOutage: null,
 	lastOutage: null,
+	gpsStale: false,
 	wakeLockActive: false,
 	error: null
 };
@@ -155,6 +179,11 @@ export class MeasurementController {
 	// --- Suivi GPS (cache de position + interpolation des trous) ----------------
 	/** Époch ms du dernier point GPS valide (pour détecter le trou). */
 	private lastGpsAt = 0;
+	/**
+	 * Époch ms du début du trou GPS courant (1er tick sans position fraîche), ou null
+	 * si le GPS est frais. Sert à détecter le dépassement de MAX_GAP_MS (cf. gpsStale).
+	 */
+	private gapStartedAt: number | null = null;
 	/** Dernière position GPS connue (le tick mesure « avec » elle quand elle est fraîche). */
 	private currentSample: GeoSample | null = null;
 	/** Dernier point GPS avant le trou en cours (point d'entrée à interpoler). */
@@ -175,6 +204,15 @@ export class MeasurementController {
 
 	setOperator(operator: Operator) {
 		this.opts.operator = operator;
+	}
+
+	/**
+	 * Opérateur réellement stocké pour une mesure : `wifi-train` si la connexion est
+	 * détectée en wifi (on ne crédite pas un opérateur mobile d'une mesure faite sur
+	 * le wifi de bord), sinon l'opérateur choisi par l'utilisateur.
+	 */
+	private effectiveOperator(onWifi: boolean): MeasuredOperator {
+		return onWifi ? WIFI_TRAIN_OPERATOR : this.opts.operator;
 	}
 
 	/** Active/désactive la mesure de débit (opt-in). Modifiable même mode arrêté. */
@@ -199,6 +237,7 @@ export class MeasurementController {
 		this.gapBuffer = restored?.pings ?? [];
 		if (restored?.profileSlug) this.ensureProfile(restored.profileSlug);
 		this.lastGpsAt = 0;
+		this.gapStartedAt = null;
 		this.currentSample = null;
 		// Réinitialise le suivi de débit (et invalide une mesure de débit en vol).
 		this.lastThroughputAt = 0;
@@ -359,10 +398,22 @@ export class MeasurementController {
 			markMeasureAlive();
 			const { status, rttMs } = await ping(this.opts.endpoint);
 			const netType = readNetworkType();
-			this.patch({ status, rttMs, netType });
+			const onWifi = isOnWifi();
+			this.patch({ status, rttMs, netType, onWifi });
 
 			const sample = this.currentSample;
 			const fresh = sample !== null && now - this.lastGpsAt <= GAP_THRESHOLD_MS;
+
+			// Suivi du trou GPS courant : on note quand il commence pour signaler (gpsStale)
+			// le dépassement de la fenêtre d'interpolation (MAX_GAP_MS). La mesure n'est
+			// JAMAIS interrompue — si le GPS finit par accrocher, on repasse en mode normal.
+			if (fresh) {
+				this.gapStartedAt = null;
+			} else if (this.gapStartedAt === null) {
+				this.gapStartedAt = now;
+			}
+			const gpsStale = this.gapStartedAt !== null && now - this.gapStartedAt > MAX_GAP_MS;
+			if (gpsStale !== this.state.gpsStale) this.patch({ gpsStale });
 
 			if (fresh && sample) {
 				// --- Mode normal : mesure positionnée ---
@@ -409,7 +460,7 @@ export class MeasurementController {
 						status,
 						rttMs,
 						downlinkKbps,
-						operator: this.opts.operator,
+						operator: this.effectiveOperator(onWifi),
 						netType,
 						speedKmh: sample.speedKmh,
 						gpsAccuracy: sample.accuracy,
@@ -438,7 +489,7 @@ export class MeasurementController {
 				// Bufferise pour rejeu ultérieur (consentement requis, comme le mode normal).
 				// Persisté à chaque ping : un refresh de page ne perd rien.
 				if (hasConsent() && this.gapBuffer.length < MAX_GAP_PINGS) {
-					this.gapBuffer.push({ measuredAt: now, status, rttMs, netType });
+					this.gapBuffer.push({ measuredAt: now, status, rttMs, netType, onWifi });
 					this.persistGap();
 					this.patch({ buffered: this.gapBuffer.length });
 				}
@@ -488,7 +539,6 @@ export class MeasurementController {
 		if (!reconstructed) return; // garde-fous non réunis → buffer jeté par l'appelant
 		const { positions, speedKmh } = reconstructed;
 
-		const operator = this.opts.operator;
 		const sessionId = getSessionId();
 		let placed = 0;
 		this.gapBuffer.forEach((g, i) => {
@@ -501,7 +551,7 @@ export class MeasurementController {
 				rttMs: g.rttMs,
 				// Pas de débit en tunnel (jamais mesuré sur le chemin interpolé).
 				downlinkKbps: null,
-				operator,
+				operator: this.effectiveOperator(g.onWifi),
 				netType: g.netType,
 				// Vitesse moyenne le long du tracé entre les deux ancres : c'est la même
 				// hypothèse (vitesse constante) que la reconstruction des positions.

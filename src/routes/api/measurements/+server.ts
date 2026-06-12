@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { snapToCell } from '$geo/h3';
 import { lineSlugForCell } from '$geo/line-snap';
 import { ingestMeasurement } from '$lib/server/ingest';
+import { WIFI_TRAIN_OPERATOR } from '$lib/operators';
 import type { RequestHandler } from './$types';
 
 /**
@@ -17,7 +18,9 @@ const MeasurementInput = z.object({
 	status: z.enum(['ok', 'degraded', 'none']),
 	rttMs: z.number().int().nonnegative().nullable().optional(),
 	downlinkKbps: z.number().int().nonnegative().nullable().optional(),
-	operator: z.enum(['orange', 'sfr', 'free', 'bouygues', 'autre', 'inconnu']).default('inconnu'),
+	operator: z
+		.enum(['orange', 'sfr', 'free', 'bouygues', 'autre', 'inconnu', WIFI_TRAIN_OPERATOR])
+		.default('inconnu'),
 	netType: z.string().max(16).nullable().optional(),
 	speedKmh: z.number().nonnegative().nullable().optional(),
 	gpsAccuracy: z.number().nonnegative().nullable().optional(),

@@ -10,12 +10,13 @@
  * v1 : scan + dérivation à la lecture (suffisant au volume actuel). Si ça devient
  * lent, matérialiser une table d'agrégats recalculée à l'ingestion (hors scope).
  */
-import { and, asc, eq, isNotNull } from 'drizzle-orm';
+import { and, asc, eq, ne, isNotNull } from 'drizzle-orm';
 import { db } from './db/client';
 import { measurements, type Measurement } from './db/schema';
 import { cellCenter } from '$geo/h3';
 import { lineSlugForCell } from '$geo/line-snap';
 import { resolveLineFilter } from '$geo/troncon-snap';
+import { WIFI_TRAIN_OPERATOR } from '$lib/operators';
 import { detectOutages, type OutageSample } from '$lib/measure/outage';
 
 /** Opérateurs valides (doit suivre l'enum du schéma). */
@@ -154,7 +155,12 @@ export async function aggregateOutages(
 				isNotNull(measurements.measuredAt),
 				eq(measurements.operator, operator as Measurement['operator'])
 			)
-		: isNotNull(measurements.measuredAt);
+		: // Vue « tous opérateurs » : on exclut le Wi-Fi de bord (cohérent avec les cellules
+			// `/api/coverage*`) — il ne reflète pas le réseau mobile (cf. src/lib/operators.ts).
+			and(
+				isNotNull(measurements.measuredAt),
+				ne(measurements.operator, WIFI_TRAIN_OPERATOR as Measurement['operator'])
+			);
 
 	const rows = await db
 		.select({

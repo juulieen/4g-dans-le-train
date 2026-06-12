@@ -26,6 +26,7 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { USAGE_OPS, type Level, type UsageOp } from '../src/lib/usage';
 import type { LineStats, LevelDist } from '../src/lib/geo/line-stats';
+import { stationBefore } from '../src/lib/geo/station-name';
 
 const PROFILES_DIR = 'static/data/route-profiles';
 /** Longueur minimale d'un tronçon sans couverture pour le compter en zone blanche (km). */
@@ -57,23 +58,6 @@ interface RouteProfile {
 
 const r4 = (x: number) => Math.round(x * 1e4) / 1e4;
 const r1 = (x: number) => Math.round(x * 10) / 10;
-
-/** Nettoie un libellé de gare GTFS pour un usage rédactionnel (« Mâcon - Loché TGV » → « Mâcon - Loché »). */
-function prettyStation(name: string): string {
-	const s = name
-		.replace(/\s*\([^)]*\)\s*/g, ' ') // retire les parenthèses
-		.replace(/\s+Hall\s+\d.*$/i, '') // « … Hall 1 - 2 »
-		.replace(/\s+/g, ' ')
-		.trim();
-	// Gares parisiennes (« Paris Gare de Lyon », « Paris Est »…) → « Paris ».
-	if (/^Paris\b/.test(s)) return 'Paris';
-	return s
-		.replace(/\s+(TGV|Ville|SNCF)\b/gi, '')
-		.replace(/\bGare\s+(de|du|des|d')\s+/gi, '')
-		.replace(/\s+Gare\b/gi, '')
-		.replace(/\s+/g, ' ')
-		.trim();
-}
 
 function emptyDist(): LevelDist {
 	return { TBC: 0, BC: 0, CL: 0, none: 0 };
@@ -127,18 +111,6 @@ async function main() {
 
 		// Zones blanches : segments best === 'none', fusionnés si séparés par moins
 		// de MERGE_GAP_KM de couvert, filtrés par longueur, nommés par la gare amont.
-		const stations = [...profile.stations]
-			.map((st) => ({ name: prettyStation(st.name), distKm: st.distKm }))
-			.sort((a, b) => a.distKm - b.distKm);
-		const stationBefore = (km: number): string => {
-			let label = stations[0]?.name ?? '';
-			for (const st of stations) {
-				if (st.distKm <= km) label = st.name;
-				else break;
-			}
-			return label;
-		};
-
 		const merged: { start: number; end: number }[] = [];
 		for (const seg of segs) {
 			if (seg.best !== 'none') continue;
@@ -147,7 +119,10 @@ async function main() {
 			else merged.push({ start: seg.fromKm, end: seg.toKm });
 		}
 		const zones = merged
-			.map((r) => ({ after: stationBefore(r.start), lengthKm: r1(r.end - r.start) }))
+			.map((r) => ({
+				after: stationBefore(profile.stations, r.start),
+				lengthKm: r1(r.end - r.start)
+			}))
 			.filter((z) => z.lengthKm >= MIN_WHITE_KM)
 			.sort((a, b) => b.lengthKm - a.lengthKm);
 

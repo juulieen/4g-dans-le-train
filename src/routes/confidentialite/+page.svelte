@@ -1,5 +1,6 @@
 <script lang="ts">
 	import PageWrap from '$components/PageWrap.svelte';
+	import { ORIGIN } from '$lib/site';
 </script>
 
 <svelte:head>
@@ -8,7 +9,7 @@
 		name="description"
 		content="Politique de confidentialité : quelles données sont collectées par 4G dans le train et comment elles sont anonymisées."
 	/>
-	<link rel="canonical" href="https://4g-dans-le-train.juulieen.fr/confidentialite" />
+	<link rel="canonical" href={`${ORIGIN}/confidentialite`} />
 </svelte:head>
 
 <PageWrap>

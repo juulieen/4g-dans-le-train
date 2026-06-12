@@ -27,6 +27,159 @@
      **vitesse moyenne le long du tracé** entre les deux ancres (au lieu de `null`) —
      même hypothèse de vitesse constante que la reconstruction des positions.
 
+## 2026-06-04
+
+- **Pages ligne — aperçu de carte zoomé sur la ligne (branche `feat/og-share-cards`)** : les
+  pages `/ligne/[slug]` (et croisées `…/[operateur]`) gagnent un **aperçu de carte statique et
+  cliquable**, calé sur le tracé de la ligne, sous la frise. Il **réutilise `Map.svelte`** (même
+  fond CARTO + voie colorée par usage) mais en lui **injectant des données légères** : la voie
+  ARCEP de la ligne seule, construite depuis son route-profile (`buildArcepLineFeatures` +
+  `segmentCoords`, ~dizaines de Ko) **au lieu de charger les GeoJSON nationaux** `arcep-lines`
+  (4,6 Mo) et `rail-lines` (1,7 Mo) ; rubans communautaires scopés à la ligne (`&line=`).
+  Nouvelles props additives sur `Map.svelte` : `interactive` (carte non-interactive en aperçu),
+  `focusBounds` (`fitBounds`), `arcepLinesData` (injection, court-circuite le fetch global),
+  `showRail`, `lineSlug`. Nouveau composant `MapPreview.svelte` : **init paresseuse**
+  (IntersectionObserver) + **import dynamique** de MapLibre → le chunk ne se charge qu'à l'entrée
+  dans le viewport (pas d'impact LCP sur les pages indexées). Le clic ouvre la carte interactive
+  **déjà focalisée** sur la ligne via un **deep-link `/?line=<slug>`** désormais lu par la home.
+  Helpers purs testés `buildArcepLineFeatures` / `pathBounds` (`src/lib/coverage-segments.ts`).
+  Ajustements tactiles mobiles au passage : pills opérateurs à 44 px, `touch-action: pan-y` sur
+  l'overlay de l'aperçu, garde `overflow-x: clip` sur `.prose`. _Non encore mergé sur `main`._
+
+- **Partage social — vignettes « frise de trajet » (branche `feat/og-share-cards`)** :
+  jusqu'ici, coller un lien `/ligne/<slug>` sur X / WhatsApp / Discord / Reddit n'affichait
+  **aucune vignette** (les pages n'avaient ni `og:image` ni `twitter:card`). Première
+  brique de la **boucle d'acquisition** : chaque page expose désormais une **carte sociale
+  1200×630 générée à la volée** (`GET /og/<slug>.png`) montrant le **trajet** (`A ↔ B`), la
+  **frise de couverture ARCEP colorée par usage** (le visuel signature), deux **stats
+  d'accroche** (« X % en streaming vidéo » + « Y % de zones blanches ») et le branding. Rendu
+  serveur **satori → resvg** (fonte DejaVu vendue dans `src/lib/server/og/fonts/`, fournie
+  aux deux étages pour un rendu déterministe sans fontes système). Stratégie **« ARCEP →
+  réel progressif »** : la carte montre la couverture théorique tant qu'une ligne a peu de
+  mesures, puis **superpose un résumé du réel communautaire** dès qu'il y en a (seuil
+  ≥ 3 cellules) — **sans rebuild** : endpoint runtime avec **cache 24 h** (en-tête HTTP +
+  mémo en process invalidé chaque jour). `/og/default.png` sert la carte générique. Câblage
+  des balises `og:image`/`twitter:image`/`og:url` **centralisé dans `+layout.svelte`**
+  (dérivées de la route, source unique, zéro doublon). Nouveau **bouton « Partager ce
+  trajet »** dans le panneau carte (`navigator.share` + repli presse-papier). Au passage,
+  **toutes les URLs absolues en dur** (canonical, `sitemap.xml`, `og:url`) passent par
+  `src/lib/site.ts` (`PUBLIC_SITE_URL` + repli prod). Aucune migration, aucune donnée
+  committée (l'image est dérivée à la demande). _Non encore mergé sur `main`._
+
+- **Pages ligne/opérateur — passe SEO + UX (suite des revues)** : lot d'améliorations issu
+  de deux revues (SEO technique + UX/rédactionnelle). **Lisibilité** : les points noirs sont
+  **regroupés par gare** (« Après Angoulême — 5 coupures · la plus longue ~2 min » au lieu de
+  5 lignes identiques, `groupBlackspots`) ; **fraîcheur** affichée (« dernière mesure il y a
+  N jours », `freshnessLabel`) ; **biais opérateur** signalé (« principalement Orange » quand
+  les mesures viennent surtout d'un opérateur, via `LineReal.operatorMix`) ; **dé-jargon** du
+  verdict (« selon les déclarations des opérateurs » et « Sur le papier : X % ; dans le
+  train : Y % » au lieu de « couverture théorique ARCEP ») ; **CTA mesure** visible quand le
+  trajet n'est pas mesuré ; astuces et CTA carte **contextuels** ; section ARCEP fusionnée
+  avec un chapeau « chiffres déclarés, pas mesurés ». **SEO** : titres **raccourcis** (~58
+  car., « Internet dans le train X–Y : ça capte ? ») ; **FAQ dédoublée** (wifi de bord vs
+  réseau mobile, intents distincts) + **FAQ opérateur** enrichie de chiffres propres ;
+  **BreadcrumbList** JSON-LD + `og:type/og:url/twitter:card` ; **H2 « Où ça coupe entre X et
+  Y ? »** conservé même sans coupure ; règle **`noindex`** affinée (on indexe les
+  tronçons×ligne/opérateur riches en réel, `real.sufficient`) ; le hub `/operateur/[slug]` ne
+  **lie plus que des pages indexables**. **Mobile** : anti-débordement (H1/points noirs), nav
+  du bas qui ne masque plus le contenu, chevron sur la FAQ. Composant `Verdict.svelte`
+  partagé. Tests Vitest (regroupement, fraîcheur, biais). 98 tests verts.
+
+## 2026-06-03
+
+- **Socle données « verdict + points noirs » des pages ligne (SSR, base vive)** : première
+  brique de la refonte SEO de `/ligne/[slug]` (cf. `docs/spec-page-ligne.md`). Nouveau
+  module **pur** `src/lib/geo/line-real.ts` (`computeLineReal`) qui calcule, par ligne, un
+  **instantané du réel** : couverture **spatiale** (cellules H3 fiables ≥ 3 pings,
+  `coveragePct`, `nFiables`, `sufficient` si ≥ 50 % du trajet ET ≥ 8 cellules — PAS un total
+  de mesures), `goodPct`, `bestOperator` et les **points noirs** (zones « rien » mesurées
+  et coupures avec durée médiane, nommées « après {gare} »). **Décision d'archi** : ces
+  pages passent en **SSR** (`/ligne/[slug]` : `prerender = false`) plutôt que prérendues +
+  cron nocturne — le verdict est rendu **côté serveur depuis la base vive** à chaque requête
+  (`src/lib/server/line-real.ts` → `loadLineReal`), donc **toujours frais et indexable**,
+  avec un court `cache-control` (5 min) pour amortir. Plus de cron, plus d'instantané
+  committé. (Le sous-arbre `[operateur]` est aligné en SSR dans l'entrée suivante.) Helper
+  de nommage de gare factorisé (`src/lib/geo/station-name.ts`, partagé avec `build-line-stats`).
+  Tests Vitest.
+- **Page ligne — refonte « réponse d'abord » + virage vocabulaire** : `/ligne/[slug]`
+  s'ouvre désormais sur un **verdict** (`buildVerdict`, `coverage-copy.ts`) — _« D'après les
+  voyageurs, ça capte bien sur 94 % du trajet… 5 zones où ça coupe, notamment après
+  Angoulême. Au mieux : Orange. »_ — basé sur le réel quand la couverture est suffisante,
+  sinon sur l'ARCEP avec invite à mesurer (bloc teinté vert/orange/rouge/gris selon la
+  tonalité). Suivi d'une liste **« points noirs »** nommés par gare (`blackspotLabel`).
+  **Vocabulaire usager** dans le titre/H1/méta/FAQ (« internet / réseau / ça capte / ça
+  coupe » au lieu de « couverture mobile 4G »), d'après l'exploration Google Suggest ;
+  **FAQ** alimentée des vraies questions (wifi de bord, meilleur opérateur, pourquoi ça
+  coupe) + JSON-LD. La frise `RouteProfile` est reléguée en illustration secondaire. Le
+  verdict + les points noirs sont extraits dans un composant partagé `Verdict.svelte`.
+  Les **pages opérateur** (`/ligne/[slug]/[operateur]`) sont **alignées sur le même
+  verdict**, mais **par opérateur** : elles passent aussi en **SSR**, le réel est filtré
+  sur l'opérateur (`loadLineReal(fetch, slug, op)`), le verdict est phrasé « avec {op} » et
+  comparé à l'ARCEP de cet opérateur (`buildVerdict(..., { operatorName, arcepDist })`).
+  Tests Vitest (`coverage-copy.test.ts`, variantes opérateur incluses).
+
+## 2026-06-02
+
+- **Nettoyage — factorisation des textes de la carte (DRY)** : les libellés d'usage de
+  la légende (`Map.svelte`) viennent maintenant de `USAGE_SHORT`/`USAGE_CSS_VAR` (au lieu
+  d'être dupliqués en dur, comme le fait déjà `RouteProfile`) ; les libellés des 4
+  opérateurs ARCEP sont centralisés dans `OPERATOR_LABEL` (`usage.ts`), réutilisés par
+  les selects de la carte, les popups et le référentiel `lines.ts` — ce qui aligne au
+  passage **« Bouygues Telecom » → « Bouygues »** partout (pages opérateur incluses).
+  Nouveau helper `pluralS` (`src/lib/plural.ts`) pour les accords « point(s) ». Aussi :
+  message d'avertissement `gpsStale` resserré (le QR voisin porte déjà l'invite mobile).
+- **Mode mesure — garde-fou desktop (GPS imprécis) + QR vers le téléphone** : sur
+  ordinateur, sans vrai GPS, la position Wi-Fi/IP (> 100 m) est rejetée et aucune
+  mesure n'est positionnée. Le controller expose désormais `gpsStale` (aucun fix
+  valide depuis plus de `MAX_GAP_MS` = 5 min, seuil au-delà duquel l'interpolation
+  « depuis les rails » ne peut plus recaler les pings) ; la page affiche alors un
+  **avertissement ambre** — sans jamais interrompre la mesure (si le GPS accroche, on
+  enregistre). En complément, un **QR code** (lib `uqr`, ~5 Ko) vers le site s'affiche
+  dans le panneau mesure **uniquement sur desktop** (`@media min-width: 761px`) pour
+  inviter à mesurer depuis un téléphone. Nouveau helper `src/lib/qr.ts`.
+- **Mesure — détection du Wi-Fi de bord (anti-pollution de la couverture mobile)** :
+  si le téléphone reste sur le **Wi-Fi du train** pendant une mesure, le ping mesure ce
+  Wi-Fi (et son backhaul lent), pas le réseau mobile — on créditait à tort l'opérateur
+  choisi. Désormais le controller lit `navigator.connection.type` (`isOnWifi()`) à
+  chaque tick et **tague la mesure `operator = 'wifi-train'`** quand le Wi-Fi est
+  détecté. Cette valeur reste cantonnée à la couche mesure (hors `OPERATORS` SEO et
+  ARCEP) et est **exclue de toutes les vues de couverture mobile** au niveau des
+  lectures DB des agrégats (`+page.server.ts`, `/api/coverage`, `/api/coverage/segments`)
+  dès qu'aucun opérateur précis n'est demandé — carte « tous opérateurs » **et frise de
+  trajet**. UI : **rappel statique** invitant
+  à couper le Wi-Fi (seule parade sur iOS/Firefox où `connection.type` est absent) +
+  **bannière** quand le Wi-Fi est effectivement détecté. Aucune lecture de SSID.
+- **Carte — le réel ressort (cerclé de blanc) au-dessus de l'ARCEP** : après la refonte
+  en rubans, les mesures se confondaient avec la voie ARCEP (formes/largeurs/couleurs
+  proches) → le réel ne primait plus, et l'incitation à contribuer baissait. Le ruban
+  « réel » reçoit un **liseré blanc** (casing) et s'épaissit, et les hexagones un
+  **contour blanc** : on retrouve la signature « cerclé de blanc = du vécu » des
+  anciennes pastilles, en gras au-dessus du théorique. Cerclage **contrasté selon le
+  thème** (blanc en sombre / foncé en clair, car le blanc disparaissait sur le fond
+  clair positron). L'ARCEP passe **légèrement en retrait** (opacité 0,9→0,8, flou accru) :
+  lisible **hors zones mesurées**, volontairement recouvert sous le ruban réel.
+- **Carte — lisibilité des mesures : ruban le long de la voie + quadrillage H3** :
+  remplacement des **pastilles empilées** (illisibles dès qu'un trajet génère des
+  centaines de cellules — ex. Paris-Arcachon : 656 cellules) par un **rendu
+  progressif au zoom**. Au zoom faible/intermédiaire, un **ruban coloré suit le
+  tracé** (nouvel endpoint `GET /api/coverage/segments` : projection des cellules sur
+  le `path` du profil de ligne, fusion run-length par niveau d'usage) ; au zoom fort,
+  un **quadrillage de cellules hexagonales H3** (`cellToBoundary` côté client) avec
+  fondu croisé. En vue « tous opérateurs », chaque cellule/segment prend le **pire**
+  taux parmi les opérateurs (`worstByCell`) → on met en avant les risques de coupure.
+  Seuils de classification du réel centralisés dans `src/lib/usage.ts` (`rateToLevel`,
+  80/40 → TBC/CL/none), réutilisés par la carte et la frise `RouteProfile`.
+  `/api/coverage` (points) reste inchangé.
+- **Carte — cliquer sur une voie révèle les lignes qui passent ici** : la popup
+  ARCEP (au clic sur une voie colorée) gagne une section « Lignes qui passent ici »
+  listant les **lignes commerciales** du référentiel traversant ce point, chacune
+  avec un lien vers sa **page dédiée** `/ligne/{slug}`. Nouvel endpoint
+  `GET /api/lines?lat=&lng=` : convertit la position en cellule H3 (rés. 9) et la
+  croise avec `line-index.json` via `lineSlugsForCell`, en élargissant anneau par
+  anneau (`gridDisk` k=0→2) pour rester robuste à un clic légèrement décalé du
+  tracé. Affichage plafonné à 6 lignes (les plus spécifiques d'abord) avec un
+  résumé « +N autres ».
+
 ## 2026-06-01
 
 - **Mesure — débit : maîtrise de la consommation data** : la cadence du test de débit

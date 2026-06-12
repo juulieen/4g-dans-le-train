@@ -17,7 +17,7 @@ const NOW = 1_700_000_000_000;
 const MAX_AGE = 5 * 60_000;
 
 function ping(measuredAt: number, overrides: Partial<GapPing> = {}): GapPing {
-	return { measuredAt, status: 'none', rttMs: null, netType: null, ...overrides };
+	return { measuredAt, status: 'none', rttMs: null, netType: null, onWifi: false, ...overrides };
 }
 
 function state(overrides: Partial<GapState> = {}): GapState {
@@ -80,6 +80,16 @@ describe('GapStore', () => {
 		gap.save(state());
 		gap.clear();
 		expect(gap.load(NOW, MAX_AGE)).toBeNull();
+	});
+
+	it("normalise onWifi à false pour un buffer persisté avant l'ajout du champ", () => {
+		const legacy = state();
+		// Simule l'ancien format : pings sans la propriété onWifi.
+		const pings = legacy.pings.map(({ onWifi: _ignored, ...rest }) => rest);
+		store.setItem('4gdt.gap', JSON.stringify({ ...legacy, pings }));
+		const restored = gap.load(NOW, MAX_AGE);
+		expect(restored!.pings).toHaveLength(2);
+		expect(restored!.pings.every((p) => p.onWifi === false)).toBe(true);
 	});
 
 	it('résiste à un contenu de storage corrompu', () => {

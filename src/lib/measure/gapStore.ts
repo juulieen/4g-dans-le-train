@@ -24,6 +24,8 @@ export interface GapPing {
 	status: PingStatus;
 	rttMs: number | null;
 	netType: string | null;
+	/** Connexion en wifi à l'instant du ping (tag `wifi-train` au recalage). */
+	onWifi: boolean;
 }
 
 /** État d'un trou GPS en cours : ancre d'entrée + pings en attente de recalage. */
@@ -71,9 +73,11 @@ export class GapStore {
 			if (!raw) return null;
 			const parsed = JSON.parse(raw) as GapState;
 			if (!Array.isArray(parsed?.pings)) return null;
-			const pings = parsed.pings.filter(
-				(p) => typeof p?.measuredAt === 'number' && now - p.measuredAt <= maxAgeMs
-			);
+			const pings = parsed.pings
+				.filter((p) => typeof p?.measuredAt === 'number' && now - p.measuredAt <= maxAgeMs)
+				// Buffer persisté avant l'ajout du champ `onWifi` : on ne peut plus conclure
+				// a posteriori → false (l'opérateur mobile choisi reste crédité).
+				.map((p) => ({ ...p, onWifi: p.onWifi === true }));
 			if (pings.length === 0) return null;
 			const entry =
 				parsed.entry &&

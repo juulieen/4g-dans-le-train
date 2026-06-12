@@ -3,6 +3,7 @@
 	import { setContext } from 'svelte';
 	import Onboarding from '$components/Onboarding/Onboarding.svelte';
 	import Icon from '$components/Icon.svelte';
+	import { ORIGIN } from '$lib/site';
 
 	let { children } = $props();
 
@@ -14,6 +15,17 @@
 	];
 
 	const isMapRoute = $derived(page.url.pathname === '/');
+
+	// --- Partage social (Open Graph / Twitter Card) ---
+	// Source UNIQUE de og:image / og:url, calculée depuis la route : les pages
+	// `/ligne/<slug>` (et `/ligne/<slug>/<operateur>`) reçoivent la vignette de leur
+	// trajet (endpoint `/og/<slug>.png`) ; toute autre page reçoit la carte générique.
+	// Les og:title / og:description restent gérés par chaque page (contenu propre).
+	const ogImage = $derived.by(() => {
+		const m = page.url.pathname.match(/^\/ligne\/([^/]+)/);
+		return `${ORIGIN}/og/${m ? m[1] : 'default'}.png`;
+	});
+	const ogUrl = $derived(`${ORIGIN}${page.url.pathname}`);
 
 	// --- Onboarding : exposé aux pages enfants via le contexte (ré-ouverture ℹ️) ---
 	let onboardingOpen = $state(false);
@@ -43,6 +55,18 @@
 		if (meta) meta.setAttribute('content', theme === 'dark' ? '#0b1220' : '#eef2f7');
 	}
 </script>
+
+<svelte:head>
+	<meta property="og:site_name" content="4G dans le train" />
+	<meta property="og:locale" content="fr_FR" />
+	<meta property="og:type" content="website" />
+	<meta property="og:url" content={ogUrl} />
+	<meta property="og:image" content={ogImage} />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:image" content={ogImage} />
+</svelte:head>
 
 <div class="app" class:map-route={isMapRoute}>
 	<header class="glass">
@@ -140,11 +164,13 @@
 		--sp-5: 1.5rem;
 		--sp-6: 2rem;
 
-		--fs-xs: 0.72rem;
-		--fs-sm: 0.85rem;
-		--fs-md: 0.95rem;
-		--fs-lg: 1.15rem;
-		--fs-xl: 1.6rem;
+		/* Échelle typographique : planchers lisibles sur mobile + titres FLUIDES (clamp)
+		   pour que les longues questions ne débordent plus sur petit écran. */
+		--fs-xs: 0.8rem;
+		--fs-sm: 0.9rem;
+		--fs-md: 1rem;
+		--fs-lg: clamp(1.1rem, 1rem + 0.6vw, 1.25rem);
+		--fs-xl: clamp(1.35rem, 1.05rem + 1.7vw, 1.7rem);
 		--lh: 1.6;
 
 		--glass-blur: 14px;
@@ -354,6 +380,10 @@
 	@media (max-width: 760px) {
 		.tools-label {
 			display: none;
+		}
+		/* Dégage le contenu de la bottom-nav fixe (sinon elle masque le bas de page). */
+		main {
+			padding-bottom: calc(64px + env(safe-area-inset-bottom));
 		}
 		.desktop-nav {
 			display: none;

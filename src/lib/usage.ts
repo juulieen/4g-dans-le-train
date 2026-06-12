@@ -17,6 +17,18 @@ export type Level = 'TBC' | 'BC' | 'CL' | 'none';
 export const USAGE_OPS = ['orange', 'sfr', 'free', 'bouygues'] as const;
 export type UsageOp = (typeof USAGE_OPS)[number];
 
+/**
+ * Libellé d'affichage des 4 opérateurs ARCEP — source unique réutilisée par les
+ * selects de la carte, les popups (`Map.svelte`) et le référentiel SEO (`lines.ts`),
+ * pour éviter que « Bouygues » diverge d'un endroit à l'autre.
+ */
+export const OPERATOR_LABEL: Record<UsageOp, string> = {
+	orange: 'Orange',
+	sfr: 'SFR',
+	free: 'Free',
+	bouygues: 'Bouygues'
+};
+
 /** Couleurs par niveau (hex). En CSS, préférer `var(--usage-*)` (thématisées). */
 export const USAGE_COLORS: Record<Level, string> = {
 	TBC: '#22c55e', // vert — streaming vidéo / visio
@@ -98,5 +110,25 @@ export function levelFromKbps(kbps: number | null): Level {
 	if (kbps >= KBPS_THRESHOLDS.TBC) return 'TBC';
 	if (kbps >= KBPS_THRESHOLDS.BC) return 'BC';
 	if (kbps >= KBPS_THRESHOLDS.CL) return 'CL';
+	return 'none';
+}
+
+/**
+ * Seuils du taux de réussite mesuré (`successRate`, part de pings OK) → niveau d'usage.
+ * Source unique partagée par la carte (`Map.svelte`) et la frise (`RouteProfile.svelte`).
+ *
+ * Le palier intermédiaire `BC` est volontairement ABSENT : la mesure est un ping
+ * binaire (OK/KO), trop grossier pour distinguer « web » de « streaming ». Le réel
+ * n'a donc que 3 paliers (vert/orange/rouge), là où le théorique ARCEP en distingue 4.
+ *  - ≥ 0,8 → TBC (ça capte bien)
+ *  - ≥ 0,4 → CL (réseau dégradé)
+ *  - < 0,4 → none (ça coupe)
+ */
+export const RATE_THRESHOLDS = { TBC: 0.8, CL: 0.4 } as const;
+
+/** Traduit un taux de réussite mesuré (0..1) en niveau d'usage (3 paliers). */
+export function rateToLevel(rate: number): Level {
+	if (rate >= RATE_THRESHOLDS.TBC) return 'TBC';
+	if (rate >= RATE_THRESHOLDS.CL) return 'CL';
 	return 'none';
 }

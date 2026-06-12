@@ -1,13 +1,12 @@
 <script lang="ts">
 	import { OPERATORS } from '$geo/lines';
-	import {
-		describeOperator,
-		describeWhiteZones,
-		bestTbcPct,
-		lineMetaDescription
-	} from '$geo/coverage-copy';
+	import { OPERATOR_LABEL } from '$lib/usage';
+	import { describeOperator, buildVerdict, buildBlackspots, clip } from '$geo/coverage-copy';
 	import PageWrap from '$components/PageWrap.svelte';
 	import RouteProfile from '$components/RouteProfile.svelte';
+	import Verdict from '$components/Verdict.svelte';
+	import MapPreview from '$components/MapPreview.svelte';
+	import { ORIGIN } from '$lib/site';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -15,46 +14,73 @@
 	const stats = $derived(data.stats);
 	const parent = $derived(data.parent);
 	const isTroncon = $derived(data.isTroncon);
-	// Un tronçon est bidirectionnel : on l'affiche « A ↔ B » (une seule page pour
-	// les deux sens), une ligne classique garde son libellé « A – B ».
+	const real = $derived(data.real);
 	const relationLabel = $derived(isTroncon ? `${line.from} ↔ ${line.to}` : line.name);
 
-	const title = $derived(
-		isTroncon
-			? `Couverture mobile 4G/5G dans le train — ${line.from} ↔ ${line.to}`
-			: `Couverture mobile 4G/5G — ligne ${line.name} (${line.service})`
-	);
+	// Verdict (réponse d'abord) + points noirs regroupés par gare ; fraîcheur.
+	const verdict = $derived(buildVerdict(line.from, line.to, stats ?? null, real));
+	const blackspots = $derived(buildBlackspots(real, stats ?? null));
+	const freshness = $derived(data.freshness);
+
+	// --- SEO : titres / méta en langage usager, courts (différenciateur en tête) ---
+	const title = $derived(`Internet dans le train ${line.from}–${line.to} : ça capte ?`);
 	const description = $derived(
-		lineMetaDescription(line.name, line.from, line.to, stats ?? undefined)
+		clip(
+			verdict.measured
+				? `${verdict.lead}${verdict.cuts ? ' ' + verdict.cuts : ''}`
+				: `${verdict.lead} Couverture annoncée + mesures réelles des voyageurs.`,
+			158
+		)
 	);
-	const url = $derived(`https://4g-dans-le-train.juulieen.fr/ligne/${line.slug}`);
+	const url = $derived(`${ORIGIN}/ligne/${line.slug}`);
 
-	// Réponse FAQ enrichie des vrais chiffres ARCEP quand ils existent.
-	const faqAnswer = $derived(
-		stats
-			? `Sur la ligne ${line.name}, la 4G est annoncée excellente sur ${bestTbcPct(stats)} du parcours (couverture théorique ARCEP, au mieux des opérateurs). ${
-					describeWhiteZones(stats) || 'Aucune zone blanche majeure n’est connue.'
-				} Consultez la carte communautaire pour comparer avec les mesures réelles des voyageurs.`
-			: `La couverture mobile sur la ligne ${line.name} varie selon l'opérateur et les zones traversées. Consultez la carte communautaire pour voir les sections où le réseau 4G/5G passe ou coupe.`
-	);
-
+	// --- FAQ : wifi de bord ET réseau mobile dédoublés (intents distincts) --------
+	const faqs = $derived([
+		{
+			q: `Y a-t-il du wifi à bord du train entre ${line.from} et ${line.to} ?`,
+			a: `Selon le train (TGV INOUI…), un wifi de bord gratuit peut exister, mais il est souvent saturé et lent. Pour un vrai débit, comptez surtout sur votre réseau mobile (4G/5G) — voici ce qu'il vaut sur ce trajet.`
+		},
+		{
+			q: `Est-ce que ça capte (4G/5G) dans le train entre ${line.from} et ${line.to} ?`,
+			a: `${verdict.lead}${verdict.cuts ? ' ' + verdict.cuts : ''}`
+		},
+		{
+			q: `Quel opérateur capte le mieux entre ${line.from} et ${line.to} ?`,
+			a:
+				real.sufficient && real.bestOperator
+					? `D'après les mesures des voyageurs, ${OPERATOR_LABEL[real.bestOperator as keyof typeof OPERATOR_LABEL] ?? real.bestOperator}. Mais ça dépend des sections — comparez les opérateurs plus bas.`
+					: `Ça dépend des sections traversées. Comparez Orange, SFR, Free et Bouygues plus bas.`
+		},
+		{
+			q: `Pourquoi on ne capte pas dans le train ?`,
+			a: `Tunnels, zones rurales, carrosserie métallique et grande vitesse coupent le réseau, même là où la couverture est annoncée bonne.`
+		}
+	]);
 	const faqLd = $derived({
 		'@context': 'https://schema.org',
 		'@type': 'FAQPage',
-		mainEntity: [
+		mainEntity: faqs.map((f) => ({
+			'@type': 'Question',
+			name: f.q,
+			acceptedAnswer: { '@type': 'Answer', text: f.a }
+		}))
+	});
+	const breadcrumbLd = $derived({
+		'@context': 'https://schema.org',
+		'@type': 'BreadcrumbList',
+		itemListElement: [
 			{
-				'@type': 'Question',
-				name: `Est-ce que ça capte dans le train entre ${line.from} et ${line.to} ?`,
-				acceptedAnswer: { '@type': 'Answer', text: faqAnswer }
-			}
+				'@type': 'ListItem',
+				position: 1,
+				name: 'Lignes',
+				item: `${ORIGIN}/lignes`
+			},
+			{ '@type': 'ListItem', position: 2, name: relationLabel, item: url }
 		]
 	});
-
-	// Balise JSON-LD assemblée par concaténation pour ne pas fermer le <script> hôte ;
-	// `<` échappé dans les données par sécurité (défensif, données build-time).
 	const jsonLd = $derived(
 		'<script type="application/ld+json">' +
-			JSON.stringify(faqLd).replace(/</g, '\\u003c') +
+			JSON.stringify([faqLd, breadcrumbLd]).replace(/</g, '\\u003c') +
 			'</' +
 			'script>'
 	);
@@ -65,87 +91,94 @@
 	<meta name="description" content={description} />
 	<link rel="canonical" href={url} />
 	{#if data.noindex}
-		<!-- Tronçon mince (sans stats ARCEP fiables) : exclu de l'index, liens suivis. -->
+		<!-- Tronçon mince (ni stats ARCEP fiables ni réel mesuré suffisant) : exclu de l'index. -->
 		<meta name="robots" content="noindex,follow" />
 	{/if}
 	<meta property="og:title" content={title} />
 	<meta property="og:description" content={description} />
+	<!-- og:image / og:url / og:type / twitter:card : fournis par +layout.svelte (vignette OG). -->
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 	{@html jsonLd}
 </svelte:head>
 
 <PageWrap>
 	<nav class="crumbs"><a href="/lignes">Lignes</a> › {relationLabel}</nav>
-	<h1>Couverture mobile dans le train&nbsp;: {relationLabel}</h1>
-	{#if isTroncon}
-		<p class="lede">
-			Trajet <strong>{line.from} ↔ {line.to}</strong> (dans les deux sens), portion de la ligne
+	<h1>Est-ce que ça capte dans le train entre {line.from} et {line.to}&nbsp;?</h1>
+	<p class="lede">
+		{#if isTroncon}Portion de la ligne
 			{#if parent}<a href="/ligne/{parent.slug}">{parent.name}</a>{:else}{line.service}{/if}.
-			Découvrez où la 4G/5G passe (ou coupe) grâce aux mesures de la communauté.
-		</p>
-	{:else}
-		<p class="lede">
-			Ligne <strong>{line.service}</strong> entre {line.from} et {line.to}. Découvrez où la 4G/5G
-			passe (ou coupe) grâce aux mesures de la communauté.
-		</p>
-	{/if}
+		{:else}Ligne {line.service} entre {line.from} et {line.to}.{/if}
+		{#if stats}{Math.round(stats.lengthKm)}&nbsp;km{/if}{#if real.samples > 0}&nbsp;·
+			{real.samples.toLocaleString('fr-FR')} mesures de voyageurs{/if}
+	</p>
 
+	<!-- VERDICT « réponse d'abord » + points noirs. -->
+	<Verdict {verdict} {blackspots} from={line.from} to={line.to} {freshness} />
+
+	<a class="cta" href={`/?line=${line.slug}`}>
+		{verdict.measured && blackspots.length
+			? 'Voir où ça coupe sur la carte →'
+			: 'Voir la couverture sur la carte →'}
+	</a>
+
+	<!-- FRISE — illustration gare après gare (secondaire). -->
 	<section class="profil">
-		<h2>Le profil de votre trajet, gare après gare</h2>
-		<p>
-			De {line.from} à {line.to}, voici où vous pourrez regarder une vidéo, naviguer, juste envoyer
-			un message… ou rien du tout. Le fond montre la couverture théorique (ARCEP)&nbsp;; les
-			pastilles cerclées de blanc, ce qui a été mesuré en vrai.
-		</p>
+		<h2>Le détail gare après gare</h2>
 		<RouteProfile slug={line.slug} />
 	</section>
 
-	<a class="cta" href="/">Voir la carte interactive →</a>
+	<section class="apercu-carte">
+		<h2>Où passe la ligne {isTroncon ? `${line.from} ↔ ${line.to}` : line.name}</h2>
+		<p>Le tracé de {line.from} à {line.to}, coloré par la couverture mobile attendue.</p>
+		<MapPreview slug={line.slug} />
+	</section>
 
-	<section>
-		{#if stats}
-			<h2>La couverture annoncée sur {line.name}</h2>
-			<p>
-				D'après la couverture théorique publiée par l'ARCEP, le réseau 4G est annoncé excellent sur
-				<strong>{bestTbcPct(stats)}</strong> du parcours {line.from}–{line.to} (au mieux des quatre opérateurs),
-				sur {Math.round(stats.lengthKm)}&nbsp;km de voie.
-				{#if describeWhiteZones(stats)}
-					{describeWhiteZones(stats)}
-				{:else}
-					Aucune zone blanche majeure n'est connue le long du trajet.
-				{/if}
+	{#if stats}
+		<section>
+			<h2>La couverture ARCEP par opérateur sur {line.name}</h2>
+			<p class="muted">
+				Ces chiffres sont ceux <em>déclarés par les opérateurs</em>, pas mesurés en vrai.
 			</p>
-
-			<h2>Le détail par opérateur sur {line.name}</h2>
 			<ul class="ops">
 				{#each OPERATORS as o (o.slug)}
 					<li>{describeOperator(o.name, stats.arcep[o.key])}</li>
 				{/each}
 			</ul>
-		{:else}
-			<h2>Comment est mesurée la couverture&nbsp;?</h2>
 			<p>
-				Les voyageurs activent le mode mesure sur leur téléphone pendant le trajet. L'application
-				teste la connexion en continu et enregistre, de façon anonyme, où ça capte. Plus il y a de
-				contributeurs sur la ligne {line.name}, plus la carte est précise.
+				Sur le terrain, tunnels, zones rurales et grande vitesse provoquent des coupures même là où
+				la couverture est annoncée bonne — c'est tout l'intérêt des mesures des voyageurs.
 			</p>
-		{/if}
+		</section>
+	{/if}
 
+	<section>
 		<h2>Comparer les opérateurs sur {line.name}</h2>
-		<p>La couverture diffère selon votre opérateur. Voyez le détail&nbsp;:</p>
+		<p>La couverture diffère selon votre opérateur&nbsp;:</p>
 		<ul class="pills">
 			{#each OPERATORS as o (o.slug)}
 				<li><a href="/ligne/{line.slug}/{o.slug}">{o.name} sur {line.name}</a></li>
 			{/each}
 		</ul>
 
+		<h2>Questions fréquentes</h2>
+		{#each faqs as f, i (i)}
+			<details>
+				<summary>{f.q}</summary>
+				<p>{f.a}</p>
+			</details>
+		{/each}
+
 		<h2>Astuces pour mieux capter entre {line.from} et {line.to}</h2>
 		<ul>
-			<li>Préchargez vos contenus (musique, vidéos, articles) avant les zones blanches connues.</li>
-			<li>Le Wi-Fi de bord peut prendre le relais sur certains TGV INOUI.</li>
-			<li>
-				Comparez les opérateurs&nbsp;: la couverture diffère selon Orange, SFR, Free et Bouygues.
-			</li>
+			{#if blackspots.length}
+				<li>Préchargez vos contenus (musique, vidéos, articles) avant les zones où ça coupe.</li>
+			{:else}
+				<li>
+					Ce trajet semble bien couvert — si vous le prenez, contribuez vos mesures pour le
+					confirmer.
+				</li>
+			{/if}
+			<li>Le Wi-Fi de bord peut dépanner sur certains TGV INOUI — mais il rame souvent.</li>
 		</ul>
 	</section>
 </PageWrap>

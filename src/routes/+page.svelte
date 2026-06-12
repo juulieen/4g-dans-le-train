@@ -18,16 +18,24 @@
 		getSavedOperator,
 		setSavedOperator
 	} from '$measure/session';
-	import { levelFromKbps, USAGE_TEXT, USAGE_COLORS } from '$lib/usage';
+	import { levelFromKbps, USAGE_TEXT, USAGE_COLORS, OPERATOR_LABEL, USAGE_OPS } from '$lib/usage';
+	import { pluralS } from '$lib/plural';
+	import { buildQrSvg } from '$lib/qr';
+	import { ORIGIN } from '$lib/site';
+	import { pathBounds } from '$lib/coverage-segments';
+	import { page } from '$app/state';
+	import type maplibregl from 'maplibre-gl';
 	import type { PageData } from './$types';
+
+	// URL encodée dans le QR « mesure depuis ton téléphone » (affiché sur desktop).
+	const qrSvg = buildQrSvg(ORIGIN);
 
 	let { data }: { data: PageData } = $props();
 
+	// Opérateurs du mode mesure : les 4 opérateurs ARCEP (libellés partagés via
+	// OPERATOR_LABEL) + deux choix propres à la mesure (« Autre » / « Je ne sais pas »).
 	const OPERATORS: { value: Operator; label: string }[] = [
-		{ value: 'orange', label: 'Orange' },
-		{ value: 'sfr', label: 'SFR' },
-		{ value: 'free', label: 'Free' },
-		{ value: 'bouygues', label: 'Bouygues' },
+		...USAGE_OPS.map((value) => ({ value, label: OPERATOR_LABEL[value] })),
 		{ value: 'autre', label: 'Autre' },
 		{ value: 'inconnu', label: 'Je ne sais pas' }
 	];
@@ -49,22 +57,66 @@
 	// Ligne sélectionnée pour afficher son « profil de trajet » (frise). Vide = aucune.
 	let selectedLine = $state<string>('');
 	const sortedLines = [...RAIL_LINES].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+
+	// Deep-link `/?line=<slug>` (depuis l'aperçu des pages ligne) : on cadre la carte sur la
+	// ligne et on pré-sélectionne sa frise. La carte démarre en vue nationale puis se recadre
+	// dès que la bbox (route-profile) arrive — bref flash accepté (cf. PRODUCT.md § Aperçu carte).
+	let focusBounds = $state<maplibregl.LngLatBoundsLike | null>(null);
+	$effect(() => {
+		const slug = page.url.searchParams.get('line');
+		if (!slug) {
+			focusBounds = null; // navigation (SPA) vers `/` sans `?line=` → on dé-cadre.
+			return;
+		}
+		if (sortedLines.some((l) => l.slug === slug)) selectedLine = slug;
+		let cancelled = false;
+		void (async () => {
+			try {
+				const res = await fetch(`/data/route-profiles/${slug}.json`);
+				if (!res.ok) return;
+				const profile = (await res.json()) as { path?: [number, number, number][] };
+				if (!cancelled && profile.path && profile.path.length >= 2) {
+					focusBounds = pathBounds(profile.path);
+				}
+			} catch {
+				/* pas de profil : on garde la vue nationale */
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	});
+
+	// --- Partage du trajet sélectionné (Web Share + repli presse-papier). ---
+	// La vignette sociale (`/og/<slug>.png`) fait l'accroche visuelle au moment du
+	// partage du lien `/ligne/<slug>`.
+	let shareMsg = $state('');
+	async function shareLine() {
+		const l = sortedLines.find((x) => x.slug === selectedLine);
+		if (!l) return;
+		const url = `${ORIGIN}/ligne/${l.slug}`;
+		const shareData = {
+			title: `Couverture mobile — ${l.name}`,
+			text: `Où ça capte dans le train sur ${l.from} ↔ ${l.to} ?`,
+			url
+		};
+		try {
+			if (navigator.share) {
+				await navigator.share(shareData);
+			} else {
+				await navigator.clipboard.writeText(url);
+				shareMsg = 'Lien copié !';
+				setTimeout(() => (shareMsg = ''), 2500);
+			}
+		} catch {
+			/* partage annulé par l'utilisateur : on ignore silencieusement */
+		}
+	}
 	let live = $state<LiveState | null>(null);
 	// État local initialisé une fois avec la couverture SSR, puis rafraîchi
 	// localement après chaque mesure (refreshCoverage) — lecture initiale voulue.
 	// svelte-ignore state_referenced_locally
 	let coverage = $state(data.coverage);
-
-	// Couverture communautaire filtrée selon l'opérateur d'affichage choisi.
-	const filteredCoverage = $derived.by(() => {
-		if (viewOperator === 'inconnu') return coverage;
-		return {
-			type: 'FeatureCollection' as const,
-			features: coverage.features.filter(
-				(f) => (f.properties as Record<string, unknown>)?.operator === viewOperator
-			)
-		};
-	});
 
 	let controller: MeasurementController | null = null;
 
@@ -169,12 +221,12 @@
 		if (b > 0)
 			return {
 				cls: 'buffering',
-				text: `📍 ${b} point${b > 1 ? 's' : ''} capturé${b > 1 ? 's' : ''} sans GPS — position recalée au retour du signal`
+				text: `📍 ${b} point${pluralS(b)} capturé${pluralS(b)} sans GPS — position recalée au retour du signal`
 			};
 		if (live.queued > 0)
 			return {
 				cls: 'pending',
-				text: `⏳ ${live.queued} point${live.queued > 1 ? 's' : ''} gardé${live.queued > 1 ? 's' : ''} hors-ligne — envoi au retour du réseau`
+				text: `⏳ ${live.queued} point${pluralS(live.queued)} gardé${pluralS(live.queued)} hors-ligne — envoi au retour du réseau`
 			};
 		return { cls: 'synced', text: '✓ Tout est synchronisé' };
 	});
@@ -274,19 +326,18 @@
 		name="description"
 		content="Carte communautaire de la couverture mobile (4G/5G) dans le train en France. Voyez où ça capte sur votre trajet SNCF et contribuez vos mesures."
 	/>
-	<link rel="canonical" href="https://4g-dans-le-train.juulieen.fr/" />
+	<link rel="canonical" href={`${ORIGIN}/`} />
 	<meta property="og:title" content="4G dans le train — couverture mobile sur les lignes SNCF" />
 	<meta
 		property="og:description"
 		content="Voyez où ça capte (et où ça coupe) sur votre trajet en train. Données communautaires + ARCEP."
 	/>
-	<meta property="og:type" content="website" />
 </svelte:head>
 
 <section class="layout">
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div class="map-wrap" onpointerdown={onMapInteract}>
-		<Map coverage={filteredCoverage} operator={viewOperator} {showArcep} {showCommunity} />
+		<Map {coverage} operator={viewOperator} {showArcep} {showCommunity} {focusBounds} />
 		<button
 			class="info-fab glass"
 			onpointerdown={(e) => e.stopPropagation()}
@@ -336,17 +387,16 @@
 				Afficher la couverture de&nbsp;:
 				<select id="view-operator" name="view-operator" bind:value={viewOperator}>
 					<option value="inconnu">Tous les opérateurs</option>
-					<option value="orange">Orange</option>
-					<option value="sfr">SFR</option>
-					<option value="free">Free</option>
-					<option value="bouygues">Bouygues</option>
+					{#each USAGE_OPS as op (op)}
+						<option value={op}>{OPERATOR_LABEL[op]}</option>
+					{/each}
 				</select>
 			</label>
 
 			<p class="explain">
 				La <strong>voie est colorée</strong> selon ce que vous pourrez y faire (couverture théorique
-				des opérateurs). Les <strong>pastilles cerclées de blanc</strong> sont les mesures réelles des
-				voyageurs&nbsp;: là, c'est du vécu, pas de la théorie.
+				des opérateurs). Les <strong>rubans le long de la voie</strong> (et les cellules au fort zoom)
+				sont les mesures réelles des voyageurs&nbsp;: là, c'est du vécu, pas de la théorie.
 			</p>
 
 			<div class="layers">
@@ -371,6 +421,12 @@
 			</label>
 			{#if selectedLine}
 				<RouteProfile slug={selectedLine} operator={viewOperator} />
+				<div class="share-row">
+					<button type="button" class="share-btn" onclick={shareLine}>
+						Partager ce trajet&nbsp;<span aria-hidden="true">↗</span>
+					</button>
+					{#if shareMsg}<span class="share-msg" role="status">{shareMsg}</span>{/if}
+				</div>
 			{/if}
 
 			<div class="measure">
@@ -380,6 +436,17 @@
 					mesure votre connexion en continu, de façon <strong>anonyme</strong>.
 				</p>
 
+				<!-- Desktop uniquement (CSS) : sur ordinateur le GPS est trop imprécis, on
+				     invite à mesurer depuis le téléphone via ce QR code. -->
+				<div class="qr-desktop">
+					<!-- eslint-disable-next-line svelte/no-at-html-tags : SVG généré localement, pas d'entrée utilisateur -->
+					{@html qrSvg}
+					<p class="qr-label">
+						Sur ordinateur, le GPS est trop imprécis. <strong>Scannez</strong> pour mesurer depuis votre
+						téléphone.
+					</p>
+				</div>
+
 				<label class="field" for="operator">
 					Votre opérateur
 					<select id="operator" name="operator" bind:value={operator} disabled={live?.running}>
@@ -388,6 +455,12 @@
 						{/each}
 					</select>
 				</label>
+
+				<p class="hint wifi-hint">
+					Pour mesurer votre réseau mobile, <strong>désactivez le Wi-Fi</strong> (y compris le Wi-Fi du
+					train)&nbsp;: sinon la mesure est enregistrée comme «&nbsp;Wi-Fi de bord&nbsp;», pas comme couverture
+					opérateur.
+				</p>
 
 				<label class="throughput-opt">
 					<input
@@ -417,6 +490,14 @@
 					<p class="error">{live.error}</p>
 				{/if}
 
+				{#if live?.running && live.onWifi}
+					<p class="warn" role="alert">
+						Vous semblez connecté en <strong>Wi-Fi</strong> (Wi-Fi du train&nbsp;?)&nbsp;: cette mesure
+						est enregistrée comme «&nbsp;Wi-Fi de bord&nbsp;», pas comme couverture mobile. Coupez le
+						Wi-Fi pour mesurer votre 4G/5G.
+					</p>
+				{/if}
+
 				{#if live?.running}
 					<div class="live">
 						<div class="big {live.status}">
@@ -427,11 +508,16 @@
 							{/if}
 						</div>
 
+						{#if live.gpsStale}
+							<p class="warn" aria-live="polite">
+								<strong>En attente d'une position GPS précise…</strong> La mesure continue&nbsp;: si le
+								GPS finit par accrocher, vos données seront enregistrées.
+							</p>
+						{/if}
+
 						<div class="captured" aria-live="polite">
 							<span class="count">{captured}</span>
-							<span class="unit"
-								>point{captured > 1 ? 's' : ''} enregistré{captured > 1 ? 's' : ''}</span
-							>
+							<span class="unit">point{pluralS(captured)} enregistré{pluralS(captured)}</span>
 						</div>
 						<!-- Toujours rendue (hauteur réservée) → pas de saut de mise en page. -->
 						<p class="sync {syncInfo.cls}">{syncInfo.text}</p>
@@ -692,6 +778,44 @@
 		color: #fca5a5;
 		font-size: var(--fs-sm);
 	}
+	/* Avertissement (ambre) : informatif, moins critique qu'une erreur. Classe partagée
+	   par le rappel Wi-Fi de bord et l'attente de position GPS précise (gpsStale). */
+	.warn {
+		margin: 0.5rem 0 0;
+		padding: 0.5rem 0.7rem;
+		border-radius: var(--r-sm);
+		background: rgba(251, 191, 36, 0.12);
+		border: 1px solid rgba(251, 191, 36, 0.35);
+		color: #fbbf24;
+		font-size: var(--fs-sm);
+		line-height: 1.4;
+	}
+	.warn strong {
+		color: #fcd34d;
+	}
+	/* Rappel statique sous le select opérateur (couvre iOS où le Wi-Fi est indétectable). */
+	.wifi-hint {
+		margin: -0.25rem 0 0.75rem;
+	}
+	/* QR « mesure depuis ton téléphone » : masqué par défaut (mobile-first),
+	   affiché uniquement sur desktop (cf. @media min-width: 761px). */
+	.qr-desktop {
+		display: none;
+	}
+	.qr-desktop :global(svg) {
+		width: 132px;
+		height: 132px;
+		background: #fff;
+		padding: 7px;
+		border-radius: var(--r-sm);
+	}
+	.qr-label {
+		margin: 0;
+		font-size: var(--fs-sm);
+		color: var(--muted);
+		text-align: center;
+		max-width: 22ch;
+	}
 	.queued-note {
 		color: var(--muted);
 		font-size: 0.78rem;
@@ -866,6 +990,13 @@
 		.panel {
 			padding: 1.25rem;
 		}
+		.qr-desktop {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: var(--sp-2);
+			margin: 0.25rem 0 1rem;
+		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
@@ -875,5 +1006,33 @@
 		.cta {
 			transition: none;
 		}
+	}
+
+	/* --- Partage du trajet sélectionné --- */
+	.share-row {
+		display: flex;
+		align-items: center;
+		gap: var(--sp-3);
+		margin-top: var(--sp-3);
+	}
+	.share-btn {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.5rem 0.9rem;
+		border: 1px solid var(--glass-border);
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--accent) 16%, transparent);
+		color: var(--text);
+		font-size: var(--fs-sm);
+		font-weight: 600;
+		cursor: pointer;
+		transition: background 0.18s;
+	}
+	.share-btn:hover {
+		background: color-mix(in srgb, var(--accent) 26%, transparent);
+	}
+	.share-msg {
+		font-size: var(--fs-sm);
+		color: var(--link);
 	}
 </style>
