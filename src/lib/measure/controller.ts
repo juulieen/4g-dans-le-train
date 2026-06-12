@@ -360,14 +360,14 @@ export class MeasurementController {
 		//    fix suivant, qui donnera le sens du trajet pour extrapoler en arrière ;
 		//  - tracé pas encore chargé : il arrive par la réponse API de la 1re mesure
 		//    positionnée (+ un fetch), souvent APRÈS le fix qui referme le trou → on
-		//    retente au fix suivant plutôt que de perdre le buffer dans la course.
+		//    retente au fix suivant plutôt que de perdre le buffer dans la course ;
+		//  - recalage refusé (reprise « hors-rails », fréquente au ré-accrochage GPS en
+		//    sortie de tunnel) : un fix on-rails peut suivre 1-2 s plus tard → on retente.
 		// L'attente est bornée : au-delà de MAX_GAP_MS depuis l'ancre, l'interpolation
 		// rejetterait tout de toute façon → on jette.
 		if (this.gapBuffer.length > 0 && this.gapEntry) {
-			if (this.profilePath) {
-				this.commitGap(this.gapEntry, sample);
-				this.dropGap(sample);
-			} else if (sample.timestamp - this.gapEntry.timestamp > MAX_GAP_MS) {
+			const expired = sample.timestamp - this.gapEntry.timestamp > MAX_GAP_MS;
+			if (expired || (this.profilePath && this.commitGap(this.gapEntry, sample))) {
 				this.dropGap(sample);
 			}
 			// sinon : buffer + ancre conservés, nouvelle tentative au prochain fix.
@@ -524,10 +524,14 @@ export class MeasurementController {
 	 * N'enfile RIEN sans garde-fous : profil chargé, ancres ≤ 5 min d'écart, entrée ET
 	 * sortie « sur les rails » (preuve de non-sortie du train). Chaque ping reconstruit
 	 * à plus de 5 min de l'ancre est ignoré (extrapolation trop lointaine).
+	 *
+	 * Retourne true si la reconstruction a abouti (le buffer est soldé) ; false si un
+	 * garde-fou a refusé — l'appelant garde alors le buffer et retentera avec un fix
+	 * ultérieur (cas typique : sortie de tunnel avec un 1er fix encore hors-rails).
 	 */
-	private commitGap(entry: GeoSample, exit: GeoSample): void {
+	private commitGap(entry: GeoSample, exit: GeoSample): boolean {
 		const path = this.profilePath;
-		if (!path || this.gapBuffer.length === 0) return;
+		if (!path || this.gapBuffer.length === 0) return false;
 
 		const reconstructed = reconstructAlongPath(
 			path,
@@ -536,7 +540,7 @@ export class MeasurementController {
 			this.gapBuffer.map((g) => g.measuredAt),
 			{ maxSpanMs: MAX_GAP_MS, snapMaxM: SNAP_MAX_M }
 		);
-		if (!reconstructed) return; // garde-fous non réunis → buffer jeté par l'appelant
+		if (!reconstructed) return false; // garde-fous non réunis → l'appelant retentera
 		const { positions, speedKmh } = reconstructed;
 
 		const sessionId = getSessionId();
@@ -567,6 +571,7 @@ export class MeasurementController {
 			this.patch({ queued: this.queue.size });
 			void this.flush();
 		}
+		return true;
 	}
 
 	/** Persiste l'état du trou en cours (survit au refresh et à l'arrêt). */

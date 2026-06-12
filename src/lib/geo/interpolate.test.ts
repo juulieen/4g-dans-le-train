@@ -114,6 +114,11 @@ describe('reconstructAlongPath', () => {
 		expect(out!.positions[0]!.lng).toBeCloseTo(2.1, 6);
 	});
 
+	it('rejette (null) un tracé dégénéré (< 2 points : rien le long de quoi interpoler)', () => {
+		expect(reconstructAlongPath([], entry, exit, [50_000], OPTS)).toBeNull();
+		expect(reconstructAlongPath([[2.0, 48.0, 0]], entry, exit, [50_000], OPTS)).toBeNull();
+	});
+
 	it('rejette (null) si les ancres sont espacées de plus de maxSpanMs', () => {
 		const farExit = { ...exit, t: 6 * 60_000 };
 		expect(reconstructAlongPath(PATH, entry, farExit, [0], OPTS)).toBeNull();

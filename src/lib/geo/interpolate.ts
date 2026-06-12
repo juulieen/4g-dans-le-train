@@ -107,7 +107,9 @@ export function reconstructAlongPath(
 	times: number[],
 	opts: ReconstructOptions
 ): { positions: Array<{ lat: number; lng: number } | null>; speedKmh: number } | null {
-	if (path.length === 0) return null;
+	// < 2 points : pas de tracé le long duquel interpoler (un point unique projetterait
+	// tout au même endroit avec une vitesse nulle, dégénéré).
+	if (path.length < 2) return null;
 	const span = exit.t - entry.t;
 	if (span <= 0 || span > opts.maxSpanMs) return null;
 

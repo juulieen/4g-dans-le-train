@@ -125,8 +125,8 @@
 		measureThroughput = getThroughputOptIn();
 	});
 
-	// Persiste le choix d'opérateur à chaque changement (premier passage = no-op :
-	// la valeur initiale vient déjà du storage).
+	// Persiste le choix d'opérateur à chaque changement (premier passage : réécrit la
+	// valeur qui vient d'être restaurée du storage — idempotent).
 	$effect(() => {
 		setSavedOperator(operator);
 	});

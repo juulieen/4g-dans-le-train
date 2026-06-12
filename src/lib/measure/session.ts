@@ -113,7 +113,14 @@ export function clearMeasureAlive(): void {
 	}
 }
 
-/** Une mesure tournait-elle il y a moins de `maxAgeMs` (défaut 2 min) ? */
+/**
+ * Une mesure tournait-elle il y a moins de `maxAgeMs` (défaut 2 min) ?
+ *
+ * 2 min, volontairement plus court que la fenêtre de recalage du buffer de trou
+ * (MAX_GAP_MS = 5 min, controller.ts) : au-delà, la mesure est considérée « morte »
+ * et on ne la relance pas — mais le buffer persisté, lui, reste recalable jusqu'à
+ * 5 min et sera repris au prochain démarrage MANUEL.
+ */
 export function wasMeasuringRecently(maxAgeMs = 2 * 60_000): boolean {
 	if (typeof localStorage === 'undefined') return false;
 	try {

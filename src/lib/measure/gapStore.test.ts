@@ -59,6 +59,14 @@ describe('GapStore', () => {
 		expect(restored!.pings[0].measuredAt).toBe(NOW - 30_000);
 	});
 
+	it('sauvegarde et restaure un buffer sans ancre (cold-start pur, aucun fix reçu)', () => {
+		gap.save(state({ entry: null }));
+		const restored = gap.load(NOW, MAX_AGE);
+		expect(restored).not.toBeNull();
+		expect(restored!.entry).toBeNull();
+		expect(restored!.pings).toHaveLength(2);
+	});
+
 	it("jette une ancre d'entrée périmée mais garde les pings récents (repartent en cold-start)", () => {
 		gap.save(
 			state({

@@ -94,7 +94,10 @@ export class GapStore {
 	clear(): void {
 		if (!this.store) return;
 		try {
-			this.store.setItem(GAP_KEY, JSON.stringify(null));
+			// Repli `setItem("null")` pour un store de test minimal sans removeItem :
+			// `load` traite les deux formes (clé absente ou JSON null) comme « vide ».
+			if (this.store.removeItem) this.store.removeItem(GAP_KEY);
+			else this.store.setItem(GAP_KEY, JSON.stringify(null));
 		} catch {
 			/* storage indisponible : best-effort */
 		}
