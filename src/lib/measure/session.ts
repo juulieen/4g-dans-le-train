@@ -11,6 +11,8 @@ const SESSION_KEY = '4gdt.session';
 const CONSENT_KEY = '4gdt.consent';
 const ONBOARDED_KEY = '4gdt.onboarded';
 const THROUGHPUT_OPT_KEY = '4gdt.opt.throughput';
+const SENSORS_OPT_KEY = '4gdt.opt.sensors';
+const ACTIVE_TRACE_KEY = '4gdt.trace.active';
 const MEASURE_ALIVE_KEY = '4gdt.measure.alive';
 const OPERATOR_KEY = '4gdt.operator';
 
@@ -81,6 +83,64 @@ export function setThroughputOptIn(on: boolean): void {
 	try {
 		if (on) localStorage.setItem(THROUGHPUT_OPT_KEY, 'on');
 		else localStorage.removeItem(THROUGHPUT_OPT_KEY);
+	} catch {
+		/* stockage bloqué : best-effort, on ignore */
+	}
+}
+
+/**
+ * Opt-in de l'enregistreur de traces capteurs (outil expérimental). OFF par
+ * défaut. Les traces (accéléromètre + gyroscope + GPS bruts) restent 100 %
+ * locales (IndexedDB) et ne sont JAMAIS envoyées au serveur — l'utilisateur
+ * les exporte lui-même en JSON. Préférence locale, sans donnée personnelle.
+ */
+export function getSensorsOptIn(): boolean {
+	if (typeof localStorage === 'undefined') return false;
+	try {
+		return localStorage.getItem(SENSORS_OPT_KEY) === 'on';
+	} catch {
+		return false;
+	}
+}
+
+export function setSensorsOptIn(on: boolean): void {
+	if (typeof localStorage === 'undefined') return;
+	try {
+		if (on) localStorage.setItem(SENSORS_OPT_KEY, 'on');
+		else localStorage.removeItem(SENSORS_OPT_KEY);
+	} catch {
+		/* stockage bloqué : best-effort, on ignore */
+	}
+}
+
+/**
+ * Pointeur de trace capteurs ACTIVE (id de la trace en cours d'enregistrement).
+ * Sémantique calquée sur le heartbeat : posé au démarrage de l'enregistrement,
+ * effacé à l'arrêt VOLONTAIRE. S'il survit (refresh en cours de session), la
+ * reprise continue d'écrire dans la même trace au lieu d'en ouvrir une nouvelle.
+ */
+export function getActiveTraceId(): string | null {
+	if (typeof localStorage === 'undefined') return null;
+	try {
+		return localStorage.getItem(ACTIVE_TRACE_KEY);
+	} catch {
+		return null;
+	}
+}
+
+export function setActiveTraceId(id: string): void {
+	if (typeof localStorage === 'undefined') return;
+	try {
+		localStorage.setItem(ACTIVE_TRACE_KEY, id);
+	} catch {
+		/* stockage bloqué : best-effort, on ignore */
+	}
+}
+
+export function clearActiveTraceId(): void {
+	if (typeof localStorage === 'undefined') return;
+	try {
+		localStorage.removeItem(ACTIVE_TRACE_KEY);
 	} catch {
 		/* stockage bloqué : best-effort, on ignore */
 	}

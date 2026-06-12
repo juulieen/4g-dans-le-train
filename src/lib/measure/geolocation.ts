@@ -45,37 +45,47 @@ export class GeoTracker {
 	}
 
 	/** Filtre de précision + mise en forme commune (fix initial et suivi continu). */
-	private emit(pos: GeolocationPosition, onSample: (s: GeoSample) => void): void {
+	private emit(
+		pos: GeolocationPosition,
+		onSample: (s: GeoSample) => void,
+		onRawSample?: (s: GeoSample) => void
+	): void {
 		const { latitude, longitude, accuracy, speed } = pos.coords;
-		if (accuracy > MAX_ACCURACY_M) return;
-		onSample({
+		const sample: GeoSample = {
 			lat: latitude,
 			lng: longitude,
 			accuracy,
 			speedKmh: speed != null ? speed * 3.6 : null,
 			timestamp: pos.timestamp
-		});
+		};
+		// Flux BRUT (avant filtre) : sert uniquement à la trace capteurs expérimentale,
+		// qui a besoin des fixes imprécis avec leur `accuracy` pour l'analyse hors-ligne.
+		onRawSample?.(sample);
+		if (accuracy > MAX_ACCURACY_M) return;
+		onSample(sample);
 	}
 
 	/**
-	 * Démarre le suivi. `onSample` est appelé pour chaque position suffisamment précise.
+	 * Démarre le suivi. `onSample` est appelé pour chaque position suffisamment précise ;
+	 * `onRawSample` (optionnel) pour CHAQUE fix, même trop imprécis pour la mesure.
 	 * Retourne false si la géoloc n'est pas disponible.
 	 */
 	start(
 		onSample: (s: GeoSample) => void,
-		onError?: (e: GeolocationPositionError) => void
+		onError?: (e: GeolocationPositionError) => void,
+		onRawSample?: (s: GeoSample) => void
 	): boolean {
 		if (!this.isSupported) return false;
 		// Fix initial rapide : réutilise une position récente si le téléphone en a une
 		// (cas du redémarrage de mesure). Les erreurs sont ignorées ici — `watchPosition`
 		// reste la source de vérité pour le suivi et la remontée d'erreurs.
 		navigator.geolocation.getCurrentPosition(
-			(pos) => this.emit(pos, onSample),
+			(pos) => this.emit(pos, onSample, onRawSample),
 			() => {},
 			{ enableHighAccuracy: true, maximumAge: FIRST_FIX_MAX_AGE_MS, timeout: 10000 }
 		);
 		this.watchId = navigator.geolocation.watchPosition(
-			(pos) => this.emit(pos, onSample),
+			(pos) => this.emit(pos, onSample, onRawSample),
 			(err) => onError?.(err),
 			{ enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
 		);
