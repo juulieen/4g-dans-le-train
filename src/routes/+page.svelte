@@ -131,12 +131,16 @@
 	const MAX_TRAIL_POINTS = 7_200; // ~2 h à 1 point/s
 	let trailFeatures: GeoJSON.Feature[] = [];
 	let trail = $state.raw<GeoJSON.FeatureCollection>({ type: 'FeatureCollection', features: [] });
-	function pushTrailPoint(p: SessionPoint) {
-		trailFeatures.push({
-			type: 'Feature',
-			geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
-			properties: { status: p.status, posSource: p.posSource }
-		});
+	// Reçoit les points EN LOT (1 par tick en mode normal, ~320 d'un coup à la sortie
+	// d'un tunnel) → une seule réaffectation de `trail` (donc un seul setData) par lot.
+	function pushTrailPoints(points: SessionPoint[]) {
+		for (const p of points) {
+			trailFeatures.push({
+				type: 'Feature',
+				geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+				properties: { status: p.status, posSource: p.posSource }
+			});
+		}
 		if (trailFeatures.length > MAX_TRAIL_POINTS) {
 			trailFeatures.splice(0, trailFeatures.length - MAX_TRAIL_POINTS);
 		}
@@ -184,7 +188,7 @@
 			controller = new MeasurementController({
 				operator,
 				onState: (s) => (live = s),
-				onPoint: pushTrailPoint,
+				onPoints: pushTrailPoints,
 				measureThroughput
 			});
 		}
@@ -204,6 +208,9 @@
 		if (live?.running) {
 			await c.stop();
 			await refreshCoverage();
+			// Fin de session : on rouvre le panneau (bilan, réglages) — sinon l'utilisateur
+			// reste face à une carte avec une sheet repliée devenue muette.
+			sheetExpanded = true;
 		} else {
 			if (!consent) {
 				grantConsent();
@@ -286,8 +293,10 @@
 
 	// Âge de la dernière mesure de débit (« il y a 40 s ») : un instantané d'1 min
 	// d'âge ne doit pas se faire passer pour du temps réel. Recalculé à chaque tick
-	// (l'objet `live` change toutes les secondes).
+	// (l'objet `live` change toutes les secondes). Garde SSR : Date.now() côté serveur
+	// divergerait de l'hydratation si ce derived sortait un jour du {#if live?.running}.
 	const downlinkAge = $derived.by(() => {
+		if (typeof window === 'undefined') return '';
 		if (!live?.downlinkAt) return '';
 		const s = Math.max(0, Math.round((Date.now() - live.downlinkAt) / 1000));
 		return s < 5 ? "à l'instant" : `il y a ${formatDuree(s)}`;
@@ -445,12 +454,19 @@
 			{#if live?.running}
 				<!-- Mini-HUD du mode mesure : visible dans la zone « peek » de la sheet repliée
 				     et collant en haut du panneau ouvert. Le détail reste plus bas (section mesure). -->
-				<div class="hud" aria-live="polite">
+				<!-- aria-live sur le SEUL libellé de statut (change aux transitions), jamais sur
+				     le conteneur : compteur, chrono et synchro changent chaque seconde et
+				     spammeraient les lecteurs d'écran. -->
+				<div class="hud">
 					<div class="hud-status {live.status}">
 						<span class="rec" aria-hidden="true"></span>
-						<span class="hud-label">{statusLabel[live.status] ?? live.status}</span>
+						<span class="hud-label" aria-live="polite"
+							>{statusLabel[live.status] ?? live.status}</span
+						>
 						{#if live.currentOutage}
-							<span class="since">· depuis {formatDuree(live.currentOutage.sinceS)}</span>
+							<span class="since" aria-hidden="true"
+								>· depuis {formatDuree(live.currentOutage.sinceS)}</span
+							>
 						{/if}
 						<button class="hud-stop" onclick={toggleMeasure}>Arrêter</button>
 					</div>

@@ -317,7 +317,11 @@ Conventions produit :
     Au-delà de **5 min** sans échantillon, l'épisode en cours est clos comme **non
     terminé** (on ne sait pas quand le réseau est revenu). Les épisodes non
     terminés (trou, ou arrêt en zone blanche) sont **exclus des agrégats serveur**
-    pour ne pas biaiser la durée médiane.
+    pour ne pas biaiser la durée médiane. ⚠️ Écart de sémantique assumé : le
+    **compteur live « Coupures » compte tous les épisodes vus** (terminés ou non —
+    retour immédiat à l'utilisateur), tandis que le serveur n'agrège que les
+    terminés ; le chiffre d'une session peut donc dépasser ce que les pages
+    afficheront.
   - **Vie privée** : `GET /api/outages` ne renvoie **que des agrégats** (durée et
     longueur médianes par cellule de début × opérateur, ligne dérivée de la
     cellule) — jamais les points bruts ni les séquences par session. On affiche

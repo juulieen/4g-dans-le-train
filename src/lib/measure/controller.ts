@@ -107,9 +107,10 @@ export interface SessionPoint {
 export interface ControllerOptions {
 	operator: Operator;
 	onState: (s: LiveState) => void;
-	/** Appelé pour chaque point positionné enfilé (sillage live sur la carte).
-	 *  Les points interpolés d'un tunnel arrivent en lot à la reprise du GPS. */
-	onPoint?: (p: SessionPoint) => void;
+	/** Appelé avec les points positionnés enfilés (sillage live sur la carte) —
+	 *  EN LOT : 1 point par tick en mode normal, jusqu'à ~320 d'un coup à la sortie
+	 *  d'un tunnel (commitGap). Le lot évite une rafale de mises à jour réactives. */
+	onPoints?: (points: SessionPoint[]) => void;
 	endpoint?: string;
 	/** Active la mesure de débit (opt-in : consomme la data mobile). Défaut false. */
 	measureThroughput?: boolean;
@@ -503,15 +504,17 @@ export class MeasurementController {
 						sessionId: getSessionId()
 					});
 					this.patch({ queued: this.queue.size });
-					this.emitPoint({
-						lat: sample.lat,
-						lng: sample.lng,
-						status,
-						rttMs,
-						downlinkKbps,
-						measuredAt: now,
-						posSource: 'gps'
-					});
+					this.emitPoints([
+						{
+							lat: sample.lat,
+							lng: sample.lng,
+							status,
+							rttMs,
+							downlinkKbps,
+							measuredAt: now,
+							posSource: 'gps'
+						}
+					]);
 				}
 			} else {
 				// --- Trou GPS / cold-start : ping bufferisé sans position ---
@@ -588,7 +591,9 @@ export class MeasurementController {
 		const { positions, speedKmh } = reconstructed;
 
 		const sessionId = getSessionId();
-		let placed = 0;
+		// Sillage : accumulés puis émis EN UN SEUL LOT après la boucle — sinon la sortie
+		// de tunnel déclencherait jusqu'à ~320 mises à jour réactives d'affilée.
+		const placedPoints: SessionPoint[] = [];
 		this.gapBuffer.forEach((g, i) => {
 			const pos = positions[i];
 			if (!pos) return; // instant trop lointain de l'ancre
@@ -609,8 +614,7 @@ export class MeasurementController {
 				sessionId,
 				posSource: 'interpolated'
 			});
-			// Sillage : les points du tunnel apparaissent en lot, replacés sur le tracé.
-			this.emitPoint({
+			placedPoints.push({
 				lat: pos.lat,
 				lng: pos.lng,
 				status: g.status,
@@ -619,10 +623,10 @@ export class MeasurementController {
 				measuredAt: g.measuredAt,
 				posSource: 'interpolated'
 			});
-			placed++;
 		});
-		if (placed > 0) {
+		if (placedPoints.length > 0) {
 			this.patch({ queued: this.queue.size });
+			this.emitPoints(placedPoints);
 			void this.flush();
 		}
 		return true;
@@ -700,7 +704,10 @@ export class MeasurementController {
 				}
 			})
 			.finally(() => {
-				// Ne libère le verrou que s'il s'agit toujours de la même session.
+				// Ne libère le verrou que s'il s'agit toujours de la même session. Pour une
+				// génération périmée (stop/start pendant la mesure en vol), c'est le
+				// `patch({ ...initialState })` de start() qui remet throughputMeasuring à
+				// false — ce finally n'a alors rien à faire (et ne doit rien toucher).
 				if (gen === this.generation) {
 					this.throughputInFlight = false;
 					this.patch({ throughputMeasuring: false });
@@ -708,10 +715,15 @@ export class MeasurementController {
 			});
 	}
 
-	/** Alimente le ticker « derniers envois » et le sillage carte (local, éphémère). */
-	private emitPoint(p: SessionPoint): void {
-		this.patch({ lastSamples: [...this.state.lastSamples, p].slice(-MAX_LAST_SAMPLES) });
-		this.opts.onPoint?.(p);
+	/** Alimente le ticker « derniers envois » et le sillage carte (local, éphémère).
+	 *  Un SEUL patch + un SEUL callback quel que soit le nombre de points : la sortie
+	 *  de tunnel (jusqu'à ~320 points recalés) ne déclenche qu'une mise à jour UI. */
+	private emitPoints(points: SessionPoint[]): void {
+		if (points.length === 0) return;
+		this.patch({
+			lastSamples: [...this.state.lastSamples, ...points].slice(-MAX_LAST_SAMPLES)
+		});
+		this.opts.onPoints?.(points);
 	}
 
 	/** Récupère le dernier débit mesuré et le consomme (ne le rattache qu'une fois). */

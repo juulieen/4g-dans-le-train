@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { cellToBoundary } from 'h3-js';
@@ -484,11 +484,13 @@
 	function bindInteractions() {
 		if (!map) return;
 
-		// Un pan/zoom de l'utilisateur débraye le suivi caméra du mode mesure
-		// (le bouton « Recentrer » le réactive). Les easeTo programmés n'émettent
-		// pas ces events « *start » avec geste utilisateur.
-		map.on('dragstart', () => (follow = false));
-		map.on('wheel', () => (follow = false));
+		// TOUT geste utilisateur (pan, molette, pinch-zoom, rotation…) débraye le suivi
+		// caméra du mode mesure (le bouton « Recentrer » le réactive). On filtre sur
+		// `originalEvent` : les mouvements programmés (easeTo de suivi) n'en ont pas —
+		// sans ce filtre, notre propre suivi se débrayerait lui-même.
+		map.on('movestart', (e) => {
+			if (e.originalEvent) follow = false;
+		});
 
 		// Popup ARCEP : ce qu'on peut faire ici (théorique) + lignes qui passent ici.
 		map.on('click', 'arcep-lines', (e) => {
@@ -689,6 +691,9 @@
 
 	// Marqueur « vous êtes ici » : créé au premier fix, suit la position et prend la
 	// couleur du statut courant (vert/orange/rouge — rouge pendant une coupure).
+	// `follow` est lu via untrack : l'effet est déjà re-déclenché chaque seconde par
+	// `livePos`, et le tracker ferait de l'écriture `follow = true` (branche création)
+	// une auto-invalidation inutile et fragile.
 	$effect(() => {
 		if (!loaded || !map) return;
 		if (!livePos) {
@@ -708,7 +713,9 @@
 			map.easeTo({ center: [livePos.lng, livePos.lat], zoom: Math.max(map.getZoom(), 11.5) });
 		} else {
 			liveMarker.setLngLat([livePos.lng, livePos.lat]);
-			if (follow) map.easeTo({ center: [livePos.lng, livePos.lat], duration: 900 });
+			if (untrack(() => follow)) {
+				map.easeTo({ center: [livePos.lng, livePos.lat], duration: 900 });
+			}
 		}
 		liveMarkerEl?.style.setProperty('--live-color', LIVE_COLORS[livePos.status] ?? USAGE_COLORS.CL);
 	});
@@ -810,6 +817,12 @@
 		box-shadow: 0 0 0 2px rgb(0 0 0 / 25%);
 		position: relative;
 	}
+	/* Thème clair (basemap positron quasi blanc) : la bordure blanche disparaîtrait —
+	   on prend la même logique de contraste que le cerclage du réel (realEdgeColor). */
+	:global(html[data-theme='light'] .live-marker) {
+		border-color: #0f172a;
+		box-shadow: 0 0 0 2px rgb(255 255 255 / 45%);
+	}
 	:global(.live-marker)::after {
 		content: '';
 		position: absolute;
@@ -834,10 +847,12 @@
 		}
 	}
 
-	/* Bouton « Recentrer » : réactive le suivi caméra du mode mesure. */
+	/* Bouton « Recentrer » : réactive le suivi caméra du mode mesure. En bas de la
+	   carte (zone du pouce) ; sur mobile, juste au-dessus du peek de la bottom-sheet
+	   (--peek: 188px dans +page.svelte — valeur reprise ici faute de portée CSS). */
 	.recenter {
 		position: absolute;
-		top: 150px;
+		bottom: 24px;
 		right: 10px;
 		z-index: 5;
 		display: inline-flex;
@@ -856,6 +871,12 @@
 		border-radius: 50%;
 		background: var(--accent);
 		flex: none;
+	}
+	/* Mobile : la bottom-sheet repliée couvre le bas → le bouton remonte juste au-dessus. */
+	@media (max-width: 760px) {
+		.recenter {
+			bottom: 200px;
+		}
 	}
 
 	/* Popups MapLibre (injectées hors du composant → :global) : look glass lisible.
