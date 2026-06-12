@@ -175,6 +175,19 @@ describe('OutageDetector', () => {
 		expect(eps[0].lengthM).toBe(0);
 	});
 
+	it('currentOutageStart : expose le début de la coupure ouverte, null sinon', () => {
+		const d = new OutageDetector();
+		expect(d.currentOutageStart()).toBeNull();
+		d.observe(sample(0, 'ok'));
+		expect(d.currentOutageStart()).toBeNull();
+		d.observe(sample(10 * S, 'none'));
+		expect(d.currentOutageStart()).toBe(10 * S);
+		d.observe(sample(20 * S, 'none'));
+		expect(d.currentOutageStart()).toBe(10 * S); // le début ne bouge pas
+		d.observe(sample(30 * S, 'ok'));
+		expect(d.currentOutageStart()).toBeNull(); // épisode clos
+	});
+
 	it('trou de mesure > 5 min : clôt l’épisode en cours (non terminé) et en démarre un autre', () => {
 		const M = 60 * S;
 		const eps = detectOutages([

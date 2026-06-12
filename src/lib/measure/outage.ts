@@ -135,6 +135,15 @@ export class OutageDetector {
 		return this.close(s.measuredAt, recovery, true);
 	}
 
+	/**
+	 * Instant de début (époch ms) de la coupure encore OUVERTE, sinon null.
+	 * Sert au retour live « pas de réseau depuis X s » — l'épisode clos, lui,
+	 * n'arrive qu'à la reprise du réseau via `observe`/`finalize`.
+	 */
+	currentOutageStart(): number | null {
+		return this.startedAt;
+	}
+
 	/** Clôt une coupure encore ouverte (session arrêtée en zone blanche). */
 	finalize(): OutageEpisode | null {
 		if (!this.inOutage) return null;
