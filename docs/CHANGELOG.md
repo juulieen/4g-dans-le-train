@@ -5,6 +5,20 @@
 
 ## 2026-06-12
 
+- **Mode mesure — correctifs des reviews du tableau de bord live (opus + sonnet)** :
+  **perf sortie de tunnel** : les points recalés sont désormais émis **en un seul lot**
+  (`onPoints`, un patch + un setData au lieu de ~320 mises à jour réactives d'affilée) ;
+  **suivi caméra durci** : débrayage sur **tout geste réel** (`movestart` filtré sur
+  `originalEvent` — couvre le pinch-zoom mobile, sans que nos `easeTo` se débrayent
+  eux-mêmes) et lecture de `follow` via `untrack` (plus d'auto-invalidation de l'effet) ;
+  **a11y** : `aria-live` restreint au libellé de statut (le HUD entier changeait chaque
+  seconde → spam lecteurs d'écran), chrono en `aria-hidden` ; **UI** : bouton
+  « Recentrer » déplacé en bas de carte (zone du pouce, au-dessus du peek mobile),
+  bordure du marqueur contrastée en thème clair, la sheet se **rouvre à l'arrêt** de la
+  mesure ; garde SSR sur l'âge du débit. Doc : écart de sémantique assumé entre le
+  compteur live « Coupures » (tous les épisodes vus) et les agrégats serveur (terminés
+  seulement).
+
 - **Mode mesure — tableau de bord live (carte + HUD honnête)** : pendant la mesure, la
   carte passe au premier plan. **Marqueur « vous êtes ici »** pulsant coloré par statut
   (rouge en coupure), **suivi caméra** débrayable (drag/molette → bouton « Recentrer »),
