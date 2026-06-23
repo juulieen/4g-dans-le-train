@@ -158,7 +158,13 @@ Conventions produit :
   écran maintenu via Wake Lock).
 - **Cadence stable à 1/s** : un **tick maître** (`controller.ts`, toutes les 1 s)
   pilote toute la mesure → un **ping actif** (petite requête réseau) par seconde,
-  quoi qu'il arrive. `watchPosition` (irrégulier selon l'OS) ne sert plus qu'à
+  quoi qu'il arrive. Le ping est lancé en **fire-and-forget** : la cadence ne dépend
+  **pas** de sa latence. Un ping lent (degraded ~2 s) ou un timeout de coupure (~2,5 s)
+  ne « gèle » plus le tick — on conserve **~1 point/s même en mauvaise zone**, là où
+  c'est le plus utile (avant, un ping sérialisé espaçait les points à ~1/2-3 s pile
+  dans les coupures). Plusieurs pings peuvent être en vol ; leurs résultats sont
+  appliqués **dans l'ordre de lancement** (le détecteur de coupures exige des instants
+  monotones). `watchPosition` (irrégulier selon l'OS) ne sert plus qu'à
   **rafraîchir la position courante** et à refermer les trous GPS ; il ne déclenche
   plus la mesure. On en tire succès/échec + latence (RTT). Méthode cross-navigateur
   (iOS inclus, uniquement `fetch`/`performance.now()`), contrairement à
