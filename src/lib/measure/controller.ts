@@ -116,6 +116,27 @@ export interface ControllerOptions {
 	measureThroughput?: boolean;
 }
 
+/**
+ * Instantané d'un tick + résultat de son ping, transporté du lancement (synchrone)
+ * à l'application ordonnée (cf. fire-and-forget dans `tick`/`applyTick`).
+ */
+interface TickResult {
+	/** Numéro de lancement (ordre d'application). */
+	seq: number;
+	/** Génération de session au lancement : un résultat d'une session passée est jeté. */
+	generation: number;
+	/** Instant du tick (époch ms) — sert de `measuredAt` et garde l'ordre temporel. */
+	now: number;
+	/** Position GPS au lancement du tick (ou null). */
+	sample: GeoSample | null;
+	/** GPS jugé frais au lancement (sinon ping bufferisé pour interpolation). */
+	fresh: boolean;
+	netType: string | null;
+	onWifi: boolean;
+	status: PingStatus;
+	rttMs: number | null;
+}
+
 const initialState: LiveState = {
 	running: false,
 	status: 'idle',
@@ -190,8 +211,14 @@ export class MeasurementController {
 	private detector = new OutageDetector();
 	private state: LiveState = { ...initialState };
 	private opts: ControllerOptions;
-	/** Évite les ticks concurrents si un ping traîne au-delà de la cadence. */
-	private busy = false;
+	/** Fire-and-forget : numéro du prochain tick lancé (étiquette chaque ping). */
+	private tickSeq = 0;
+	/** Prochain seq à APPLIQUER : garantit un traitement ordonné des résultats de ping
+	 *  (le détecteur de coupures exige des instants monotones), même si un ping rapide
+	 *  revient avant un ping lent lancé plus tôt. */
+	private nextApplySeq = 0;
+	/** Résultats de ping arrivés en avance, en attente de leur tour (clé = seq). */
+	private pendingTicks = new Map<number, TickResult>();
 	/** Évite les vidages de file concurrents. */
 	private flushing = false;
 	private flushTimer: ReturnType<typeof setInterval> | null = null;
@@ -275,6 +302,11 @@ export class MeasurementController {
 		this.lastGpsAt = 0;
 		this.gapStartedAt = null;
 		this.currentSample = null;
+		// Réinitialise le séquençage fire-and-forget (les pings d'une session précédente
+		// encore en vol seront jetés via la garde de génération dans applyTick).
+		this.tickSeq = 0;
+		this.nextApplySeq = 0;
+		this.pendingTicks.clear();
 		// Réinitialise le suivi de débit (et invalide une mesure de débit en vol).
 		this.lastThroughputAt = 0;
 		this.throughputBytesUsed = 0;
@@ -312,12 +344,16 @@ export class MeasurementController {
 		this.flushTimer = setInterval(() => void this.flush(), FLUSH_INTERVAL_MS);
 		// Tick maître : pingue à cadence fixe (1/s). On lance un tick tout de suite pour
 		// afficher l'état réseau dès le départ, sans attendre le premier fix GPS.
-		this.tickTimer = setInterval(() => void this.tick(), TICK_MS);
-		void this.tick();
+		this.tickTimer = setInterval(() => this.tick(), TICK_MS);
+		this.tick();
 		void this.flush();
 	}
 
 	async stop(): Promise<void> {
+		// Invalide les pings fire-and-forget encore en vol : leur `applyTick` verra une
+		// génération différente et sera ignoré (pas de mesure enfilée après l'arrêt).
+		this.generation++;
+		this.pendingTicks.clear();
 		this.geo.stop();
 		await this.wake.release();
 		if (typeof window !== 'undefined') window.removeEventListener('online', this.onOnline);
@@ -420,143 +456,170 @@ export class MeasurementController {
 	}
 
 	/**
-	 * Tick maître (1/s). Pingue, puis selon la fraîcheur du GPS :
+	 * Tick maître (1/s) — FIRE-AND-FORGET. Capture un instantané synchrone (instant,
+	 * position, fraîcheur GPS) puis lance le ping SANS l'attendre : la cadence ne dépend
+	 * plus de la latence réseau. Un ping degraded (~2 s) ou un timeout de coupure (~2,5 s)
+	 * n'espace donc plus les points — on garde ~1 mesure/s même en mauvaise zone (là où
+	 * c'est le plus utile). Plusieurs pings peuvent être en vol en parallèle ; leurs
+	 * résultats sont appliqués DANS L'ORDRE de lancement (cf. `applyTick`), car le
+	 * détecteur de coupures exige des instants monotones.
+	 */
+	private tick(): void {
+		if (!this.state.running) return;
+		const now = Date.now();
+		// Heartbeat de reprise : prouve qu'une mesure tournait si la page recharge.
+		markMeasureAlive();
+		const seq = this.tickSeq++;
+		const generation = this.generation;
+		const sample = this.currentSample;
+		const fresh = sample !== null && now - this.lastGpsAt <= GAP_THRESHOLD_MS;
+		const netType = readNetworkType();
+		const onWifi = isOnWifi();
+		void ping(this.opts.endpoint).then(({ status, rttMs }) =>
+			this.applyTick({ seq, generation, now, sample, fresh, netType, onWifi, status, rttMs })
+		);
+	}
+
+	/**
+	 * Applique les résultats de ping DANS L'ORDRE de lancement (`seq`). Un ping rapide
+	 * revenu avant un ping lent lancé plus tôt est mis en attente jusqu'à ce que son tour
+	 * vienne — sinon le détecteur de coupures verrait des instants non monotones. Chaque
+	 * ping résout en ≤ 5 s (timeout client), donc l'attente est bornée (jamais de blocage).
+	 */
+	private applyTick(p: TickResult): void {
+		// Résultat d'une session précédente (stop/start) ou mesure arrêtée : jeté.
+		if (p.generation !== this.generation || !this.state.running) return;
+		this.pendingTicks.set(p.seq, p);
+		while (this.pendingTicks.has(this.nextApplySeq)) {
+			const cur = this.pendingTicks.get(this.nextApplySeq)!;
+			this.pendingTicks.delete(this.nextApplySeq);
+			this.nextApplySeq++;
+			this.processTick(cur);
+		}
+	}
+
+	/**
+	 * Traite UN tick déjà ordonné. Selon la fraîcheur du GPS :
 	 *  - GPS frais → mesure positionnée (mode normal) + débit cadencé optionnel ;
 	 *  - GPS gelé / cold-start → ping bufferisé sans position (repositionné plus tard).
 	 * N'ENVOIE PAS directement — la synchro (`flush`) est déclenchée en tâche de fond.
 	 */
-	private async tick(): Promise<void> {
-		if (!this.state.running || this.busy) return;
-		this.busy = true;
-		try {
-			const now = Date.now();
-			// Heartbeat de reprise : prouve qu'une mesure tournait si la page recharge.
-			markMeasureAlive();
-			const { status, rttMs } = await ping(this.opts.endpoint);
-			const netType = readNetworkType();
-			const onWifi = isOnWifi();
-			this.patch({ status, rttMs, netType, onWifi });
+	private processTick(p: TickResult): void {
+		const { now, sample, fresh, netType, onWifi, status, rttMs } = p;
+		this.patch({ status, rttMs, netType, onWifi });
 
-			const sample = this.currentSample;
-			const fresh = sample !== null && now - this.lastGpsAt <= GAP_THRESHOLD_MS;
+		// Suivi du trou GPS courant : on note quand il commence pour signaler (gpsStale)
+		// le dépassement de la fenêtre d'interpolation (MAX_GAP_MS). La mesure n'est
+		// JAMAIS interrompue — si le GPS finit par accrocher, on repasse en mode normal.
+		if (fresh) {
+			this.gapStartedAt = null;
+		} else if (this.gapStartedAt === null) {
+			this.gapStartedAt = now;
+		}
+		const gpsStale = this.gapStartedAt !== null && now - this.gapStartedAt > MAX_GAP_MS;
+		if (gpsStale !== this.state.gpsStale) this.patch({ gpsStale });
 
-			// Suivi du trou GPS courant : on note quand il commence pour signaler (gpsStale)
-			// le dépassement de la fenêtre d'interpolation (MAX_GAP_MS). La mesure n'est
-			// JAMAIS interrompue — si le GPS finit par accrocher, on repasse en mode normal.
-			if (fresh) {
-				this.gapStartedAt = null;
-			} else if (this.gapStartedAt === null) {
-				this.gapStartedAt = now;
+		if (fresh && sample) {
+			// --- Mode normal : mesure positionnée ---
+
+			// Mesure de débit : opt-in, espacée dans le TEMPS (1/min), UNIQUEMENT sur le
+			// chemin GPS (jamais en tunnel : pas de réseau, data gaspillée) et tant que le
+			// plafond de données/session n'est pas atteint. Lancée HORS du tick
+			// (fire-and-forget) pour ne jamais retarder la cadence ; son résultat est
+			// affiché dès réception et rattaché au prochain envoi.
+			if (
+				this.opts.measureThroughput &&
+				!this.throughputInFlight &&
+				this.throughputBytesUsed < THROUGHPUT_CAP_BYTES &&
+				now - this.lastThroughputAt >= THROUGHPUT_INTERVAL_MS
+			) {
+				this.lastThroughputAt = now;
+				this.measureThroughputDetached();
 			}
-			const gpsStale = this.gapStartedAt !== null && now - this.gapStartedAt > MAX_GAP_MS;
-			if (gpsStale !== this.state.gpsStale) this.patch({ gpsStale });
 
-			if (fresh && sample) {
-				// --- Mode normal : mesure positionnée ---
+			const ep = this.detector.observe({
+				measuredAt: now,
+				status,
+				lat: sample.lat,
+				lng: sample.lng,
+				speedKmh: sample.speedKmh
+			});
+			if (ep) {
+				this.patch({
+					outages: this.state.outages + 1,
+					lastOutage: { durationS: ep.durationS, lengthM: ep.lengthM }
+				});
+			}
 
-				// Mesure de débit : opt-in, espacée dans le TEMPS (1/min), UNIQUEMENT sur le
-				// chemin GPS (jamais en tunnel : pas de réseau, data gaspillée) et tant que le
-				// plafond de données/session n'est pas atteint. Lancée HORS du tick
-				// (fire-and-forget) pour ne jamais retarder la cadence ; son résultat est
-				// affiché dès réception et rattaché au prochain envoi.
-				if (
-					this.opts.measureThroughput &&
-					!this.throughputInFlight &&
-					this.throughputBytesUsed < THROUGHPUT_CAP_BYTES &&
-					now - this.lastThroughputAt >= THROUGHPUT_INTERVAL_MS
-				) {
-					this.lastThroughputAt = now;
-					this.measureThroughputDetached();
-				}
+			// Consomme le dernier débit mesuré à CHAQUE mesure (borne son âge à ~1
+			// cycle, même sans consentement où il serait sinon rattaché bien plus tard).
+			const downlinkKbps = this.consumePendingDownlink();
 
-				const ep = this.detector.observe({
-					measuredAt: now,
-					status,
+			if (hasConsent()) {
+				// On ENFILE systématiquement (même « none ») : les zones blanches, où
+				// l'envoi direct échouerait, sont ainsi gardées et rejouées plus tard.
+				this.queue.enqueue({
 					lat: sample.lat,
 					lng: sample.lng,
-					speedKmh: sample.speedKmh
+					status,
+					rttMs,
+					downlinkKbps,
+					operator: this.effectiveOperator(onWifi),
+					netType,
+					speedKmh: sample.speedKmh,
+					gpsAccuracy: sample.accuracy,
+					measuredAt: now,
+					sessionId: getSessionId()
 				});
-				if (ep) {
-					this.patch({
-						outages: this.state.outages + 1,
-						lastOutage: { durationS: ep.durationS, lengthM: ep.lengthM }
-					});
-				}
-
-				// Consomme le dernier débit mesuré à CHAQUE mesure (borne son âge à ~1
-				// cycle, même sans consentement où il serait sinon rattaché bien plus tard).
-				const downlinkKbps = this.consumePendingDownlink();
-
-				if (hasConsent()) {
-					// On ENFILE systématiquement (même « none ») : les zones blanches, où
-					// l'envoi direct échouerait, sont ainsi gardées et rejouées plus tard.
-					this.queue.enqueue({
+				this.patch({ queued: this.queue.size });
+				this.emitPoints([
+					{
 						lat: sample.lat,
 						lng: sample.lng,
 						status,
 						rttMs,
 						downlinkKbps,
-						operator: this.effectiveOperator(onWifi),
-						netType,
-						speedKmh: sample.speedKmh,
-						gpsAccuracy: sample.accuracy,
 						measuredAt: now,
-						sessionId: getSessionId()
-					});
-					this.patch({ queued: this.queue.size });
-					this.emitPoints([
-						{
-							lat: sample.lat,
-							lng: sample.lng,
-							status,
-							rttMs,
-							downlinkKbps,
-							measuredAt: now,
-							posSource: 'gps'
-						}
-					]);
-				}
-			} else {
-				// --- Trou GPS / cold-start : ping bufferisé sans position ---
-				// Alimente la détection live des coupures même sans position : en tunnel,
-				// cela maintient l'épisode vivant et en mesure la vraie durée.
-				const ep = this.detector.observe({
-					measuredAt: now,
-					status,
-					lat: null,
-					lng: null,
-					speedKmh: null
-				});
-				if (ep) {
-					this.patch({
-						outages: this.state.outages + 1,
-						lastOutage: { durationS: ep.durationS, lengthM: ep.lengthM }
-					});
-				}
-				// Bufferise pour rejeu ultérieur (consentement requis, comme le mode normal).
-				// Persisté à chaque ping : un refresh de page ne perd rien.
-				if (hasConsent() && this.gapBuffer.length < MAX_GAP_PINGS) {
-					this.gapBuffer.push({ measuredAt: now, status, rttMs, netType, onWifi });
-					this.persistGap();
-					this.patch({ buffered: this.gapBuffer.length });
-				}
+						posSource: 'gps'
+					}
+				]);
 			}
-
-			// Chrono de la coupure EN COURS (épisode encore ouvert dans le détecteur) :
-			// rafraîchi à chaque tick → « pas de réseau depuis X s » dans l'UI.
-			const outageStart = this.detector.currentOutageStart();
-			this.patch({
-				currentOutage:
-					outageStart != null
-						? { sinceS: Math.max(0, Math.round((now - outageStart) / 1000)) }
-						: null
+		} else {
+			// --- Trou GPS / cold-start : ping bufferisé sans position ---
+			// Alimente la détection live des coupures même sans position : en tunnel,
+			// cela maintient l'épisode vivant et en mesure la vraie durée.
+			const ep = this.detector.observe({
+				measuredAt: now,
+				status,
+				lat: null,
+				lng: null,
+				speedKmh: null
 			});
-
-			// Envoi en tâche de fond : ne bloque pas le tick suivant.
-			void this.flush();
-		} finally {
-			this.busy = false;
+			if (ep) {
+				this.patch({
+					outages: this.state.outages + 1,
+					lastOutage: { durationS: ep.durationS, lengthM: ep.lengthM }
+				});
+			}
+			// Bufferise pour rejeu ultérieur (consentement requis, comme le mode normal).
+			// Persisté à chaque ping : un refresh de page ne perd rien.
+			if (hasConsent() && this.gapBuffer.length < MAX_GAP_PINGS) {
+				this.gapBuffer.push({ measuredAt: now, status, rttMs, netType, onWifi });
+				this.persistGap();
+				this.patch({ buffered: this.gapBuffer.length });
+			}
 		}
+
+		// Chrono de la coupure EN COURS (épisode encore ouvert dans le détecteur) :
+		// rafraîchi à chaque tick → « pas de réseau depuis X s » dans l'UI.
+		const outageStart = this.detector.currentOutageStart();
+		this.patch({
+			currentOutage:
+				outageStart != null ? { sinceS: Math.max(0, Math.round((now - outageStart) / 1000)) } : null
+		});
+
+		// Envoi en tâche de fond : ne bloque pas le tick suivant.
+		void this.flush();
 	}
 
 	/**

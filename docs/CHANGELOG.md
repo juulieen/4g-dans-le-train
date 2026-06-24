@@ -3,6 +3,17 @@
 > Ajoute ici une entrée (date + résumé) pour toute évolution fonctionnelle ou de
 > contenu notable. Le plus récent en haut. Voir `../CLAUDE.md`.
 
+## 2026-06-21
+
+- **Mesure — ping en fire-and-forget (densité dans les coupures)** : le tick maître
+  lance désormais le ping **sans l'attendre**, donc la cadence ne dépend plus de la
+  latence réseau. Avant, le ping sérialisé « gelait » le tick le temps de sa réponse →
+  en zone dégradée (~2 s) ou en coupure (timeout ~2,5 s), les points s'espaçaient à
+  ~1 tous les 2-3 s, **pile là où c'est le plus intéressant**. Désormais ~1 point/s
+  partout. Plusieurs pings peuvent être en vol ; leurs résultats sont appliqués **dans
+  l'ordre de lancement** (`seq`), car le détecteur de coupures exige des instants
+  monotones. La durée des coupures, elle, était déjà exacte (dérivée des horodatages).
+
 ## 2026-06-12
 
 - **Mode mesure — correctifs des reviews du tableau de bord live (opus + sonnet)** :
