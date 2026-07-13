@@ -39,8 +39,18 @@
 	<ul>
 		<li>Aucune donnée personnelle (nom, e-mail, numéro, identifiant d'appareil).</li>
 		<li>Aucune trace GPS continue ré-identifiable.</li>
-		<li>Aucun cookie publicitaire, aucun tracker tiers.</li>
+		<li>Aucun cookie (ni publicitaire, ni de suivi), aucun tracker tiers commercial.</li>
 	</ul>
+
+	<h2>Mesure d'audience</h2>
+	<p>
+		Nous utilisons <strong>Plausible</strong>, un outil de statistiques d'audience
+		<strong>auto-hébergé</strong> sur notre propre serveur (<code>plausible.juulieen.fr</code>). Il
+		mesure de façon <strong>agrégée et anonyme</strong> le nombre de visites et les pages
+		consultées, <strong>sans cookie</strong> et <strong>sans stocker de donnée personnelle</strong>
+		(pas d'adresse IP conservée, pas d'identifiant persistant, aucun suivi entre les sites). Aucune donnée
+		n'est transmise à un tiers.
+	</p>
 
 	<h2>Vos droits</h2>
 	<p>

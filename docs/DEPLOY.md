@@ -76,6 +76,12 @@ sudo systemctl reload caddy
 Le HTTPS est provisionné automatiquement. C'est requis pour la géolocalisation et
 le Wake Lock (API disponibles uniquement en contexte sécurisé).
 
+> **CSP & mesure d'audience** : le site charge Plausible depuis
+> `plausible.juulieen.fr` (cf. `src/app.html`). La config Caddy actuelle n'impose
+> **aucune** `Content-Security-Policy`. Si tu en ajoutes une un jour, pense à
+> autoriser ce domaine dans `script-src` **et** `connect-src`, sinon le tag et
+> l'envoi des events seront bloqués.
+
 ## 4. Données
 
 Avant ou après le premier déploiement, importer les tracés ferroviaires :

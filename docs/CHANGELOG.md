@@ -3,6 +3,16 @@
 > Ajoute ici une entrée (date + résumé) pour toute évolution fonctionnelle ou de
 > contenu notable. Le plus récent en haut. Voir `../CLAUDE.md`.
 
+## 2026-07-13
+
+- **Mesure d'audience — Plausible auto-hébergé** : ajout du tag Plausible
+  (`plausible.juulieen.fr`, self-hosted) dans `src/app.html`, présent sur toutes les
+  pages. **Sans cookie, sans donnée personnelle** — cohérent avec la politique vie
+  privée du projet. Extensions activées : `file-downloads`, `outbound-links` (extension
+  `hash` volontairement écartée : navigation SvelteKit en pushState, pas de
+  hash-routing → elle fausserait le comptage de pages). Page `confidentialite` mise à
+  jour avec une section « Mesure d'audience » explicite.
+
 ## 2026-06-21
 
 - **Mesure — ping en fire-and-forget (densité dans les coupures)** : le tick maître
