@@ -356,6 +356,15 @@ Conventions produit :
   dégrade proprement sans mesures. C'est l'incarnation de l'ADN du projet :
   l'**écart** entre couverture annoncée et constatée.
 - **Périmètre** : France (réseau SNCF) d'abord ; architecture extensible.
+- **Mesure d'audience — Plausible auto-hébergé** : le site charge Plausible depuis
+  notre propre instance (`plausible.juulieen.fr`), pas le service SaaS. Choix motivé
+  par la politique vie privée **non négociable** : Plausible ne pose **aucun cookie**,
+  ne conserve **aucune adresse IP** ni identifiant persistant, ne suit pas l'utilisateur
+  entre les sites et n'envoie rien à un tiers — donc pas de bandeau cookie requis. Le
+  tag vit dans `src/app.html` (toutes les pages). Extensions `file-downloads` +
+  `outbound-links` ; l'extension `hash` est écartée (navigation pushState, elle
+  compterait les changements d'ancre comme des pages vues). La page `confidentialite`
+  documente cette mesure côté utilisateur.
 - **Snapping ligne — décisions** : (1) une mesure hors de toute ligne connue est
   **acceptée sans `lineSlug`**, jamais rejetée (on ne perd aucune donnée ; le filtre
   anti-aberrant est reporté). (2) Une cellule de **tronc commun** appartient à
