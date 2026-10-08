@@ -2,6 +2,8 @@
 	import { onMount, untrack } from 'svelte';
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
+	import { Protocol } from 'pmtiles';
+	import { layers as basemapLayers, namedFlavor } from '@protomaps/basemaps';
 	import { cellToBoundary } from 'h3-js';
 	import {
 		USAGE_COLORS,
@@ -15,6 +17,15 @@
 	} from '$lib/usage';
 	import { worstByCell, type CellRate } from '$lib/coverage-quality';
 	import { pluralS } from '$lib/plural';
+
+	// Protocole pmtiles:// : lit le fichier .pmtiles auto-hébergé par requêtes HTTP
+	// range (pas de serveur de tuiles, Caddy statique suffit). Garde anti-doublon
+	// pour le HMR en dev.
+	try {
+		maplibregl.addProtocol('pmtiles', new Protocol().tile);
+	} catch {
+		/* protocole déjà enregistré (HMR) */
+	}
 
 	/** Niveaux d'usage, du meilleur au pire — ordre d'affichage de la légende. */
 	const LEGEND_LEVELS: Level[] = ['TBC', 'BC', 'CL', 'none'];
@@ -92,25 +103,25 @@
 	let arcepTried = false;
 
 	/**
-	 * Fond de carte sobre, gratuit et sans clé API (raster CARTO), accordé au thème :
-	 * dark-matter en sombre, positron en clair. Attribution OSM + CARTO incluse.
+	 * Fond de carte vectoriel AUTO-HÉBERGÉ (PMTiles Protomaps, extrait France servi en
+	 * statique par Caddy sous /tiles/ — voir docs/DEPLOY.md), accordé au thème :
+	 * flavor « dark » en sombre, « light » en clair. Attribution OSM incluse.
+	 * Les glyphs (labels) et sprites (icônes) sont eux aussi servis sous /tiles/.
 	 */
 	function basemapStyle(theme: 'light' | 'dark'): maplibregl.StyleSpecification {
-		const base = theme === 'light' ? 'light_all' : 'dark_all';
 		return {
 			version: 8,
+			glyphs: '/tiles/fonts/{fontstack}/{range}.pbf',
+			sprite: `/tiles/sprites/v4/${theme}`,
 			sources: {
-				carto: {
-					type: 'raster',
-					tiles: ['a', 'b', 'c', 'd'].map(
-						(s) => `https://${s}.basemaps.cartocdn.com/${base}/{z}/{x}/{y}.png`
-					),
-					tileSize: 256,
-					attribution: '© OpenStreetMap, © CARTO'
+				protomaps: {
+					type: 'vector',
+					url: 'pmtiles:///tiles/france.pmtiles',
+					attribution: '© OpenStreetMap'
 				}
 			},
-			layers: [{ id: 'carto', type: 'raster', source: 'carto' }]
-		} satisfies maplibregl.StyleSpecification;
+			layers: basemapLayers('protomaps', namedFlavor(theme), { lang: 'fr' })
+		} as unknown as maplibregl.StyleSpecification;
 	}
 
 	function currentTheme(): 'light' | 'dark' {
@@ -162,7 +173,7 @@
 	// Couleurs du « cerclage » du réel, contrastées avec le fond de carte (les
 	// expressions MapLibre ne peuvent pas lire les variables CSS thématisées).
 	const REAL_EDGE_DARK = '#ffffff'; // sur basemap sombre
-	const REAL_EDGE_LIGHT = '#0f172a'; // sur basemap clair (positron)
+	const REAL_EDGE_LIGHT = '#0f172a'; // sur basemap clair
 
 	/**
 	 * Couleur du « cerclage » du réel (liseré du ruban, contour des hexagones) : doit
@@ -817,7 +828,7 @@
 		box-shadow: 0 0 0 2px rgb(0 0 0 / 25%);
 		position: relative;
 	}
-	/* Thème clair (basemap positron quasi blanc) : la bordure blanche disparaîtrait —
+	/* Thème clair (basemap quasi blanc) : la bordure blanche disparaîtrait —
 	   on prend la même logique de contraste que le cerclage du réel (realEdgeColor). */
 	:global(html[data-theme='light'] .live-marker) {
 		border-color: #0f172a;

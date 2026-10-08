@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
 	 * Aperçu de carte STATIQUE et CLIQUABLE, zoomé sur une ligne, posé sur les pages
-	 * `/ligne/[slug]`. Réutilise `Map.svelte` (rendu identique : fond CARTO + voie ARCEP
+	 * `/ligne/[slug]`. Réutilise `Map.svelte` (rendu identique : fond Protomaps auto-hébergé + voie ARCEP
 	 * colorée + mesures de la ligne) mais en lui INJECTANT des données légères :
 	 *  - la voie ARCEP de CETTE ligne seule, construite depuis son route-profile
 	 *    (`arcep[] + path` → `buildArcepLineFeatures`), ~dizaines de Ko au lieu de 4,6 Mo ;
@@ -99,7 +99,7 @@
 			<div class="skeleton" aria-hidden="true"></div>
 		{/if}
 		<!-- Overlay cliquable TOUJOURS présent (donc lien dans le HTML statique, sans JS) ;
-		     laisse la bande d'attribution CARTO/OSM en bas cliquable. -->
+		     laisse la bande d'attribution OSM en bas cliquable. -->
 		<a
 			class="overlay"
 			href={`/?line=${slug}`}

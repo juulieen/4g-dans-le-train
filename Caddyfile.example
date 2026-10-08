@@ -2,5 +2,13 @@
 # Caddy provisionne le HTTPS automatiquement via Let's Encrypt.
 
 4g-dans-le-train.juulieen.fr {
+    # Tuiles vectorielles auto-hebergees (PMTiles Protomaps) + fonts/sprites,
+    # servies en statique (requetes HTTP range). Le dossier doit etre visible
+    # par Caddy sous /srv/tiles (bind-mount si Caddy tourne en conteneur).
+    handle_path /tiles/* {
+        root * /srv/tiles
+        file_server
+        header Cache-Control "public, max-age=86400"
+    }
     reverse_proxy localhost:3101
 }

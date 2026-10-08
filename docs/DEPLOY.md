@@ -82,7 +82,33 @@ le Wake Lock (API disponibles uniquement en contexte sécurisé).
 > autoriser ce domaine dans `script-src` **et** `connect-src`, sinon le tag et
 > l'envoi des events seront bloqués.
 
-## 4. Données
+## 4. Fond de carte auto-hébergé (tuiles PMTiles)
+
+Le fond de carte est un **extrait France des builds Protomaps** (données OpenStreetMap),
+servi en statique par Caddy sous `/tiles/` — aucun service ni clé API tiers. Trois
+éléments dans `~/server/asus-1/tiles/` (bind-mounté `:ro` dans le conteneur Caddy) :
+
+- `france.pmtiles` (~10 Go) — tuiles vectorielles, consommées par le navigateur via
+  requêtes HTTP range (`pmtiles.js` côté client) ;
+- `fonts/` — glyphs PBF des fontstacks Noto Sans (labels de la carte) ;
+- `sprites/` — icônes (gares, shields routiers) des flavors light/dark.
+
+Régénérer les tuiles (données OSM fraîches, ~tous les 6 mois suffit) :
+
+```bash
+cd ~/server/asus-1/tiles
+# Vérifier la dernière build dispo : maps.protomaps.com/builds
+./pmtiles extract https://build.protomaps.com/<YYYYMMDD>.pmtiles france.pmtiles \
+    --bbox=-5.5,41.0,10.0,51.5 --maxzoom=15 --download-threads=8
+```
+
+Fonts et sprites proviennent du repo `protomaps/basemaps-assets` (sparse checkout des
+fontstacks Noto Sans Regular/Medium/Italic + `sprites/`).
+
+En **dev local**, rien à héberger : Vite proxifie `/tiles/*` vers la prod
+(voir `vite.config.ts`).
+
+## 5. Données
 
 Avant ou après le premier déploiement, importer les tracés ferroviaires :
 
