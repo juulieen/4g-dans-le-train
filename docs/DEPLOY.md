@@ -96,11 +96,17 @@ servi en statique par Caddy sous `/tiles/` — aucun service ni clé API tiers. 
 Régénérer les tuiles (données OSM fraîches, ~tous les 6 mois suffit) :
 
 ```bash
+# Le CLI vit HORS du dossier servi (~/server/asus-1/tiles-cli/) : tout ce qui est
+# dans tiles/ est public (sous /tiles/*), ne pas y laisser binaires ni logs.
 cd ~/server/asus-1/tiles
 # Vérifier la dernière build dispo : maps.protomaps.com/builds
-./pmtiles extract https://build.protomaps.com/<YYYYMMDD>.pmtiles france.pmtiles \
+../tiles-cli/pmtiles extract https://build.protomaps.com/<YYYYMMDD>.pmtiles france.pmtiles \
     --bbox=-5.5,41.0,10.0,51.5 --maxzoom=15 --download-threads=8
 ```
+
+Durcissement côté Caddy (dans le `handle_path /tiles/*`) : les requêtes **sans header
+`Range`** sur `*.pmtiles` reçoivent un **403** — le fichier fait ~10 Go et pmtiles.js
+ne consomme que des ranges, ça bloque les téléchargements complets abusifs.
 
 Fonts et sprites proviennent du repo `protomaps/basemaps-assets` (sparse checkout des
 fontstacks Noto Sans Regular/Medium/Italic + `sprites/`).
