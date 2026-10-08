@@ -440,12 +440,26 @@
 		}
 	}
 
+	// Cadrage France métropolitaine : l'extrait PMTiles couvre [-5.5,41 → 10,51.5]
+	// (cf. docs/DEPLOY.md). Vue initiale = toute la France ; maxBounds (avec une petite
+	// marge) + minZoom empêchent de dériver vers les zones vides hors de l'extrait.
+	const FRANCE_VIEW: maplibregl.LngLatBoundsLike = [
+		[-5.5, 41.2],
+		[9.9, 51.3]
+	];
+	const FRANCE_MAX_BOUNDS: maplibregl.LngLatBoundsLike = [
+		[-7, 39.5],
+		[11.5, 52.5]
+	];
+
 	onMount(() => {
 		map = new maplibregl.Map({
 			container: mapContainer,
 			style: basemapStyle(currentTheme()),
-			center: [2.6, 46.6],
-			zoom: 5.2,
+			bounds: FRANCE_VIEW,
+			fitBoundsOptions: { padding: 16 },
+			maxBounds: FRANCE_MAX_BOUNDS,
+			minZoom: 4.5,
 			attributionControl: { compact: true },
 			// Aperçu statique : aucune interaction (ni pan/zoom, ni capture du scroll mobile).
 			interactive
