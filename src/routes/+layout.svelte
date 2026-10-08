@@ -273,6 +273,14 @@
 		min-height: 100dvh;
 	}
 
+	/* Route carte : la page tient EXACTEMENT dans l'écran (pas de scroll) — la hauteur
+	   est bornée ici, sinon la chaîne flex est content-driven et le panneau latéral
+	   (plus haut que l'écran) étire toute la page. Le panneau scrolle en interne. */
+	.app.map-route {
+		height: 100dvh;
+		overflow: hidden;
+	}
+
 	/* --- Top bar --- */
 	header {
 		position: sticky;

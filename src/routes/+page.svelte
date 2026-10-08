@@ -1160,17 +1160,25 @@
 		.layout {
 			display: grid;
 			grid-template-columns: 1fr min(380px, 38%);
-			overflow: visible;
+			/* Rangée contrainte à la hauteur du conteneur : sans ça, la rangée auto
+			   se dimensionne au contenu du panneau (plus haut que l'écran). */
+			grid-template-rows: minmax(0, 1fr);
+			/* Surtout PAS overflow:visible ici : un flex item visible a une taille
+			   minimale = min-content, ce qui laissait le panneau (plus haut que
+			   l'écran) étirer toute la page et la faire scroller. */
 		}
 		.map-wrap {
 			position: relative;
 			inset: auto;
+			min-height: 0;
 		}
 		.sheet {
 			position: relative;
 			inset: auto;
 			bottom: auto;
 			height: auto;
+			/* Idem : sans ça, le contenu du panneau impose sa hauteur à la grille. */
+			min-height: 0;
 			transform: none;
 			border-radius: 0;
 			border: none;

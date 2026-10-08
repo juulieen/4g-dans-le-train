@@ -100,8 +100,10 @@ Régénérer les tuiles (données OSM fraîches, ~tous les 6 mois suffit) :
 # dans tiles/ est public (sous /tiles/*), ne pas y laisser binaires ni logs.
 cd ~/server/asus-1/tiles
 # Vérifier la dernière build dispo : maps.protomaps.com/builds
+# Bbox = Europe de l'Ouest : assez large pour que le contexte autour de la France
+# (Benelux, Allemagne, Suisse, Italie du Nord, Espagne) soit rendu en vue nationale.
 ../tiles-cli/pmtiles extract https://build.protomaps.com/<YYYYMMDD>.pmtiles france.pmtiles \
-    --bbox=-5.5,41.0,10.0,51.5 --maxzoom=15 --download-threads=8
+    --bbox=-7,39,14,53.5 --maxzoom=15 --download-threads=8
 ```
 
 Durcissement côté Caddy (dans le `handle_path /tiles/*`) : les requêtes **sans header
