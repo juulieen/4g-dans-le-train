@@ -404,9 +404,9 @@
 	/>
 	<!-- Préchargement des glyphs de base de la carte : sans ça, ils arrivent en cascade
 	     APRÈS les tuiles (~2-3 s de plus sur lien lent). URLs exactes = celles de MapLibre. -->
-	<link rel="preload" as="fetch" crossorigin href="/tiles/fonts/Noto%20Sans%20Regular/0-255.pbf" />
-	<link rel="preload" as="fetch" crossorigin href="/tiles/fonts/Noto%20Sans%20Medium/0-255.pbf" />
-	<link rel="preload" as="fetch" crossorigin href="/tiles/fonts/Noto%20Sans%20Italic/0-255.pbf" />
+	<link rel="preload" as="fetch" crossorigin="anonymous" href="/tiles/fonts/Noto%20Sans%20Regular/0-255.pbf" />
+	<link rel="preload" as="fetch" crossorigin="anonymous" href="/tiles/fonts/Noto%20Sans%20Medium/0-255.pbf" />
+	<link rel="preload" as="fetch" crossorigin="anonymous" href="/tiles/fonts/Noto%20Sans%20Italic/0-255.pbf" />
 </svelte:head>
 
 <section class="layout">
