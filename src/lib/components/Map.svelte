@@ -1,7 +1,11 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
-	import maplibregl from 'maplibre-gl';
+	import * as maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
+	// MapLibre v6 (ESM uniquement) : sous un bundler, l'URL du worker doit être fournie
+	// explicitement. `?worker&url` fait bundler le worker par Vite (fichier same-origin,
+	// donc pas besoin de `worker-src blob:` en CSP).
+	import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 	import { Protocol } from 'pmtiles';
 	import { layers as basemapLayers, namedFlavor } from '@protomaps/basemaps';
 	import { cellToBoundary } from 'h3-js';
@@ -17,6 +21,8 @@
 	} from '$lib/usage';
 	import { worstByCell, type CellRate } from '$lib/coverage-quality';
 	import { pluralS } from '$lib/plural';
+
+	maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
 	// Protocole pmtiles:// : lit le fichier .pmtiles auto-hébergé par requêtes HTTP
 	// range (pas de serveur de tuiles, Caddy statique suffit). Garde anti-doublon
@@ -112,7 +118,10 @@
 		return {
 			version: 8,
 			glyphs: '/tiles/fonts/{fontstack}/{range}.pbf',
-			sprite: `/tiles/sprites/v4/${theme}`,
+			// MapLibre 6 exige une URL de sprite ABSOLUE (sinon « Invalid sprite URL » et
+			// les icônes du fond — points de villes, capitales — disparaissent en silence).
+			// Les glyphs, eux, acceptent toujours un chemin relatif. Style construit côté client.
+			sprite: `${location.origin}/tiles/sprites/v4/${theme}`,
 			sources: {
 				protomaps: {
 					type: 'vector',

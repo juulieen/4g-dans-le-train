@@ -29,7 +29,7 @@
 	import { ORIGIN } from '$lib/site';
 	import { pathBounds } from '$lib/coverage-segments';
 	import { page } from '$app/state';
-	import type maplibregl from 'maplibre-gl';
+	import type * as maplibregl from 'maplibre-gl';
 	import type { PageData } from './$types';
 
 	// URL encodée dans le QR « mesure depuis ton téléphone » (affiché sur desktop).

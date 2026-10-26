@@ -56,7 +56,7 @@
 		"@turf/turf": "^7.1.0",
 		"drizzle-orm": "^0.45.4",
 		"h3-js": "^4.1.0",
-		"maplibre-gl": "^4.7.1",
+		"maplibre-gl": "^6.16.0",
 		"pmtiles": "^4.5.0",
 		"satori": "^0.26.0",
 		"uqr": "^0.1.3",

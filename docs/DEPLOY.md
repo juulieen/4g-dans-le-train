@@ -81,6 +81,11 @@ le Wake Lock (API disponibles uniquement en contexte sécurisé).
 > **aucune** `Content-Security-Policy`. Si tu en ajoutes une un jour, pense à
 > autoriser ce domaine dans `script-src` **et** `connect-src`, sinon le tag et
 > l'envoi des events seront bloqués.
+>
+> Côté carte (MapLibre 6) : le worker est un fichier same-origin bundlé par Vite
+> (`/_app/immutable/workers/…`), donc `worker-src 'self'` suffit (pas de `blob:`) ;
+> prévoir aussi `connect-src 'self'` (PMTiles, glyphs et sprites sont chargés par `fetch`)
+> et `img-src 'self' data: blob:` (recommandation du guide de migration MapLibre v6).
 
 ## 4. Fond de carte auto-hébergé (tuiles PMTiles)
 
