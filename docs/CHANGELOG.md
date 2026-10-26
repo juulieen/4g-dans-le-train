@@ -3,6 +3,19 @@
 > Ajoute ici une entrée (date + résumé) pour toute évolution fonctionnelle ou de
 > contenu notable. Le plus récent en haut. Voir `../CLAUDE.md`.
 
+## 2026-10-26
+
+- **Sécurité — mise à jour des dépendances** : `@sveltejs/kit` 2.61.1 → 2.70.3
+  (ReDoS CVE-2026-66062), `drizzle-orm` 0.36.4 → 0.45.4 (CVE-2026-39356, injection SQL
+  via identifiants dynamiques — le code n'en construit aucun depuis l'entrée
+  utilisateur), `drizzle-kit` 0.28.1 → 0.31.11. Correctifs transitifs dans les plages
+  semver existantes (`devalue`, `postcss`, `nanoid`, `fast-uri`, `js-yaml`, `fflate`…).
+  Aucun changement de schéma ni de migration. Restent à traiter hors de cette passe
+  (sauts majeurs) : `vite` 5, `vitest` 2, `maplibre-gl` 4, `zod` 3.
+- **Build Docker — lockfile strict** : `bun install --frozen-lockfile` sans repli sur
+  `bun install` (build et image de prod) : l'image échoue désormais si `bun.lock` ne
+  correspond pas à `package.json`, au lieu de résoudre silencieusement d'autres versions.
+
 ## 2026-07-13
 
 - **Mesure d'audience — Plausible auto-hébergé** : ajout du tag Plausible

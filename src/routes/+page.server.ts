@@ -28,7 +28,13 @@ export const load: PageServerLoad = async ({ setHeaders }) => {
 			.from(cellAggregates)
 			.where(ne(cellAggregates.operator, WIFI_TRAIN_OPERATOR));
 	} catch (e) {
-		console.warn('[coverage] base indisponible, couverture vide :', (e as Error).message);
+		// Depuis drizzle-orm 0.44, l'erreur libSQL d'origine (ex. SQLITE_CANTOPEN) est
+		// enveloppée dans un DrizzleQueryError : on logge la cause plutôt que la requête.
+		const cause = (e as Error).cause ?? e;
+		console.warn(
+			'[coverage] base indisponible, couverture vide :',
+			cause instanceof Error ? cause.message : cause
+		);
 		return { coverage: EMPTY, cells: 0 };
 	}
 

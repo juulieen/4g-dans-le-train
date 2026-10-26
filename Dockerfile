@@ -1,8 +1,8 @@
 # Build SvelteKit (adapter-node) puis image de production légère, runtime Bun.
 FROM oven/bun:1 AS build
 WORKDIR /app
-COPY package.json bun.lock* ./
-RUN bun install --frozen-lockfile || bun install
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
 COPY . .
 RUN bun run build
 
@@ -11,8 +11,8 @@ FROM oven/bun:1-slim
 WORKDIR /app
 ENV NODE_ENV=production
 # Dépendances de prod uniquement (adapter-node sert le build).
-COPY package.json bun.lock* ./
-RUN bun install --production --frozen-lockfile || bun install --production
+COPY package.json bun.lock ./
+RUN bun install --production --frozen-lockfile
 COPY --from=build /app/build ./build
 # Migrations + schéma, pour pouvoir appliquer db:migrate au démarrage si besoin.
 COPY --from=build /app/drizzle ./drizzle
