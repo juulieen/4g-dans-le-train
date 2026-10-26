@@ -8,7 +8,8 @@
  * dans un `.env` pour des liens locaux.
  *
  * Variable **dynamique** et facultative (déclarée dans `src/env.ts`) : lue au démarrage
- * du serveur — l'image Docker est construite sans elle — et jamais bloquante si absente.
+ * du serveur pour les pages SSR, et au build pour les pages prérendues (sitemap,
+ * /lignes, /operateurs…) — l'image Docker est construite sans elle, d'où le repli.
  */
 import { PUBLIC_SITE_URL } from '$app/env/public';
 
