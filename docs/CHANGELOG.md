@@ -5,6 +5,13 @@
 
 ## 2026-10-26
 
+- **Outillage — Vite 8, vitest 5, zod 4** : `vite` 5.4 → 8.3.5 (bundler Rolldown ; fin des
+  failles du serveur de dev Vite 5), `@sveltejs/vite-plugin-svelte` 4 → 7.3.1, `svelte`
+  5.57.2, `@vite-pwa/sveltekit` 0.6 → 1.1.0 (vite-plugin-pwa 1.3), `vitest` 2 → 5.0.5
+  (corrige `tinypool`), `zod` 3 → 4.6.7 (DoS mémoire GHSA corrigé en 4.6.6). Code :
+  `z.string().uuid()` → `z.uuid()` dans l'ingestion des mesures (seul usage de zod ;
+  les identifiants de session viennent de `crypto.randomUUID()`, donc conformes à la
+  validation RFC 9562 plus stricte de zod 4). Aucun changement de comportement attendu.
 - **Sécurité — mise à jour des dépendances** : `@sveltejs/kit` 2.61.1 → 2.70.3
   (ReDoS CVE-2026-66062), `drizzle-orm` 0.36.4 → 0.45.4 (CVE-2026-39356, injection SQL
   via identifiants dynamiques — le code n'en construit aucun depuis l'entrée

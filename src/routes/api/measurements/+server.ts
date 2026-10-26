@@ -28,7 +28,7 @@ const MeasurementInput = z.object({
 	measuredAt: z.number().int().nonnegative().nullable().optional(),
 	/** Origine de la position : `gps` par défaut, `interpolated` si reconstruite sur le tracé. */
 	posSource: z.enum(['gps', 'interpolated']).default('gps'),
-	sessionId: z.string().uuid()
+	sessionId: z.uuid()
 });
 
 // Rate-limit mémoire simple (par session, fenêtre glissante d'1 min).
