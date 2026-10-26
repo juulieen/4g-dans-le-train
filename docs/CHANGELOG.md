@@ -5,6 +5,15 @@
 
 ## 2026-10-26
 
+- **Retrait du plugin PWA** (`@vite-pwa/sveltekit`) : le `sw.js` et le manifest
+  qu'il générait n'ont jamais été référencés (ni `registerSW`, ni
+  `<link rel="manifest">`, icônes `/icons/*` inexistantes → 404) — aucun service worker
+  n'a donc jamais été installé chez un visiteur, rien à désinscrire. `/sw.js`,
+  `/manifest.webmanifest` et `/workbox-*.js` ne sont plus servis. Pas de manifest
+  statique gardé (sans icônes, il n'apporterait rien) ; favicon et `theme-color`
+  inchangés. Le mode mesure garde sa file hors-ligne `localStorage`. Débloque la
+  montée SvelteKit 3.
+
 - **Carte — repli sans WebGL2** : MapLibre 6 exige WebGL2 ; sans lui (vieux navigateur,
   accélération matérielle coupée, GPU en liste noire), la carte restait vide sans
   explication. Désormais, détection préalable (`src/lib/webgl.ts`, testée) + capture de
