@@ -8,17 +8,20 @@
 - **Outillage — Vite 8, vitest 5, zod 4** : `vite` 5.4 → 8.3.5 (bundler Rolldown ; fin des
   failles du serveur de dev Vite 5), `@sveltejs/vite-plugin-svelte` 4 → 7.3.1, `svelte`
   5.57.2, `@vite-pwa/sveltekit` 0.6 → 1.1.0 (vite-plugin-pwa 1.3), `vitest` 2 → 5.0.5
-  (corrige `tinypool`), `zod` 3 → 4.6.7 (DoS mémoire GHSA corrigé en 4.6.6). Code :
-  `z.string().uuid()` → `z.uuid()` dans l'ingestion des mesures (seul usage de zod ;
-  les identifiants de session viennent de `crypto.randomUUID()`, donc conformes à la
-  validation RFC 9562 plus stricte de zod 4). Aucun changement de comportement attendu.
+  (corrige `tinypool`), `svelte-check` 4.7.7, `zod` 3 → 4.6.7 (DoS mémoire corrigé en
+  4.6.6) ; plage `@sveltejs/adapter-node` alignée sur la version déjà verrouillée (5.5.4).
+  Code : `z.string().uuid()` → `z.uuid()` dans l'ingestion des mesures (seul usage de zod).
+  Deux entrées déjà absurdes sont désormais refusées (400) par `POST /api/measurements` :
+  un `sessionId` qui n'est pas un UUID RFC 9562 (bits de version/variante) et un entier
+  hors de la plage « safe » JS. Notre client n'envoie ni l'un ni l'autre
+  (`crypto.randomUUID()`, valeurs arrondies). Vitest 5 demande Node ≥ 22.12 en local.
 - **Sécurité — mise à jour des dépendances** : `@sveltejs/kit` 2.61.1 → 2.70.3
   (ReDoS CVE-2026-66062), `drizzle-orm` 0.36.4 → 0.45.4 (CVE-2026-39356, injection SQL
   via identifiants dynamiques — le code n'en construit aucun depuis l'entrée
   utilisateur), `drizzle-kit` 0.28.1 → 0.31.11. Correctifs transitifs dans les plages
   semver existantes (`devalue`, `postcss`, `nanoid`, `fast-uri`, `js-yaml`, `fflate`…).
-  Aucun changement de schéma ni de migration. Restent à traiter hors de cette passe
-  (sauts majeurs) : `vite` 5, `vitest` 2, `maplibre-gl` 4, `zod` 3.
+  Aucun changement de schéma ni de migration. Sauts majeurs (`vite` 5, `vitest` 2,
+  `zod` 3, `maplibre-gl` 4) traités dans des PR séparées (entrées ci-dessus).
 - **Build Docker — lockfile strict** : `bun install --frozen-lockfile` sans repli sur
   `bun install` (build et image de prod) : l'image échoue désormais si `bun.lock` ne
   correspond pas à `package.json`, au lieu de résoudre silencieusement d'autres versions.
