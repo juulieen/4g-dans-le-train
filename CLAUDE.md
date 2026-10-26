@@ -41,7 +41,7 @@ bun run data:arcep # (ré)importe la couverture ARCEP puis régénère les voies
 bun run db:migrate # applique les migrations libSQL
 ```
 
-Avant de livrer : `bun run check && bun run lint && bun run build` doivent passer.
+Avant de livrer : `bun run check && bun run lint && bun run test && bun run build` doivent passer.
 
 ## Conventions
 

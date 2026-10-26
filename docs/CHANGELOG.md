@@ -49,7 +49,7 @@
   `no-navigation-without-resolve`, dont seuls les `href` sont exemptés (site servi à la
   racine ; `resolve` change de sémantique en SvelteKit 3, à revoir à cette migration).
 
-  **SvelteKit 3 non fait** : `@vite-pwa/sveltekit` 1.1.0 (dernière version) ne le prend pas en
+  **SvelteKit 3 non fait** (levé le jour même, cf. entrées « Retrait du plugin PWA » et « SvelteKit 3 ») : `@vite-pwa/sveltekit` 1.1.0 (dernière version) ne le prend pas en
   charge — le build passe mais ne génère plus `sw.js` (vérifié). Constat au passage : le
   service worker et le manifest PWA sont générés mais **jamais référencés** (ni
   `registerSW`, ni `<link rel="manifest">`) — la PWA n'est donc pas active en prod ; retirer

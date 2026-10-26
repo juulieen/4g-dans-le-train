@@ -78,7 +78,8 @@ le Wake Lock (API disponibles uniquement en contexte sécurisé).
 
 ### Variables d'environnement et origine des requêtes
 
-Fournies par `docker-compose.yml` (rien au build : l'image est construite sans elles) :
+Fournies par `docker-compose.yml` (rien au build : l'image est construite sans elles ;
+les pages prérendues prennent donc le repli prod de `PUBLIC_SITE_URL`, cf. `src/lib/site.ts`) :
 `NODE_ENV`, `DATABASE_URL` (`file:/app/data/local.db`) et `PUBLIC_SITE_URL`. Les
 variables lues par l'app sont déclarées et validées dans `src/env.ts` (toutes
 facultatives, cf. `.env.example`) ; `INGEST_RATE_LIMIT` (défaut 120) et

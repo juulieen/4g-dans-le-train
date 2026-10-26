@@ -91,7 +91,7 @@ Soigne la **pédagogie visuelle** (petits schémas, icônes, exemples concrets t
 
 ### Stack & contraintes techniques
 
-- **SvelteKit 2 + Svelte 5** (runes : `$state`, `$derived`, `$props`,
+- **SvelteKit 3 + Svelte 5** (runes : `$state`, `$derived`, `$props`,
   `$effect` — déjà utilisées partout, garde ce style).
 - **TypeScript strict**, **Vite**, build via **Bun** (`bun run dev`,
   `bun run build`, `bun run check`, `bun run lint`, `bun run format`).
@@ -174,7 +174,7 @@ des deux couches et de l'onboarding.
    vérifie l'absence d'erreurs console. (C'est une consigne du projet :
    toujours tester Chrome via un sous-agent.)
 4. Avant de considérer le travail fini, fais passer **`bun run check`**,
-   **`bun run lint`** et **`bun run build`** — tout doit être vert (0 erreur).
+   **`bun run lint`**, **`bun run test`** et **`bun run build`** — tout doit être vert (0 erreur).
    Lance `bun run format` pour le style de code.
 5. **Commits** clairs et atomiques sur la branche `feat/ui-liquid-glass`.
    **Ne push pas / ne merge pas sur `main`** sans validation de Julien, et **ne
