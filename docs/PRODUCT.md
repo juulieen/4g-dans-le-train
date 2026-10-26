@@ -375,13 +375,17 @@ Conventions produit :
 - **H3 résolutions** : mesures communautaires en **res 9** (~200 m, précis) ;
   couche ARCEP en **res 7** (~1,4 km, suffisant pour un fond théorique et léger).
 - **Carte sans WebGL2 — repli explicite** : MapLibre ≥ 6 exige WebGL2. `Map.svelte` le
-  teste avant de créer la carte (`supportsWebGL2`, `src/lib/webgl.ts`) et attrape aussi
-  l'échec de `new maplibregl.Map` ; à la place de la carte, un message (`role="status"`)
+  teste avant de créer la carte (`supportsWebGL2`, `src/lib/webgl.ts`, résultat mis en cache)
+  et attrape aussi l'échec de `new maplibregl.Map` (uniquement `GPUInitializationError` : un
+  autre throw est un bug, il n'est pas maquillé) ; à la place de la carte, un message (`role="status"`)
   renvoie vers `/lignes` et `/operateurs` (données consultables sans carte) ; panneau,
   filtres et mode mesure restent utilisables. Une perte de contexte WebGL en cours de route
-  (`webglcontextlost`) affiche un avis temporaire, retiré à la restauration. Sur les pages
-  ligne, `MapPreview.svelte` ne charge alors même pas le chunk MapLibre et affiche une
-  simple mention (pas de lien « Voir en grand » vers une carte qui ne s'afficherait pas).
+  (`webglcontextlost`) affiche un avis temporaire, retiré à la restauration (thème ré-appliqué
+  s'il a changé entre-temps) ; si la restauration échoue (événement `error`), repli définitif.
+  Le message vit dans une zone `role="status"` toujours présente (annonce fiable). Sur les
+  pages ligne, `MapPreview.svelte` ne charge alors même pas le chunk MapLibre et affiche une
+  simple mention (pas de lien « Voir en grand » vers une carte qui ne s'afficherait pas) ;
+  `Map` le prévient aussi (`onunavailable`) si la création échoue malgré le test.
 - **Données versionnées** : `rail-lines.geojson` et `arcep-lines.geojson` sont
   commités (déploiement clé en main, pas de re-téléchargement des ~500 Mo ARCEP).
 

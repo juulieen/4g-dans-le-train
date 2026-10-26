@@ -7,6 +7,9 @@
  *
  * Le contexte de test est libéré aussitôt (`WEBGL_lose_context`) : les navigateurs
  * plafonnent le nombre de contextes WebGL actifs (~16) et évincent les plus anciens.
+ * Effet de bord assumé : Chrome journalise alors « WebGL: CONTEXT_LOST_WEBGL: loseContext »
+ * en console. Le résultat est mis en cache (un seul contexte de test par page, même si
+ * `MapPreview` puis `Map` interrogent tous deux).
  */
 
 /** Sous-ensemble de `Document` utilisé (injectable pour les tests unitaires). */
@@ -14,15 +17,28 @@ export interface CanvasFactory {
 	createElement(tag: 'canvas'): Pick<HTMLCanvasElement, 'getContext'>;
 }
 
-export function supportsWebGL2(doc: CanvasFactory | undefined = globalThis.document): boolean {
+/** Test brut, sans cache. */
+export function detectWebGL2(doc: CanvasFactory | undefined): boolean {
 	if (!doc) return false; // SSR / environnement sans DOM
+	let ctx: WebGL2RenderingContext | null;
 	try {
-		const ctx = doc.createElement('canvas').getContext('webgl2');
-		if (!ctx) return false;
-		ctx.getExtension('WEBGL_lose_context')?.loseContext();
-		return true;
+		ctx = doc.createElement('canvas').getContext('webgl2');
 	} catch {
 		// Certains navigateurs lèvent au lieu de renvoyer null (politique de sécurité…).
 		return false;
 	}
+	if (!ctx) return false;
+	try {
+		ctx.getExtension('WEBGL_lose_context')?.loseContext();
+	} catch {
+		/* libération best-effort : WebGL2 est bien disponible */
+	}
+	return true;
+}
+
+let cached: boolean | undefined;
+
+/** WebGL2 disponible dans ce navigateur ? (testé une fois, puis mis en cache). */
+export function supportsWebGL2(): boolean {
+	return (cached ??= detectWebGL2(globalThis.document));
 }

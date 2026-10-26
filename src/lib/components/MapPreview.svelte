@@ -46,6 +46,7 @@
 	let failed = $state(false);
 	// Sans WebGL2, inutile de charger le chunk MapLibre ni de renvoyer vers la carte
 	// plein écran (elle ne s'afficherait pas non plus) : simple mention à la place.
+	// Aussi levé par `Map` si la création de la carte échoue malgré le test préalable.
 	let noWebgl = $state(false);
 
 	async function load() {
@@ -110,6 +111,7 @@
 					interactive={false}
 					showRail={false}
 					coverage={null}
+					onunavailable={() => (noWebgl = true)}
 				/>
 			</div>
 		{:else}
