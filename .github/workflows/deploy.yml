@@ -6,6 +6,7 @@ name: Deploy
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -15,6 +16,10 @@ jobs:
         with:
           clean: false
       - name: Build & up
-        run: docker compose up -d --build
+        # --pull : récupère la dernière image de base (oven/bun:1…) au lieu
+        # de réutiliser celle en cache sur le runner (correctifs de sécurité).
+        run: |
+          docker compose build --pull
+          docker compose up -d
       - name: Migrate
         run: docker compose exec -T 4g-dans-le-train bun run scripts/migrate.ts
