@@ -5,6 +5,14 @@
 
 ## 2026-10-26
 
+- **Carte — MapLibre GL JS 4.7.1 → 6.16.0** (faille XSS critique GHSA-jrc7-96c5-q579 dans
+  `DOM.sanitize()`, corrigée après 6.4.0). Adaptations de `Map.svelte` : import
+  `* as maplibregl` (v6 est ESM uniquement, plus d'export par défaut) ; worker fourni
+  explicitement via `setWorkerUrl` + import Vite `?worker&url` (fichier same-origin) ;
+  **URL de sprite rendue absolue** (`location.origin` + `/tiles/sprites/…`) — v6 refuse
+  les sprites relatifs et les icônes du fond (points de villes, capitales) disparaissaient
+  sans erreur visible. Rendu vérifié en navigateur (fond, voies ARCEP, rubans et
+  cellules H3, popups, thème clair/sombre, aperçu `/ligne/…`). WebGL2 désormais requis.
 - **Outillage — Vite 8, vitest 5, zod 4** : `vite` 5.4 → 8.3.5 (bundler Rolldown ; fin des
   failles du serveur de dev Vite 5), `@sveltejs/vite-plugin-svelte` 4 → 7.3.1, `svelte`
   5.57.2, `@vite-pwa/sveltekit` 0.6 → 1.1.0 (vite-plugin-pwa 1.3), `vitest` 2 → 5.0.5

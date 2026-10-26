@@ -18,7 +18,7 @@
 		type ArcepProfileSegment
 	} from '$lib/coverage-segments';
 	import type { PathPoint } from '$lib/geo/interpolate';
-	import type maplibregl from 'maplibre-gl';
+	import type * as maplibregl from 'maplibre-gl';
 
 	let {
 		slug,
