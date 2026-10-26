@@ -12,6 +12,22 @@
   `/lignes` et `/operateurs` ; le reste de la page (panneau, filtres, mode mesure) reste
   utilisable. Avis temporaire en cas de perte du contexte WebGL (`webglcontextlost`),
   retiré à la restauration (repli définitif si elle échoue). Aperçu des pages ligne : mention texte, chunk MapLibre non chargé.
+
+- **Outillage — eslint-plugin-svelte 2 → 3.23.1** (retire `postcss-selector-parser` 6.1.2
+  vulnérable, GHSA-w9m9-85wc-3x92 / GHSA-rj75-hqrm-r3gf ; outillage de lint uniquement). La
+  config était déjà en flat config. Nouvelles règles recommandées : `prefer-svelte-reactivity`
+  (deux `URLSearchParams` locaux construits désormais sans mutation, même URL produite) et
+  `no-navigation-without-resolve`, dont seuls les `href` sont exemptés (site servi à la
+  racine ; `resolve` change de sémantique en SvelteKit 3, à revoir à cette migration).
+
+  **SvelteKit 3 non fait** : `@vite-pwa/sveltekit` 1.1.0 (dernière version) ne le prend pas en
+  charge — le build passe mais ne génère plus `sw.js` (vérifié). Constat au passage : le
+  service worker et le manifest PWA sont générés mais **jamais référencés** (ni
+  `registerSW`, ni `<link rel="manifest">`) — la PWA n'est donc pas active en prod ; retirer
+  le plugin (ou passer au service worker natif de SvelteKit) débloquerait Kit 3, décision
+  produit laissée ouverte. `drizzle-kit` laissé en 0.31.11 (dernière stable ; l'esbuild 0.18
+  transitif vient de `@esbuild-kit`, seule la 1.0 encore en RC s'en passe).
+
 - **Carte — MapLibre GL JS 4.7.1 → 6.16.0** (faille XSS critique GHSA-jrc7-96c5-q579 dans
   `DOM.sanitize()`, corrigée en 6.4.1 ; peu exploitable chez nous : `sanitize` ne sert qu'à
   l'attribution, issue de nos propres sources). Adaptations de `Map.svelte` : import

@@ -277,9 +277,12 @@
 		op: string,
 		line?: string | null
 	): Promise<GeoJSON.FeatureCollection> {
-		const params = new URLSearchParams();
-		if (isSpecificOp(op)) params.set('operator', op);
-		if (line) params.set('line', line);
+		// Construit sans mutation (sinon `svelte/prefer-svelte-reactivity` réclame un
+		// SvelteURLSearchParams, inutile pour une variable locale non réactive).
+		const params = new URLSearchParams({
+			...(isSpecificOp(op) ? { operator: op } : {}),
+			...(line ? { line } : {})
+		});
 		const qs = params.toString() ? `?${params}` : '';
 		try {
 			const res = await fetch(`/api/coverage/segments${qs}`);
