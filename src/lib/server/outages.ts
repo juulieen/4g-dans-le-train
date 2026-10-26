@@ -13,11 +13,11 @@
 import { and, asc, eq, ne, isNotNull } from 'drizzle-orm';
 import { db } from './db/client';
 import { measurements, type Measurement } from './db/schema';
-import { cellCenter } from '$geo/h3';
-import { lineSlugForCell } from '$geo/line-snap';
-import { resolveLineFilter } from '$geo/troncon-snap';
-import { WIFI_TRAIN_OPERATOR } from '$lib/operators';
-import { detectOutages, type OutageSample } from '$lib/measure/outage';
+import { cellCenter } from '#lib/geo/h3.js';
+import { lineSlugForCell } from '#lib/geo/line-snap.js';
+import { resolveLineFilter } from '#lib/geo/troncon-snap.js';
+import { WIFI_TRAIN_OPERATOR } from '#lib/operators.js';
+import { detectOutages, type OutageSample } from '#lib/measure/outage.js';
 
 /** Opérateurs valides (doit suivre l'enum du schéma). */
 const OPERATORS = ['orange', 'sfr', 'free', 'bouygues', 'autre', 'inconnu'] as const;

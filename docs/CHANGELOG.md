@@ -5,6 +5,35 @@
 
 ## 2026-10-26
 
+- **Outillage — SvelteKit 2.70 → 3.1, adapter-node 5 → 6, TypeScript 5 → 6** (Node ≥ 22.17,
+  `engines` ajouté ; CI : Node 24 explicite + `bun run test`). Migration via
+  `sv migrate sveltekit-3` puis revue : config déplacée de `svelte.config.js` (supprimé)
+  vers `sveltekit({ adapter, preprocess })` dans `vite.config.ts` ; `tsconfig.json`
+  étend `$app/tsconfig` ; alias `$lib`/`$components`/`$measure`/`$geo` remplacés par
+  l'import de sous-chemin `#lib/…` (`imports` de `package.json`, extensions explicites) ;
+  `$env/dynamic/*` → `$app/env/*` avec déclaration des variables dans `src/env.ts`
+  (toutes dynamiques et facultatives : `PUBLIC_SITE_URL`, `DATABASE_URL`,
+  `DATABASE_AUTH_TOKEN`, et `INGEST_RATE_LIMIT` qui passe de `process.env` à une variable
+  validée — une valeur invalide bloque désormais le démarrage au lieu de désactiver
+  silencieusement la limite) ; `json()` déprécié → `Response.json()` ;
+  `src/hooks.server.ts` : `handleError` reçoit désormais toutes les erreurs, on ne
+  journalise que les 500 (avec méthode + chemin, comme Kit 2). Comportement inchangé
+  vérifié sur le build de prod (pages, API, vignettes OG, URLs absolues, CSRF : POST JSON
+  cross-origin accepté, formulaire/`text/plain` cross-origin refusé en 403). Différence
+  visible : le corps JSON des erreurs inclut `status` (`{"status":400,"message":…}`).
+  Prod : rien à changer (pas d'`ORIGIN` — retirée par adapter-node 6 — l'origine vient du
+  `Host` transmis par Caddy). Règle eslint `no-navigation-without-resolve` réévaluée :
+  `href` toujours exemptés (en SSR, `resolve()` produit des liens relatifs `../…`).
+
+- **Retrait du plugin PWA** (`@vite-pwa/sveltekit`) : le `sw.js` et le manifest
+  qu'il générait n'ont jamais été référencés (ni `registerSW`, ni
+  `<link rel="manifest">`, icônes `/icons/*` inexistantes → 404) — aucun service worker
+  n'a donc jamais été installé chez un visiteur, rien à désinscrire. `/sw.js`,
+  `/manifest.webmanifest` et `/workbox-*.js` ne sont plus servis. Pas de manifest
+  statique gardé (sans icônes, il n'apporterait rien) ; favicon et `theme-color`
+  inchangés. Le mode mesure garde sa file hors-ligne `localStorage`. Débloque la
+  montée SvelteKit 3.
+
 - **Carte — repli sans WebGL2** : MapLibre 6 exige WebGL2 ; sans lui (vieux navigateur,
   accélération matérielle coupée, GPU en liste noire), la carte restait vide sans
   explication. Désormais, détection préalable (`src/lib/webgl.ts`, testée) + capture de
@@ -20,7 +49,7 @@
   `no-navigation-without-resolve`, dont seuls les `href` sont exemptés (site servi à la
   racine ; `resolve` change de sémantique en SvelteKit 3, à revoir à cette migration).
 
-  **SvelteKit 3 non fait** : `@vite-pwa/sveltekit` 1.1.0 (dernière version) ne le prend pas en
+  **SvelteKit 3 non fait** (levé le jour même, cf. entrées « Retrait du plugin PWA » et « SvelteKit 3 ») : `@vite-pwa/sveltekit` 1.1.0 (dernière version) ne le prend pas en
   charge — le build passe mais ne génère plus `sw.js` (vérifié). Constat au passage : le
   service worker et le manifest PWA sont générés mais **jamais référencés** (ni
   `registerSW`, ni `<link rel="manifest">`) — la PWA n'est donc pas active en prod ; retirer

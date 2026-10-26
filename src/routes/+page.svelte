@@ -1,16 +1,16 @@
 <script lang="ts">
 	import { onMount, onDestroy, getContext } from 'svelte';
-	import Map from '$components/Map.svelte';
-	import Icon from '$components/Icon.svelte';
-	import RouteProfile from '$components/RouteProfile.svelte';
-	import HintChip from '$components/Onboarding/HintChip.svelte';
-	import { RAIL_LINES } from '$geo/lines';
+	import Map from '#lib/components/Map.svelte';
+	import Icon from '#lib/components/Icon.svelte';
+	import RouteProfile from '#lib/components/RouteProfile.svelte';
+	import HintChip from '#lib/components/Onboarding/HintChip.svelte';
+	import { RAIL_LINES } from '#lib/geo/lines.js';
 	import {
 		MeasurementController,
 		type LiveState,
 		type Operator,
 		type SessionPoint
-	} from '$measure/controller';
+	} from '#lib/measure/controller.js';
 	import {
 		hasConsent,
 		grantConsent,
@@ -22,12 +22,18 @@
 		wasMeasuringRecently,
 		getSavedOperator,
 		setSavedOperator
-	} from '$measure/session';
-	import { levelFromKbps, USAGE_TEXT, USAGE_COLORS, OPERATOR_LABEL, USAGE_OPS } from '$lib/usage';
-	import { pluralS } from '$lib/plural';
-	import { buildQrSvg } from '$lib/qr';
-	import { ORIGIN } from '$lib/site';
-	import { pathBounds } from '$lib/coverage-segments';
+	} from '#lib/measure/session.js';
+	import {
+		levelFromKbps,
+		USAGE_TEXT,
+		USAGE_COLORS,
+		OPERATOR_LABEL,
+		USAGE_OPS
+	} from '#lib/usage.js';
+	import { pluralS } from '#lib/plural.js';
+	import { buildQrSvg } from '#lib/qr.js';
+	import { ORIGIN } from '#lib/site.js';
+	import { pathBounds } from '#lib/coverage-segments.js';
 	import { page } from '$app/state';
 	import type * as maplibregl from 'maplibre-gl';
 	import type { PageData } from './$types';

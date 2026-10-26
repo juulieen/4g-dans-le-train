@@ -41,7 +41,7 @@ bun run data:arcep # (ré)importe la couverture ARCEP puis régénère les voies
 bun run db:migrate # applique les migrations libSQL
 ```
 
-Avant de livrer : `bun run check && bun run lint && bun run build` doivent passer.
+Avant de livrer : `bun run check && bun run lint && bun run test && bun run build` doivent passer.
 
 ## Conventions
 
@@ -70,6 +70,9 @@ Avant de livrer : `bun run check && bun run lint && bun run build` doivent passe
 - `src/routes/{lignes,ligne/[slug],ligne/[slug]/[operateur],operateurs,operateur/[slug]}/`
   — pages SEO prerendues. Référentiel dans `src/lib/geo/lines.ts`.
 - `scripts/` — imports de données (SNCF, ARCEP) et migrations.
+- `vite.config.ts` — config SvelteKit 3 (adapter, etc. : plus de `svelte.config.js`) ;
+  `src/env.ts` — variables d'env (`$app/env/*`) ; imports internes via `#lib/…` (avec
+  extension `.js`/`.svelte`, `imports` de `package.json`).
 
 ```
 

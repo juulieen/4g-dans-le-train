@@ -1,7 +1,7 @@
 import { ne } from 'drizzle-orm';
-import { db } from '$lib/server/db/client';
-import { cellAggregates } from '$lib/server/db/schema';
-import { WIFI_TRAIN_OPERATOR } from '$lib/operators';
+import { db } from '#lib/server/db/client.js';
+import { cellAggregates } from '#lib/server/db/schema.js';
+import { WIFI_TRAIN_OPERATOR } from '#lib/operators.js';
 import type { PageServerLoad } from './$types';
 
 // La carte dépend de la base : pas de prerender, rendu serveur à la volée.

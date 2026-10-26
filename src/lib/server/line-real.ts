@@ -2,7 +2,7 @@
  * Calcule l'instantané du RÉEL communautaire d'une ligne depuis la base VIVE, pour
  * le **SSR** de la page `/ligne/[slug]` (verdict + points noirs rendus côté serveur,
  * indexables et toujours frais — pas de prérendu nocturne). Fine couche DB autour du
- * module pur `computeLineReal` (cf. `$geo/line-real`).
+ * module pur `computeLineReal` (cf. `#lib/geo/line-real.js`).
  *
  * PERFORMANCE : `aggregateOutages` scanne les mesures brutes à chaque appel ; combiné
  * au `cache-control` de la page (quelques minutes) et au volume actuel, c'est borné.
@@ -12,9 +12,14 @@ import { and, eq, ne, inArray } from 'drizzle-orm';
 import { db } from './db/client';
 import { cellAggregates } from './db/schema';
 import { aggregateOutages } from './outages';
-import { resolveLineFilter } from '$geo/troncon-snap';
-import { WIFI_TRAIN_OPERATOR } from '$lib/operators';
-import { computeLineReal, type LineReal, type RealCell, type RealOutage } from '$geo/line-real';
+import { resolveLineFilter } from '#lib/geo/troncon-snap.js';
+import { WIFI_TRAIN_OPERATOR } from '#lib/operators.js';
+import {
+	computeLineReal,
+	type LineReal,
+	type RealCell,
+	type RealOutage
+} from '#lib/geo/line-real.js';
 
 /**
  * Instantané réel d'une ligne (calcul live). `fetch` sert à lire le profil de trajet.

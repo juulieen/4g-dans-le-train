@@ -1,9 +1,8 @@
-import { json } from '@sveltejs/kit';
 import { and, eq, ne } from 'drizzle-orm';
-import { db } from '$lib/server/db/client';
-import { cellAggregates } from '$lib/server/db/schema';
-import { resolveLineFilter } from '$geo/troncon-snap';
-import { WIFI_TRAIN_OPERATOR } from '$lib/operators';
+import { db } from '#lib/server/db/client.js';
+import { cellAggregates } from '#lib/server/db/schema.js';
+import { resolveLineFilter } from '#lib/geo/troncon-snap.js';
+import { WIFI_TRAIN_OPERATOR } from '#lib/operators.js';
 import type { RequestHandler } from './$types';
 
 /**
@@ -62,5 +61,5 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
 
 	// Les agrégats changent lentement : court cache CDN/navigateur acceptable.
 	setHeaders({ 'cache-control': 'public, max-age=60' });
-	return json({ type: 'FeatureCollection', features });
+	return Response.json({ type: 'FeatureCollection', features });
 };

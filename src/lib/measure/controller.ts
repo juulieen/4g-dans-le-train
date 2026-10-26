@@ -22,8 +22,8 @@ import { getSessionId, hasConsent, markMeasureAlive, clearMeasureAlive } from '.
 import { MeasurementQueue, type QueuedMeasurement } from './queue';
 import { GapStore, type GapPing } from './gapStore';
 import { OutageDetector } from './outage';
-import { reconstructAlongPath, type PathPoint } from '$geo/interpolate';
-import { WIFI_TRAIN_OPERATOR } from '$lib/operators';
+import { reconstructAlongPath, type PathPoint } from '#lib/geo/interpolate.js';
+import { WIFI_TRAIN_OPERATOR } from '#lib/operators.js';
 
 export type Operator = 'orange' | 'sfr' | 'free' | 'bouygues' | 'autre' | 'inconnu';
 

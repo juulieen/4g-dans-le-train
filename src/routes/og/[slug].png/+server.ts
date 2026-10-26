@@ -12,17 +12,17 @@
  */
 import { readFile } from 'node:fs/promises';
 import { and, eq, ne } from 'drizzle-orm';
-import { RAIL_LINES } from '$geo/lines';
-import { resolveLineFilter } from '$geo/troncon-snap';
-import { WIFI_TRAIN_OPERATOR } from '$lib/operators';
-import { db } from '$lib/server/db/client';
-import { cellAggregates, type CellAggregate } from '$lib/server/db/schema';
+import { RAIL_LINES } from '#lib/geo/lines.js';
+import { resolveLineFilter } from '#lib/geo/troncon-snap.js';
+import { WIFI_TRAIN_OPERATOR } from '#lib/operators.js';
+import { db } from '#lib/server/db/client.js';
+import { cellAggregates, type CellAggregate } from '#lib/server/db/schema.js';
 import {
 	renderDefaultCard,
 	renderLineCard,
 	type RealSummary,
 	type RouteProfile
-} from '$lib/server/og/card';
+} from '#lib/server/og/card.js';
 import type { RequestHandler } from './$types';
 
 const DAY_MS = 86_400_000;

@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
-import { RAIL_LINES, OPERATORS, findOperator } from '$geo/lines';
-import { lineStats, type LevelDist } from '$geo/line-stats';
+import { RAIL_LINES, OPERATORS, findOperator } from '#lib/geo/lines.js';
+import { lineStats, type LevelDist } from '#lib/geo/line-stats.js';
 import type { EntryGenerator, PageLoad } from './$types';
 
 /**

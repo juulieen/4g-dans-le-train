@@ -16,10 +16,10 @@
 		buildArcepLineFeatures,
 		pathBounds,
 		type ArcepProfileSegment
-	} from '$lib/coverage-segments';
-	import type { PathPoint } from '$lib/geo/interpolate';
+	} from '#lib/coverage-segments.js';
+	import type { PathPoint } from '#lib/geo/interpolate.js';
 	import type * as maplibregl from 'maplibre-gl';
-	import { supportsWebGL2 } from '$lib/webgl';
+	import { supportsWebGL2 } from '#lib/webgl.js';
 
 	let {
 		slug,

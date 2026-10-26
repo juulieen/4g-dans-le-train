@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { RAIL_LINES } from '$geo/lines';
-	import PageWrap from '$components/PageWrap.svelte';
-	import { ORIGIN } from '$lib/site';
+	import { RAIL_LINES } from '#lib/geo/lines.js';
+	import PageWrap from '#lib/components/PageWrap.svelte';
+	import { ORIGIN } from '#lib/site.js';
 </script>
 
 <svelte:head>

@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { pct } from '$geo/coverage-copy';
-	import PageWrap from '$components/PageWrap.svelte';
-	import CommunityComparison from '$components/CommunityComparison.svelte';
-	import { ORIGIN } from '$lib/site';
+	import { pct } from '#lib/geo/coverage-copy.js';
+	import PageWrap from '#lib/components/PageWrap.svelte';
+	import CommunityComparison from '#lib/components/CommunityComparison.svelte';
+	import { ORIGIN } from '#lib/site.js';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();

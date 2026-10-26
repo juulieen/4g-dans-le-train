@@ -386,6 +386,15 @@ Conventions produit :
   pages ligne, `MapPreview.svelte` ne charge alors même pas le chunk MapLibre et affiche une
   simple mention (pas de lien « Voir en grand » vers une carte qui ne s'afficherait pas) ;
   `Map` le prévient aussi (`onunavailable`) si la création échoue malgré le test.
+- **Pas de PWA ni de service worker** : le plugin `@vite-pwa/sveltekit` générait un
+  `sw.js` et un manifest **jamais référencés** (ni `registerSW`, ni
+  `<link rel="manifest">`, et les icônes déclarées n'existaient pas) — la PWA n'a
+  donc jamais été active. Retiré (oct. 2026) pour débloquer SvelteKit 3. Le mode
+  mesure n'en dépend pas : la file des mesures non envoyées vit dans `localStorage`
+  (`src/lib/measure/queue.ts`) et est rejouée au retour du réseau. Si l'on veut un
+  jour l'installation « écran d'accueil » ou du hors-ligne, passer par le service
+  worker natif de SvelteKit (`src/service-worker.ts`) + un manifest statique avec de
+  vraies icônes.
 - **Données versionnées** : `rail-lines.geojson` et `arcep-lines.geojson` sont
   commités (déploiement clé en main, pas de re-téléchargement des ~500 Mo ARCEP).
 

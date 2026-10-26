@@ -28,14 +28,14 @@ lancé à 300 km/h est souvent différente. Ce projet croise :
 
 ## Stack technique
 
-| Brique                | Choix                                               |
-| --------------------- | --------------------------------------------------- |
-| Framework             | SvelteKit + TypeScript (SSR/prerender pour le SEO)  |
-| Carte                 | MapLibre GL JS                                      |
-| Base de données       | libSQL (moteur Turso), fichier local ou Turso cloud |
-| ORM                   | Drizzle                                             |
-| Géospatial            | H3 (binning) + Turf.js (snapping aux lignes)        |
-| Runtime / déploiement | Bun + Docker + Caddy (HTTPS Let's Encrypt)          |
+| Brique                | Choix                                                |
+| --------------------- | ---------------------------------------------------- |
+| Framework             | SvelteKit 3 + TypeScript (SSR/prerender pour le SEO) |
+| Carte                 | MapLibre GL JS                                       |
+| Base de données       | libSQL (moteur Turso), fichier local ou Turso cloud  |
+| ORM                   | Drizzle                                              |
+| Géospatial            | H3 (binning) + Turf.js (snapping aux lignes)         |
+| Runtime / déploiement | Bun + Docker + Caddy (HTTPS Let's Encrypt)           |
 
 ## Données sources
 

@@ -1,5 +1,4 @@
-import { json } from '@sveltejs/kit';
-import { aggregateOutages } from '$lib/server/outages';
+import { aggregateOutages } from '#lib/server/outages.js';
 import type { RequestHandler } from './$types';
 
 /**
@@ -31,5 +30,5 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
 
 	// Les agrégats changent lentement : court cache CDN/navigateur acceptable.
 	setHeaders({ 'cache-control': 'public, max-age=60' });
-	return json({ type: 'FeatureCollection', features });
+	return Response.json({ type: 'FeatureCollection', features });
 };

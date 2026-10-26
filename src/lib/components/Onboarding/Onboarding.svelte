@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { fade, scale } from 'svelte/transition';
-	import Icon from '$components/Icon.svelte';
+	import Icon from '#lib/components/Icon.svelte';
 	import { STEPS } from './steps';
 
 	let { open = false, onclose }: { open?: boolean; onclose?: () => void } = $props();

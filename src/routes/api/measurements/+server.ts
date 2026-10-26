@@ -1,9 +1,10 @@
-import { json, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import { z } from 'zod';
-import { snapToCell } from '$geo/h3';
-import { lineSlugForCell } from '$geo/line-snap';
-import { ingestMeasurement } from '$lib/server/ingest';
-import { WIFI_TRAIN_OPERATOR } from '$lib/operators';
+import { INGEST_RATE_LIMIT } from '$app/env/private';
+import { snapToCell } from '#lib/geo/h3.js';
+import { lineSlugForCell } from '#lib/geo/line-snap.js';
+import { ingestMeasurement } from '#lib/server/ingest.js';
+import { WIFI_TRAIN_OPERATOR } from '#lib/operators.js';
 import type { RequestHandler } from './$types';
 
 /**
@@ -32,7 +33,7 @@ const MeasurementInput = z.object({
 });
 
 // Rate-limit mémoire simple (par session, fenêtre glissante d'1 min).
-const RATE_LIMIT = Number(process.env.INGEST_RATE_LIMIT ?? '120');
+const RATE_LIMIT = INGEST_RATE_LIMIT;
 const hits = new Map<string, number[]>();
 
 function rateLimited(sessionId: string): boolean {
@@ -76,5 +77,5 @@ export const POST: RequestHandler = async ({ request }) => {
 		sessionId: m.sessionId
 	});
 
-	return json({ ok: true, cellId: snapped.cellId, lineSlug }, { status: 201 });
+	return Response.json({ ok: true, cellId: snapped.cellId, lineSlug }, { status: 201 });
 };

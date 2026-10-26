@@ -76,6 +76,23 @@ sudo systemctl reload caddy
 Le HTTPS est provisionné automatiquement. C'est requis pour la géolocalisation et
 le Wake Lock (API disponibles uniquement en contexte sécurisé).
 
+### Variables d'environnement et origine des requêtes
+
+Fournies par `docker-compose.yml` (rien au build : l'image est construite sans elles ;
+les pages prérendues prennent donc le repli prod de `PUBLIC_SITE_URL`, cf. `src/lib/site.ts`) :
+`NODE_ENV`, `DATABASE_URL` (`file:/app/data/local.db`) et `PUBLIC_SITE_URL`. Les
+variables lues par l'app sont déclarées et validées dans `src/env.ts` (toutes
+facultatives, cf. `.env.example`) ; `INGEST_RATE_LIMIT` (défaut 120) et
+`DATABASE_AUTH_TOKEN` (Turso) ne sont pas définies en prod.
+
+Origine (`url.origin`, contrôle CSRF des soumissions de formulaire) : adapter-node la
+déduit de l'en-tête `Host` — que Caddy transmet tel quel — avec le protocole `https`
+par défaut. **Aucune variable `ORIGIN`, `PROTOCOL_HEADER` ni `HOST_HEADER` n'est
+nécessaire.** Depuis SvelteKit 3 / adapter-node 6, `ORIGIN` n'est d'ailleurs plus lue :
+s'il fallait un jour forcer l'origine, ce serait via `paths.origin` dans
+`vite.config.ts` (au build). Les `fetch` serveur d'assets statiques (profils de trajet
+`/data/route-profiles/*.json`) passent par cette origine, donc par Caddy.
+
 > **CSP & mesure d'audience** : le site charge Plausible depuis
 > `plausible.juulieen.fr` (cf. `src/app.html`). La config Caddy actuelle n'impose
 > **aucune** `Content-Security-Policy`. Si tu en ajoutes une un jour, pense à

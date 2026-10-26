@@ -91,7 +91,7 @@ Soigne la **pédagogie visuelle** (petits schémas, icônes, exemples concrets t
 
 ### Stack & contraintes techniques
 
-- **SvelteKit 2 + Svelte 5** (runes : `$state`, `$derived`, `$props`,
+- **SvelteKit 3 + Svelte 5** (runes : `$state`, `$derived`, `$props`,
   `$effect` — déjà utilisées partout, garde ce style).
 - **TypeScript strict**, **Vite**, build via **Bun** (`bun run dev`,
   `bun run build`, `bun run check`, `bun run lint`, `bun run format`).
@@ -101,11 +101,8 @@ Soigne la **pédagogie visuelle** (petits schémas, icônes, exemples concrets t
   avec le thème) à condition qu'il reste **gratuit et sans clé API** (ou alors
   documente clairement toute clé requise via variable d'env — n'en commite
   jamais). Si tu n'es pas sûr, garde demotiles mais améliore tout autour.
-- **PWA** déjà configurée (`@vite-pwa/sveltekit`). ⚠️ En dev, un Service Worker
-  peut mettre en cache et te servir une vieille version (page blanche) : si ça
-  arrive, dans la console du navigateur fais
-  `navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister())); caches.keys().then(ks=>ks.forEach(k=>caches.delete(k)));`
-  puis recharge.
+- **PWA** : plus de plugin PWA ni de service worker (retirés en oct. 2026, ils
+  n'avaient jamais été enregistrés — cf. `docs/PRODUCT.md`).
 - **Pas de grosse dépendance UI** (pas de Tailwind/Material/etc. sauf si tu
   juges que ça vaut vraiment le coup — dans ce cas, justifie). Le projet est en
   CSS « maison » avec des variables. Privilégie du CSS moderne natif
@@ -177,7 +174,7 @@ des deux couches et de l'onboarding.
    vérifie l'absence d'erreurs console. (C'est une consigne du projet :
    toujours tester Chrome via un sous-agent.)
 4. Avant de considérer le travail fini, fais passer **`bun run check`**,
-   **`bun run lint`** et **`bun run build`** — tout doit être vert (0 erreur).
+   **`bun run lint`**, **`bun run test`** et **`bun run build`** — tout doit être vert (0 erreur).
    Lance `bun run format` pour le style de code.
 5. **Commits** clairs et atomiques sur la branche `feat/ui-liquid-glass`.
    **Ne push pas / ne merge pas sur `main`** sans validation de Julien, et **ne

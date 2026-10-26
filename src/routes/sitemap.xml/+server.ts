@@ -1,6 +1,6 @@
-import { RAIL_LINES, OPERATORS } from '$geo/lines';
-import { lineStats } from '$geo/line-stats';
-import { ORIGIN } from '$lib/site';
+import { RAIL_LINES, OPERATORS } from '#lib/geo/lines.js';
+import { lineStats } from '#lib/geo/line-stats.js';
+import { ORIGIN } from '#lib/site.js';
 import type { RequestHandler } from './$types';
 
 /** Génère le sitemap.xml à partir des routes statiques + pages lignes/opérateurs. */
