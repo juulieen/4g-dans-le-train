@@ -1,8 +1,15 @@
+import adapter from '@sveltejs/adapter-node';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-	plugins: [sveltekit()],
+	plugins: [
+		sveltekit({
+			preprocess: vitePreprocess(),
+			adapter: adapter()
+		})
+	],
 	// En dev, les tuiles vectorielles (PMTiles Protomaps) n'existent que sur le serveur
 	// de prod (asus-1) : on proxifie /tiles/* vers le vhost public. Rien à héberger en local.
 	server: {

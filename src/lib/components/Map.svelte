@@ -18,10 +18,10 @@
 		usageLabel,
 		rateToLevel,
 		type Level
-	} from '$lib/usage';
-	import { worstByCell, type CellRate } from '$lib/coverage-quality';
-	import { pluralS } from '$lib/plural';
-	import { supportsWebGL2 } from '$lib/webgl';
+	} from '#lib/usage.js';
+	import { worstByCell, type CellRate } from '#lib/coverage-quality.js';
+	import { pluralS } from '#lib/plural.js';
+	import { supportsWebGL2 } from '#lib/webgl.js';
 
 	maplibregl.setWorkerUrl(maplibreWorkerUrl);
 

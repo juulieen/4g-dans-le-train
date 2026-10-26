@@ -5,7 +5,7 @@
 	 * Présentationnel — le verdict et les points noirs sont calculés en amont
 	 * (`buildVerdict` / `blackspotLabel`, `coverage-copy.ts`).
 	 */
-	import type { Verdict } from '$geo/coverage-copy';
+	import type { Verdict } from '#lib/geo/coverage-copy.js';
 
 	let {
 		verdict,

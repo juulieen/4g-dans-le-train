@@ -15,8 +15,8 @@
  * consécutives. La seule donnée persistée en plus est l'instant de mesure
  * (`measuredAt`) sur chaque mesure brute.
  */
-import { toCell } from '$geo/h3';
-import { distanceM } from '$geo/distance';
+import { toCell } from '#lib/geo/h3.js';
+import { distanceM } from '#lib/geo/distance.js';
 
 export type NetworkStatus = 'ok' | 'degraded' | 'none';
 

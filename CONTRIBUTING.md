@@ -12,7 +12,7 @@ Vos mesures (anonymes) enrichissent la carte pour tout le monde.
 ### Prérequis
 
 - [Bun](https://bun.sh) ≥ 1.1
-- [Node.js](https://nodejs.org) ≥ 22.12 (Vite 8 et Vitest 5 tournent sous Node via `bun run`)
+- [Node.js](https://nodejs.org) ≥ 22.17 (SvelteKit 3, Vite 8 et Vitest 5 tournent sous Node via `bun run`)
 - Git
 
 ### Mise en route

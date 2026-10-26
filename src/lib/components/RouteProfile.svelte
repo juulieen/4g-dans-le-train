@@ -6,7 +6,7 @@
 		rateToLevel,
 		type Level,
 		type UsageOp
-	} from '$lib/usage';
+	} from '#lib/usage.js';
 
 	let {
 		slug,

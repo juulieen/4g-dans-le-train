@@ -1,8 +1,8 @@
-import { json, error } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import { gridDisk } from 'h3-js';
-import { toCell } from '$geo/h3';
-import { lineSlugsForCell } from '$geo/line-snap';
-import { findLine } from '$geo/lines';
+import { toCell } from '#lib/geo/h3.js';
+import { lineSlugsForCell } from '#lib/geo/line-snap.js';
+import { findLine } from '#lib/geo/lines.js';
 import type { RequestHandler } from './$types';
 
 /**
@@ -58,5 +58,5 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
 
 	// Données statiques (dérivées du référentiel committé) : cache long côté CDN.
 	setHeaders({ 'cache-control': 'public, max-age=3600' });
-	return json({ lines });
+	return Response.json({ lines });
 };

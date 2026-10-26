@@ -1,6 +1,6 @@
 <script lang="ts">
-	import PageWrap from '$components/PageWrap.svelte';
-	import { ORIGIN } from '$lib/site';
+	import PageWrap from '#lib/components/PageWrap.svelte';
+	import { ORIGIN } from '#lib/site.js';
 
 	const faqs = [
 		{

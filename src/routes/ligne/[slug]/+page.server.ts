@@ -1,8 +1,8 @@
 import { error } from '@sveltejs/kit';
-import { RAIL_LINES } from '$geo/lines';
-import { lineStats } from '$geo/line-stats';
-import { freshnessLabel } from '$geo/coverage-copy';
-import { loadLineReal } from '$lib/server/line-real';
+import { RAIL_LINES } from '#lib/geo/lines.js';
+import { lineStats } from '#lib/geo/line-stats.js';
+import { freshnessLabel } from '#lib/geo/coverage-copy.js';
+import { loadLineReal } from '#lib/server/line-real.js';
 import type { PageServerLoad } from './$types';
 
 /**

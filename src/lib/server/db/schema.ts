@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-// Import RELATIF (pas l'alias `$lib`) : ce fichier est aussi lu par drizzle-kit,
+// Import RELATIF (pas l'alias `#lib`) : ce fichier est aussi lu par drizzle-kit,
 // hors résolution d'alias SvelteKit.
 import { WIFI_TRAIN_OPERATOR } from '../../operators';
 

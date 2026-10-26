@@ -1,12 +1,11 @@
-import { json } from '@sveltejs/kit';
 import { and, eq, ne } from 'drizzle-orm';
-import { db } from '$lib/server/db/client';
-import { cellAggregates } from '$lib/server/db/schema';
-import { resolveLineFilter } from '$geo/troncon-snap';
-import { WIFI_TRAIN_OPERATOR } from '$lib/operators';
-import { loadRouteProfile } from '$lib/server/route-profile';
-import { worstByCell, type CellRate } from '$lib/coverage-quality';
-import { buildLineSegments, type SegmentCell } from '$lib/coverage-segments';
+import { db } from '#lib/server/db/client.js';
+import { cellAggregates } from '#lib/server/db/schema.js';
+import { resolveLineFilter } from '#lib/geo/troncon-snap.js';
+import { WIFI_TRAIN_OPERATOR } from '#lib/operators.js';
+import { loadRouteProfile } from '#lib/server/route-profile.js';
+import { worstByCell, type CellRate } from '#lib/coverage-quality.js';
+import { buildLineSegments, type SegmentCell } from '#lib/coverage-segments.js';
 import type { RequestHandler } from './$types';
 
 /**
@@ -91,5 +90,5 @@ export const GET: RequestHandler = async ({ url, fetch, setHeaders }) => {
 
 	// Les agrégats changent lentement : court cache CDN/navigateur, aligné sur /api/coverage.
 	setHeaders({ 'cache-control': 'public, max-age=60' });
-	return json({ type: 'FeatureCollection', features });
+	return Response.json({ type: 'FeatureCollection', features });
 };

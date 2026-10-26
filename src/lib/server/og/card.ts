@@ -16,8 +16,8 @@ import { join } from 'node:path';
 import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
 import { read } from '$app/server';
-import { USAGE_COLORS, toLevel, type Level } from '$lib/usage';
-import { ORIGIN } from '$lib/site';
+import { USAGE_COLORS, toLevel, type Level } from '#lib/usage.js';
+import { ORIGIN } from '#lib/site.js';
 import regularUrl from './fonts/DejaVuSans.ttf';
 import boldUrl from './fonts/DejaVuSans-Bold.ttf';
 

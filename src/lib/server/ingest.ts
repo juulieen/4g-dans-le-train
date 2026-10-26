@@ -1,5 +1,5 @@
 import { and, eq, sql } from 'drizzle-orm';
-import { lineSlugForCell } from '$geo/line-snap';
+import { lineSlugForCell } from '#lib/geo/line-snap.js';
 import { db } from './db/client';
 import { cellAggregates, measurements, type NewMeasurement } from './db/schema';
 

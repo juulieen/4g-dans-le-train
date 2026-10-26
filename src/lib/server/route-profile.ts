@@ -8,7 +8,7 @@
  * mémoïse pour la vie du process : la génération de segments à la volée ne relit donc
  * jamais deux fois le même profil.
  */
-import type { PathPoint } from '$geo/interpolate';
+import type { PathPoint } from '#lib/geo/interpolate.js';
 
 /** Sous-ensemble du profil utile à la génération de segments. */
 export interface RouteProfileGeometry {

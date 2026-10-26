@@ -7,8 +7,8 @@
 	 * du HTML prerendu (pages obsolètes), tout en restant indexable sur l'ARCEP.
 	 */
 	import { onMount } from 'svelte';
-	import type { OperatorKey } from '$geo/line-stats';
-	import { pct } from '$geo/coverage-copy';
+	import type { OperatorKey } from '#lib/geo/line-stats.js';
+	import { pct } from '#lib/geo/coverage-copy.js';
 
 	let {
 		lineSlug = null,

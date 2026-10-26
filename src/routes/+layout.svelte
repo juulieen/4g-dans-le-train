@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { setContext } from 'svelte';
-	import Onboarding from '$components/Onboarding/Onboarding.svelte';
-	import Icon from '$components/Icon.svelte';
-	import { ORIGIN } from '$lib/site';
+	import Onboarding from '#lib/components/Onboarding/Onboarding.svelte';
+	import Icon from '#lib/components/Icon.svelte';
+	import { ORIGIN } from '#lib/site.js';
 
 	let { children } = $props();
 

@@ -5,6 +5,26 @@
 
 ## 2026-10-26
 
+- **Outillage — SvelteKit 2.70 → 3.1, adapter-node 5 → 6, TypeScript 5 → 6** (Node ≥ 22.17,
+  `engines` ajouté ; CI : Node 24 explicite + `bun run test`). Migration via
+  `sv migrate sveltekit-3` puis revue : config déplacée de `svelte.config.js` (supprimé)
+  vers `sveltekit({ adapter, preprocess })` dans `vite.config.ts` ; `tsconfig.json`
+  étend `$app/tsconfig` ; alias `$lib`/`$components`/`$measure`/`$geo` remplacés par
+  l'import de sous-chemin `#lib/…` (`imports` de `package.json`, extensions explicites) ;
+  `$env/dynamic/*` → `$app/env/*` avec déclaration des variables dans `src/env.ts`
+  (toutes dynamiques et facultatives : `PUBLIC_SITE_URL`, `DATABASE_URL`,
+  `DATABASE_AUTH_TOKEN`, et `INGEST_RATE_LIMIT` qui passe de `process.env` à une variable
+  validée — une valeur invalide bloque désormais le démarrage au lieu de désactiver
+  silencieusement la limite) ; `json()` déprécié → `Response.json()` ;
+  `src/hooks.server.ts` : `handleError` reçoit désormais toutes les erreurs, on ne
+  journalise que les 500 (avec méthode + chemin, comme Kit 2). Comportement inchangé
+  vérifié sur le build de prod (pages, API, vignettes OG, URLs absolues, CSRF : POST JSON
+  cross-origin accepté, formulaire/`text/plain` cross-origin refusé en 403). Différence
+  visible : le corps JSON des erreurs inclut `status` (`{"status":400,"message":…}`).
+  Prod : rien à changer (pas d'`ORIGIN` — retirée par adapter-node 6 — l'origine vient du
+  `Host` transmis par Caddy). Règle eslint `no-navigation-without-resolve` réévaluée :
+  `href` toujours exemptés (en SSR, `resolve()` produit des liens relatifs `../…`).
+
 - **Retrait du plugin PWA** (`@vite-pwa/sveltekit`) : le `sw.js` et le manifest
   qu'il générait n'ont jamais été référencés (ni `registerSW`, ni
   `<link rel="manifest">`, icônes `/icons/*` inexistantes → 404) — aucun service worker

@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { OPERATORS } from '$geo/lines';
-	import { OPERATOR_LABEL } from '$lib/usage';
-	import { describeOperator, buildVerdict, buildBlackspots, clip } from '$geo/coverage-copy';
-	import PageWrap from '$components/PageWrap.svelte';
-	import RouteProfile from '$components/RouteProfile.svelte';
-	import Verdict from '$components/Verdict.svelte';
-	import MapPreview from '$components/MapPreview.svelte';
-	import { ORIGIN } from '$lib/site';
+	import { OPERATORS } from '#lib/geo/lines.js';
+	import { OPERATOR_LABEL } from '#lib/usage.js';
+	import { describeOperator, buildVerdict, buildBlackspots, clip } from '#lib/geo/coverage-copy.js';
+	import PageWrap from '#lib/components/PageWrap.svelte';
+	import RouteProfile from '#lib/components/RouteProfile.svelte';
+	import Verdict from '#lib/components/Verdict.svelte';
+	import MapPreview from '#lib/components/MapPreview.svelte';
+	import { ORIGIN } from '#lib/site.js';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
