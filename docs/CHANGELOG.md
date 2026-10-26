@@ -12,6 +12,9 @@
   semver existantes (`devalue`, `postcss`, `nanoid`, `fast-uri`, `js-yaml`, `fflate`…).
   Aucun changement de schéma ni de migration. Restent à traiter hors de cette passe
   (sauts majeurs) : `vite` 5, `vitest` 2, `maplibre-gl` 4, `zod` 3.
+- **Build Docker — lockfile strict** : `bun install --frozen-lockfile` sans repli sur
+  `bun install` (build et image de prod) : l'image échoue désormais si `bun.lock` ne
+  correspond pas à `package.json`, au lieu de résoudre silencieusement d'autres versions.
 
 ## 2026-07-13
 
