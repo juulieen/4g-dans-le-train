@@ -5,6 +5,13 @@
 
 ## 2026-10-26
 
+- **Carte — repli sans WebGL2** : MapLibre 6 exige WebGL2 ; sans lui (vieux navigateur,
+  accélération matérielle coupée, GPU en liste noire), la carte restait vide sans
+  explication. Désormais, détection préalable (`src/lib/webgl.ts`, testée) + capture de
+  l'erreur de création de la carte → message accessible à la place, avec liens vers
+  `/lignes` et `/operateurs` ; le reste de la page (panneau, filtres, mode mesure) reste
+  utilisable. Avis temporaire en cas de perte du contexte WebGL (`webglcontextlost`),
+  retiré à la restauration (repli définitif si elle échoue). Aperçu des pages ligne : mention texte, chunk MapLibre non chargé.
 - **Carte — MapLibre GL JS 4.7.1 → 6.16.0** (faille XSS critique GHSA-jrc7-96c5-q579 dans
   `DOM.sanitize()`, corrigée en 6.4.1 ; peu exploitable chez nous : `sanitize` ne sert qu'à
   l'attribution, issue de nos propres sources). Adaptations de `Map.svelte` : import
