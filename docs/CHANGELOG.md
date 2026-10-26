@@ -6,7 +6,8 @@
 ## 2026-10-26
 
 - **Carte — MapLibre GL JS 4.7.1 → 6.16.0** (faille XSS critique GHSA-jrc7-96c5-q579 dans
-  `DOM.sanitize()`, corrigée après 6.4.0). Adaptations de `Map.svelte` : import
+  `DOM.sanitize()`, corrigée en 6.4.1 ; peu exploitable chez nous : `sanitize` ne sert qu'à
+  l'attribution, issue de nos propres sources). Adaptations de `Map.svelte` : import
   `* as maplibregl` (v6 est ESM uniquement, plus d'export par défaut) ; worker fourni
   explicitement via `setWorkerUrl` + import Vite `?worker&url` (fichier same-origin) ;
   **URL de sprite rendue absolue** (`location.origin` + `/tiles/sprites/…`) — v6 refuse

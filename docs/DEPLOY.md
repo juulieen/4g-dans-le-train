@@ -84,7 +84,8 @@ le Wake Lock (API disponibles uniquement en contexte sécurisé).
 >
 > Côté carte (MapLibre 6) : le worker est un fichier same-origin bundlé par Vite
 > (`/_app/immutable/workers/…`), donc `worker-src 'self'` suffit (pas de `blob:`) ;
-> prévoir `img-src 'self' data: blob:` pour les sprites/icônes.
+> prévoir aussi `connect-src 'self'` (PMTiles, glyphs et sprites sont chargés par `fetch`)
+> et `img-src 'self' data: blob:` (recommandation du guide de migration MapLibre v6).
 
 ## 4. Fond de carte auto-hébergé (tuiles PMTiles)
 
