@@ -36,9 +36,11 @@
 
 	onMount(async () => {
 		try {
-			const params = new URLSearchParams();
-			if (lineSlug) params.set('line', lineSlug);
-			if (operatorKey) params.set('operator', operatorKey);
+			// Construit sans mutation (cf. `fetchSegments` dans Map.svelte).
+			const params = new URLSearchParams({
+				...(lineSlug ? { line: lineSlug } : {}),
+				...(operatorKey ? { operator: operatorKey } : {})
+			});
 			const res = await fetch(`/api/coverage?${params}`);
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			const fc = (await res.json()) as {
