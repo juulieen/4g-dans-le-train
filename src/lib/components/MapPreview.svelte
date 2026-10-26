@@ -19,6 +19,7 @@
 	} from '$lib/coverage-segments';
 	import type { PathPoint } from '$lib/geo/interpolate';
 	import type * as maplibregl from 'maplibre-gl';
+	import { supportsWebGL2 } from '$lib/webgl';
 
 	let {
 		slug,
@@ -43,6 +44,10 @@
 	let arcepData = $state<GeoJSON.FeatureCollection | null>(null);
 	let bounds = $state<maplibregl.LngLatBoundsLike | null>(null);
 	let failed = $state(false);
+	// Sans WebGL2, inutile de charger le chunk MapLibre ni de renvoyer vers la carte
+	// plein écran (elle ne s'afficherait pas non plus) : simple mention à la place.
+	// Aussi levé par `Map` si la création de la carte échoue malgré le test préalable.
+	let noWebgl = $state(false);
 
 	async function load() {
 		try {
@@ -63,6 +68,10 @@
 	}
 
 	onMount(() => {
+		if (!supportsWebGL2()) {
+			noWebgl = true;
+			return;
+		}
 		// Ne monter la carte qu'à l'approche du viewport (préchargement à 200 px).
 		const io = new IntersectionObserver(
 			(entries) => {
@@ -78,8 +87,18 @@
 	});
 </script>
 
-<div class="map-preview" class:failed bind:this={container} style="--preview-h:{height}">
-	{#if failed}
+<div
+	class="map-preview"
+	class:failed={failed || noWebgl}
+	bind:this={container}
+	style="--preview-h:{height}"
+>
+	{#if noWebgl}
+		<p class="nowebgl">
+			Aperçu de carte indisponible : votre navigateur ne prend pas en charge WebGL2. Le détail de la
+			couverture reste consultable sur cette page.
+		</p>
+	{:else if failed}
 		<a class="fallback" href={`/?line=${slug}`}>Voir la couverture de la ligne sur la carte →</a>
 	{:else}
 		{#if MapView && arcepData && bounds}
@@ -92,6 +111,7 @@
 					interactive={false}
 					showRail={false}
 					coverage={null}
+					onunavailable={() => (noWebgl = true)}
 				/>
 			</div>
 		{:else}
@@ -157,6 +177,11 @@
 		position: absolute;
 		inset: 0;
 		background: color-mix(in srgb, var(--text) 6%, transparent);
+	}
+	.nowebgl {
+		margin: 0;
+		color: var(--muted);
+		font-size: var(--fs-sm);
 	}
 	.fallback {
 		display: inline-block;

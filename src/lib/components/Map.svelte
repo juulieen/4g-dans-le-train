@@ -21,6 +21,7 @@
 	} from '$lib/usage';
 	import { worstByCell, type CellRate } from '$lib/coverage-quality';
 	import { pluralS } from '$lib/plural';
+	import { supportsWebGL2 } from '$lib/webgl';
 
 	maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
@@ -49,7 +50,8 @@
 		showRail = true,
 		lineSlug = null,
 		livePos = null,
-		trail = null
+		trail = null,
+		onunavailable
 	}: {
 		coverage?: GeoJSON.FeatureCollection | null;
 		/** Opérateur sélectionné : recolore les voies ARCEP. */
@@ -72,12 +74,29 @@
 		livePos?: { lat: number; lng: number; status: string } | null;
 		/** Sillage de la session de mesure (points locaux éphémères, posés au fil du trajet). */
 		trail?: GeoJSON.FeatureCollection | null;
+		/** Appelé si la carte ne peut pas s'afficher (pas de WebGL2) : repli côté parent. */
+		onunavailable?: () => void;
 	} = $props();
 
 	let mapContainer: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
 	let loaded = $state(false);
 	let hasArcep = $state(false);
+	// Repli sans WebGL2 (MapLibre ≥ 6 l'exige) : message à la place de la carte, le reste
+	// de la page (panneau, filtres, mode mesure) continue de fonctionner sans elle.
+	let webglUnavailable = $state(false);
+	// Contexte WebGL perdu en cours de route (GPU réinitialisé, onglet évincé…) : MapLibre
+	// le restaure souvent seul ; on prévient en attendant (`webglcontextrestored`).
+	let contextLost = $state(false);
+	// Thème du style effectivement appliqué : à la restauration du contexte, MapLibre
+	// remet le style d'AVANT la perte — on ré-applique si le thème a changé entre-temps.
+	let appliedTheme: 'light' | 'dark' = 'dark';
+
+	function markUnavailable() {
+		webglUnavailable = true;
+		contextLost = false;
+		onunavailable?.();
+	}
 
 	const EMPTY: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 	// Derniers segments « réel » récupérés : conservés pour ré-alimenter la source après
@@ -465,17 +484,56 @@
 		[14, 53.5]
 	];
 
+	/** Applique le fond du thème courant puis ré-ajoute nos couches (cf. observer). */
+	function applyTheme() {
+		if (!map) return;
+		appliedTheme = currentTheme();
+		map.setStyle(basemapStyle(appliedTheme), { diff: false });
+		map.once('styledata', () => {
+			void addOverlays();
+		});
+	}
+
 	onMount(() => {
-		map = new maplibregl.Map({
-			container: mapContainer,
-			style: basemapStyle(currentTheme()),
-			bounds: FRANCE_VIEW,
-			fitBoundsOptions: { padding: 16 },
-			maxBounds: FRANCE_MAX_BOUNDS,
-			minZoom: 4.5,
-			attributionControl: { compact: true },
-			// Aperçu statique : aucune interaction (ni pan/zoom, ni capture du scroll mobile).
-			interactive
+		if (!supportsWebGL2()) {
+			markUnavailable();
+			return;
+		}
+		appliedTheme = currentTheme();
+		try {
+			map = new maplibregl.Map({
+				container: mapContainer,
+				style: basemapStyle(appliedTheme),
+				bounds: FRANCE_VIEW,
+				fitBoundsOptions: { padding: 16 },
+				maxBounds: FRANCE_MAX_BOUNDS,
+				minZoom: 4.5,
+				attributionControl: { compact: true },
+				// Aperçu statique : aucune interaction (ni pan/zoom, ni capture du scroll mobile).
+				interactive
+			});
+		} catch (err) {
+			// Le test préalable peut passer alors que la création échoue (contexte refusé,
+			// limite de contextes atteinte…) : MapLibre lève `GPUInitializationError`.
+			// Toute autre erreur est un bug (options invalides…) : on ne la maquille pas.
+			if (!(err instanceof maplibregl.GPUInitializationError)) throw err;
+			console.warn('Carte indisponible (WebGL2) :', err);
+			map = null;
+			markUnavailable();
+			return;
+		}
+
+		// Perte du contexte WebGL (GPU réinitialisé, onglet évincé…) : avis temporaire.
+		map.on('webglcontextlost', () => (contextLost = true));
+		map.on('webglcontextrestored', () => {
+			contextLost = false;
+			// Bascule de thème survenue pendant la perte : MapLibre a restauré l'ancien style.
+			if (currentTheme() !== appliedTheme) applyTheme();
+		});
+		// Échec de la recréation du contexte : MapLibre émet `error` (et pas
+		// `webglcontextrestored`) → repli définitif plutôt qu'un avis bloqué.
+		map.on('error', (e) => {
+			if (e.error instanceof maplibregl.GPUInitializationError) markUnavailable();
 		});
 
 		// Contrôles inutiles (et indésirables) en mode statique.
@@ -501,11 +559,8 @@
 		// `styledata` (après parsing du nouveau style) est le moment fiable pour ré-ajouter.
 		// addOverlays est idempotent (gardes getSource) → pas de doublon.
 		const observer = new MutationObserver(() => {
-			if (!map) return;
-			map.setStyle(basemapStyle(currentTheme()), { diff: false });
-			map.once('styledata', () => {
-				void addOverlays();
-			});
+			// Contexte perdu : pas de style à remplacer, on ré-appliquera à la restauration.
+			if (!contextLost) applyTheme();
 		});
 		observer.observe(document.documentElement, {
 			attributes: true,
@@ -766,7 +821,38 @@
 	}
 </script>
 
-<div class="map" class:embedded={!interactive} bind:this={mapContainer}></div>
+<div
+	class="map"
+	class:embedded={!interactive}
+	class:unavailable={webglUnavailable}
+	bind:this={mapContainer}
+></div>
+<!-- Zone live TOUJOURS présente (vide sinon) : un `role="status"` inséré avec son contenu
+     n'est pas annoncé de façon fiable par les lecteurs d'écran. -->
+<div role="status" class="map-status">
+	{#if webglUnavailable || contextLost}
+		<div class="map-fallback glass" class:embedded={!interactive}>
+			{#if contextLost}
+				<p>
+					<strong>La carte a été interrompue par le navigateur.</strong>
+					Elle devrait réapparaître d'elle-même ; sinon, rechargez la page.
+				</p>
+			{:else if !interactive}
+				<p>Aperçu de carte indisponible : votre navigateur ne prend pas en charge WebGL2.</p>
+			{:else}
+				<p>
+					<strong>Votre navigateur ne permet pas d'afficher la carte</strong> (WebGL2 indisponible ou
+					désactivé, par exemple si l'accélération matérielle est coupée).
+				</p>
+				<p>
+					Les données restent consultables ligne par ligne : <a href="/lignes">toutes les lignes</a>
+					et <a href="/operateurs">le comparatif des opérateurs</a>. Vous pouvez toujours lancer une
+					mesure depuis le panneau.
+				</p>
+			{/if}
+		</div>
+	{/if}
+</div>
 {#if livePos && !follow}
 	<button class="recenter glass" onclick={recenter}>
 		<span class="recenter-dot" aria-hidden="true"></span> Recentrer
@@ -793,6 +879,38 @@
 	/* Aperçu embarqué (pages ligne) : on remplit le conteneur parent à hauteur fixe. */
 	.map.embedded {
 		min-height: 0;
+	}
+	/* Sans WebGL2 : fond neutre à la place de la carte vide. */
+	.map.unavailable {
+		background: color-mix(in srgb, var(--text) 6%, transparent);
+	}
+	/* Message de repli : en haut (sur mobile, le bas est couvert par la bottom-sheet). */
+	.map-fallback {
+		position: absolute;
+		top: 72px;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 4;
+		width: min(30rem, calc(100% - 2rem));
+		padding: 0.9rem 1.1rem;
+		border-radius: var(--r-md);
+		color: var(--text);
+		font-size: var(--fs-sm);
+		line-height: 1.45;
+	}
+	.map-fallback.embedded {
+		top: 50%;
+		transform: translate(-50%, -50%);
+	}
+	.map-fallback p {
+		margin: 0;
+	}
+	.map-fallback p + p {
+		margin-top: 0.5rem;
+	}
+	.map-fallback a {
+		color: var(--link);
+		font-weight: 600;
 	}
 	.legend-overlay {
 		position: absolute;
