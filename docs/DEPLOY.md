@@ -106,31 +106,38 @@ s'il fallait un jour forcer l'origine, ce serait via `paths.origin` dans
 
 ## 4. Fond de carte auto-hébergé (tuiles PMTiles)
 
-Le fond de carte est un **extrait France des builds Protomaps** (données OpenStreetMap),
-servi en statique par Caddy sous `/tiles/` — aucun service ni clé API tiers. Trois
-éléments dans `~/server/asus-1/tiles/` (bind-mounté `:ro` dans le conteneur Caddy) :
+Le fond de carte vient des **builds Protomaps** (données OpenStreetMap), servis en
+statique par Caddy sous `/tiles/` — aucun service ni clé API tiers. Le même dossier
+est aussi publié sur **map.juulieen.fr** (page d'exploration, style « juulieen »,
+CORS ouvert ; voir le dépôt `juulieen/map`). Contenu de `~/server/asus-1/tiles/`
+(bind-mounté `:ro` dans le conteneur Caddy) :
 
-- `france.pmtiles` (~10 Go) — tuiles vectorielles, consommées par le navigateur via
-  requêtes HTTP range (`pmtiles.js` côté client) ;
-- `fonts/` — glyphs PBF des fontstacks Noto Sans (labels de la carte) ;
-- `sprites/` — icônes (gares, shields routiers) des flavors light/dark.
+- `france.pmtiles` (~18,5 Go) — **planète du zoom 0 au 6** (le globe et la vue
+  monde restent complets) **+ Europe de l'Ouest du zoom 7 au 15**, consommé par le
+  navigateur via requêtes HTTP range (`pmtiles.js` côté client) ;
+- `fonts/` — glyphs PBF des fontstacks Noto Sans Regular/Medium/Italic ;
+- `sprites/` — icônes (gares, shields routiers) des flavors light/dark ;
+- `index.html`, `styles/` — page et style de map.juulieen.fr.
 
-Régénérer les tuiles (données OSM fraîches, ~tous les 6 mois suffit) :
+Régénérer les tuiles (données OSM fraîches, ~tous les 6 mois suffit) avec le script
+du dépôt homelab `asus-1/tiles-regen.sh` :
 
 ```bash
-# Le CLI vit HORS du dossier servi (~/server/asus-1/tiles-cli/) : tout ce qui est
-# dans tiles/ est public (sous /tiles/*), ne pas y laisser binaires ni logs.
-cd ~/server/asus-1/tiles
-# Vérifier la dernière build dispo : maps.protomaps.com/builds
-# Bbox = Europe de l'Ouest : assez large pour que le contexte autour de la France
-# (Benelux, Allemagne, Suisse, Italie du Nord, Espagne) soit rendu en vue nationale.
-../tiles-cli/pmtiles extract https://build.protomaps.com/<YYYYMMDD>.pmtiles france.pmtiles \
-    --bbox=-7,39,14,53.5 --maxzoom=15 --download-threads=8
+# Dernière build dispo : https://build-metadata.protomaps.dev/builds.json
+~/server/asus-1/tiles-regen.sh 20261118
 ```
 
-Durcissement côté Caddy (dans le `handle_path /tiles/*`) : les requêtes **sans header
-`Range`** sur `*.pmtiles` reçoivent un **403** — le fichier fait ~10 Go et pmtiles.js
-ne consomme que des ranges, ça bloque les téléchargements complets abusifs.
+Le script travaille dans `~/server/asus-1/tiles-cli/` (hors du dossier servi : tout ce
+qui est dans `tiles/` est public) : extraction de la planète z0-6 (~45 Mo) et de
+l'Europe de l'Ouest z7-15 (bbox `-7,39,14,53.5`, ~18,5 Go, ~11 min), `pmtiles merge`
+des deux archives (disjointes), `pmtiles verify`. Il **ne remplace pas** le fichier en
+service : après contrôle, `mv` de l'ancien vers `tiles-cli/` (retour arrière possible)
+puis du nouveau vers `tiles/france.pmtiles` — même disque, bascule instantanée.
+
+Durcissement côté Caddy (dans le `handle_path /tiles/*`, et sur map.juulieen.fr) : les
+requêtes **sans header `Range`** sur `*.pmtiles` reçoivent un **403** — le fichier
+fait ~18 Go et pmtiles.js ne consomme que des ranges, ça bloque les téléchargements
+complets abusifs.
 
 Fonts et sprites proviennent du repo `protomaps/basemaps-assets` (sparse checkout des
 fontstacks Noto Sans Regular/Medium/Italic + `sprites/`).
